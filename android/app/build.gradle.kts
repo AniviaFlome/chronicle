@@ -34,17 +34,6 @@ android {
         versionName = flutter.versionName
     }
 
-    buildTypes {
-        release {
-            // Release signing comes from the environment (CI secrets). When
-            // absent — local builds — fall back to debug keys so
-            // `flutter run --release` keeps working.
-            signingConfig = signingConfigs.getByName(
-                if (!System.getenv("CHRONICLE_KEYSTORE").isNullOrEmpty()) "release" else "debug"
-            )
-        }
-    }
-
     signingConfigs {
         create("release") {
             // Only wired when CI provides a keystore; otherwise this config
@@ -56,6 +45,17 @@ android {
             storePassword = System.getenv("CHRONICLE_KEYSTORE_PASSWORD")
             keyAlias = System.getenv("CHRONICLE_KEY_ALIAS") ?: "chronicle"
             keyPassword = System.getenv("CHRONICLE_KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        release {
+            // Release signing comes from the environment (CI secrets). When
+            // absent — local builds — fall back to debug keys so
+            // `flutter run --release` keeps working.
+            signingConfig = signingConfigs.getByName(
+                if (!System.getenv("CHRONICLE_KEYSTORE").isNullOrEmpty()) "release" else "debug"
+            )
         }
     }
 }
