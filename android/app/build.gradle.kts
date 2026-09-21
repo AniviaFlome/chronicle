@@ -12,6 +12,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
+    }
+
+    dependencies {
+        coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     }
 
     defaultConfig {
@@ -31,9 +36,26 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Release signing comes from the environment (CI secrets). When
+            // absent — local builds — fall back to debug keys so
+            // `flutter run --release` keeps working.
+            signingConfig = signingConfigs.getByName(
+                if (!System.getenv("CHRONICLE_KEYSTORE").isNullOrEmpty()) "release" else "debug"
+            )
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            // Only wired when CI provides a keystore; otherwise this config
+            // stays incomplete and local builds fall back to debug keys.
+            val keystorePath = System.getenv("CHRONICLE_KEYSTORE")
+            if (!keystorePath.isNullOrEmpty()) {
+                storeFile = file(keystorePath)
+            }
+            storePassword = System.getenv("CHRONICLE_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("CHRONICLE_KEY_ALIAS") ?: "chronicle"
+            keyPassword = System.getenv("CHRONICLE_KEY_PASSWORD")
         }
     }
 }

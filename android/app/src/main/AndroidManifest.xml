@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Dining-hall menus are fetched from the provider's website. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="chronicle"
+        android:label="Chronicle"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -1,4 +1,5 @@
 import 'package:chronicle/domain/schedule_models.dart';
+import 'package:chronicle/utils/time_format.dart';
 
 /// Expands recurring [ScheduleSlot]s into concrete [ClassOccurrence]s over a
 /// date range.
@@ -14,6 +15,8 @@ import 'package:chronicle/domain/schedule_models.dart';
 ///    [weekStartDay]) containing the anchor is week A
 ///  - custom rotation weeks cycle with length [slot.cycleLength], anchored at
 ///    the same week start as the A/B parity
+///  - day rotation slots match when the date's rotation day (see
+///    [rotationDayIndex], driven by [dayRotation]) is in [slot.rotationDays]
 class ScheduleOccurrenceEngine {
   final List<ScheduledClass> classes;
   final List<ScheduleSlot> slots;
@@ -27,6 +30,10 @@ class ScheduleOccurrenceEngine {
   /// this weekday.
   final int weekStartDay;
 
+  /// Day-rotation configuration. Slots with [RotationType.dayRotation] never
+  /// match when this is null.
+  final DayRotationConfig? dayRotation;
+
   const ScheduleOccurrenceEngine({
     required this.classes,
     required this.slots,
@@ -34,6 +41,7 @@ class ScheduleOccurrenceEngine {
     this.holidays = const [],
     required this.weekABAnchor,
     this.weekStartDay = 1,
+    this.dayRotation,
   });
 
   /// All occurrences for classes whose id is in [classIds] (empty = all)
@@ -60,7 +68,7 @@ class ScheduleOccurrenceEngine {
       final last = _dayStart(h.end);
       while (!d.isAfter(last)) {
         holidayDates.add(d);
-        d = d.add(const Duration(days: 1));
+        d = shiftDays(d, 1);
       }
     }
 
@@ -70,7 +78,11 @@ class ScheduleOccurrenceEngine {
 
     final result = <ClassOccurrence>[];
     final nSlots = slots.length;
-    for (var cursor = start; !cursor.isAfter(end); cursor = cursor.add(const Duration(days: 1))) {
+    for (
+      var cursor = start;
+      !cursor.isAfter(end);
+      cursor = shiftDays(cursor, 1)
+    ) {
       if (holidayDates.contains(cursor)) continue;
 
       final isoWeekday = cursor.weekday;
@@ -82,13 +94,16 @@ class ScheduleOccurrenceEngine {
         final klass = activeClasses[slot.classId];
         if (klass == null) continue;
 
-        if (klass.startDate != null && cursor.isBefore(_dayStart(klass.startDate!))) {
+        if (klass.startDate != null &&
+            cursor.isBefore(_dayStart(klass.startDate!))) {
           continue;
         }
-        if (klass.endDate != null && cursor.isAfter(_dayStart(klass.endDate!))) {
+        if (klass.endDate != null &&
+            cursor.isAfter(_dayStart(klass.endDate!))) {
           continue;
         }
-        if (slot.validFrom != null && cursor.isBefore(_dayStart(slot.validFrom!))) {
+        if (slot.validFrom != null &&
+            cursor.isBefore(_dayStart(slot.validFrom!))) {
           continue;
         }
         if (slot.validTo != null && cursor.isAfter(_dayStart(slot.validTo!))) {
@@ -106,10 +121,22 @@ class ScheduleOccurrenceEngine {
             final weeks = slot.cycleWeeks ?? const [];
             // cycleWeeks are documented 1-based; the index is 0-based.
             if (!weeks.contains(_cycleWeekIndex(cursor, cycle) + 1)) continue;
+          case RotationType.dayRotation:
+            final config = dayRotation;
+            if (config == null) continue;
+            final days = slot.rotationDays ?? const [];
+            // rotationDays are documented 1-based; the index is 0-based.
+            final index = rotationDayIndex(
+              date: cursor,
+              config: config,
+              holidays: holidayDates,
+            );
+            if (!days.contains(index + 1)) continue;
         }
 
         final exception = bySlotDate[(slot.id, cursor)];
-        if (exception != null && exception.status == ExceptionStatus.cancelled) {
+        if (exception != null &&
+            exception.status == ExceptionStatus.cancelled) {
           continue;
         }
 
@@ -117,15 +144,17 @@ class ScheduleOccurrenceEngine {
         final endM = exception?.newEndMinutes ?? slot.endMinutes;
         final room = exception?.newRoom ?? slot.room;
 
-        result.add(ClassOccurrence(
-          classId: slot.classId,
-          scheduleItemId: slot.id,
-          date: cursor,
-          startMinutes: startM,
-          endMinutes: endM,
-          room: room,
-          isMoved: exception != null,
-        ));
+        result.add(
+          ClassOccurrence(
+            classId: slot.classId,
+            scheduleItemId: slot.id,
+            date: cursor,
+            startMinutes: startM,
+            endMinutes: endM,
+            room: room,
+            isMoved: exception != null,
+          ),
+        );
       }
     }
 
@@ -146,18 +175,18 @@ class ScheduleOccurrenceEngine {
     required DateTime from,
     required DateTime to,
     int? classId,
-  }) =>
-      occurrences(rangeStart: from, rangeEnd: to, classIds: classId == null ? null : {classId})
-          .map((o) => o.date)
-          .toSet()
-          .toList()
-        ..sort();
+  }) => occurrences(
+    rangeStart: from,
+    rangeEnd: to,
+    classIds: classId == null ? null : {classId},
+  ).map((o) => o.date).toSet().toList()..sort();
 
   /// 0 for week A, 1 for week B, relative to [weekABAnchor].
   int _parityFor(DateTime date) {
     final anchorWeekStart = _weekStartOf(_dayStart(weekABAnchor));
     final dateWeekStart = _weekStartOf(_dayStart(date));
-    final diffWeeks = (dateWeekStart.difference(anchorWeekStart).inDays / 7).round();
+    final diffWeeks = (dateWeekStart.difference(anchorWeekStart).inDays / 7)
+        .round();
     return ((diffWeeks % 2) + 2) % 2;
   }
 
@@ -166,7 +195,8 @@ class ScheduleOccurrenceEngine {
   int _cycleWeekIndex(DateTime date, int cycleLength) {
     final anchorWeekStart = _weekStartOf(_dayStart(weekABAnchor));
     final dateWeekStart = _weekStartOf(_dayStart(date));
-    final diffWeeks = (dateWeekStart.difference(anchorWeekStart).inDays / 7).round();
+    final diffWeeks = (dateWeekStart.difference(anchorWeekStart).inDays / 7)
+        .round();
     return ((diffWeeks % cycleLength) + cycleLength) % cycleLength;
   }
 
@@ -176,7 +206,7 @@ class ScheduleOccurrenceEngine {
     // Dart: Monday = 1 .. Sunday = 7. Shift so weekStartDay becomes 0.
     final shift = (date.weekday - weekStartDay) % 7;
     final normalized = shift < 0 ? shift + 7 : shift;
-    return date.subtract(Duration(days: normalized));
+    return shiftDays(date, -normalized);
   }
 
   static DateTime _dayStart(DateTime d) => DateTime(d.year, d.month, d.day);

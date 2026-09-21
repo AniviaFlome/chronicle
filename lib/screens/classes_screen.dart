@@ -1,13 +1,161 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class ClassesScreen extends StatelessWidget {
+import '../data/database.dart';
+import '../providers.dart';
+import '../theme.dart';
+import '../l10n/l10n.dart';
+import 'class_edit_screen.dart';
+import 'year_widgets.dart';
+
+class ClassesScreen extends ConsumerWidget {
   const ClassesScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final classes = ref.watch(classesStreamProvider);
+    final activeYear = ref.watch(activeYearIdProvider);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Classes')),
-      body: const Center(child: Text('Class list and schedule editor will appear here')),
+      appBar: AppBar(title: Text(context.l10n.classesTitle)),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openEditor(context),
+        icon: const Icon(Icons.add),
+        label: Text(context.l10n.addClass),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: YearDropdown(
+              value: activeYear.value,
+              showAllYears: true,
+              label: context.l10n.showingYear,
+              onChanged: (v) =>
+                  ref.read(settingsRepositoryProvider).setActiveYearId(v),
+            ),
+          ),
+          Expanded(
+            child: classes.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(
+                    child: Text(context.l10n.couldNotLoadClasses('$e')),
+                  ),
+              data: (list) {
+                if (list.isEmpty) {
+                  return const _EmptyState();
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                  itemCount: list.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    return _ClassCard(
+                      classRow: list[i],
+                      onOpen: () => _openEditor(context, existing: list[i]),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openEditor(BuildContext context, {ClassesData? existing}) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ClassEditScreen(existing: existing),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+}
+
+class _ClassCard extends StatelessWidget {
+  final ClassesData classRow;
+  final VoidCallback onOpen;
+
+  const _ClassCard({required this.classRow, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = Color(classRow.colorValue);
+    final theme = Theme.of(context);
+    final color = classAccentColor(theme.colorScheme, raw);
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 10,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(classRow.name, style: theme.textTheme.titleMedium),
+                    if (classRow.teacher != null &&
+                        classRow.teacher!.isNotEmpty)
+                      Text(classRow.teacher!, style: theme.textTheme.bodySmall),
+                    if (classRow.maxAbsences != null)
+                      Text(
+                        context.l10n.absenceLimit(classRow.maxAbsences!),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.tertiary,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.school_outlined,
+            size: 64,
+            color: theme.colorScheme.outline,
+          ),
+          const SizedBox(height: 12),
+          Text(context.l10n.noClassesYet, style: theme.textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            context.l10n.addFirstClass,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

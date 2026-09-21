@@ -20,6 +20,7 @@
           flutter
           # Linux desktop embedder build deps.
           gtk3 # provides gtk+-3.0.pc for pkg-config (flutter embedder links GTK3)
+          sqlite # libsqlite3.so for drift; NixOS has no global /usr/lib
           cmake
           ninja
           pkg-config
@@ -27,6 +28,8 @@
         ];
 
         shellHook = ''
+          export SQLITE_LIB="${pkgs.sqlite.out}/lib"
+          export LD_LIBRARY_PATH="$SQLITE_LIB''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           echo "Chronicle dev shell ready."
         '';
       };

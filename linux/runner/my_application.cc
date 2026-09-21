@@ -1,9 +1,8 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
-#ifdef GDK_WINDOWING_X11
-#include <gdk/gdkx.h>
-#endif
+
+#include <string.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -25,23 +24,33 @@ static void my_application_activate(GApplication* application) {
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
-  // Use a header bar when running in GNOME as this is the common style used
-  // by applications and is the setup most users will be using (e.g. Ubuntu
-  // desktop).
-  // If running on X and not using GNOME then just use a traditional title bar
-  // in case the window manager does more exotic layout, e.g. tiling.
-  // If running on Wayland assume the header bar will work (may need changing
-  // if future cases occur).
-  gboolean use_header_bar = TRUE;
-#ifdef GDK_WINDOWING_X11
-  GdkScreen* screen = gtk_window_get_screen(window);
-  if (GDK_IS_X11_SCREEN(screen)) {
-    const gchar* wm_name = gdk_x11_screen_get_window_manager_name(screen);
-    if (g_strcmp0(wm_name, "GNOME Shell") != 0) {
-      use_header_bar = FALSE;
+  // Window decorations are decided at runtime by the desktop environment
+  // instead of forcing a GTK header bar everywhere:
+  // - CHRONICLE_DECORATIONS=csd forces the GTK header bar; =ssd (or
+  //   anything else, e.g. "none") forces a plain title and leaves
+  //   decorations to the compositor.
+  // - Niri never decorates windows itself, so no titlebar is set there.
+  // - GNOME draws no server-side decorations on Wayland, so the header bar
+  //   is kept on GNOME-ish sessions (it would otherwise be borderless).
+  // - Everywhere else (KDE/KWin, Sway, Hyprland, classic X11 window
+  //   managers, ...) a plain title lets the compositor draw decorations
+  //   in its own style.
+  gboolean use_header_bar = FALSE;
+  const gchar* decor_override = g_getenv("CHRONICLE_DECORATIONS");
+  if (decor_override != nullptr) {
+    use_header_bar = (g_ascii_strcasecmp(decor_override, "csd") == 0);
+  } else if (g_getenv("NIRI_SOCKET") == nullptr) {
+    const gchar* desktop = g_getenv("XDG_CURRENT_DESKTOP");
+    if (desktop != nullptr) {
+      gchar* lower = g_ascii_strdown(desktop, -1);
+      use_header_bar = strstr(lower, "gnome") != nullptr ||
+          strstr(lower, "ubuntu") != nullptr ||
+          strstr(lower, "pantheon") != nullptr ||
+          strstr(lower, "zorin") != nullptr ||
+          strstr(lower, "endless") != nullptr;
+      g_free(lower);
     }
   }
-#endif
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
@@ -53,6 +62,10 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+  // Explicitly resizable with a sane minimum so layouts adapt instead of
+  // clipping: Flutter side already scrolls horizontally for wide grids.
+  gtk_window_set_resizable(window, TRUE);
+  gtk_widget_set_size_request(GTK_WIDGET(window), 800, 600);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(

@@ -4,7 +4,9 @@
 /// ints. Weekday uses ISO numbering: 1 = Monday .. 7 = Sunday.
 library;
 
-enum RotationType { weekly, weekAB, custom }
+import '../utils/time_format.dart';
+
+enum RotationType { weekly, weekAB, custom, dayRotation }
 
 enum ExceptionStatus { cancelled, moved }
 
@@ -28,6 +30,10 @@ class ScheduleSlot {
   /// this slot occurs.
   final List<int>? cycleWeeks;
 
+  /// For [RotationType.dayRotation]: 1-based rotation day indices where
+  /// this slot occurs.
+  final List<int>? rotationDays;
+
   final DateTime? validFrom;
   final DateTime? validTo;
 
@@ -42,10 +48,68 @@ class ScheduleSlot {
     this.weekParity,
     this.cycleLength,
     this.cycleWeeks,
+    this.rotationDays,
     this.validFrom,
     this.validTo,
   });
 }
+
+/// Day-rotation configuration (MyStudyLife-style rotating days).
+///
+/// The rotation advances by one each school day and pauses on holidays and
+/// non-school days. The anchor date itself is rotation day 1 when it is a
+/// school day.
+class DayRotationConfig {
+  /// Cycle length in days (2-10).
+  final int length;
+
+  /// ISO weekdays the rotation advances on, e.g. {1,2,3,4,5}.
+  final Set<int> schoolDays;
+
+  final DateTime anchor;
+
+  const DayRotationConfig({
+    required this.length,
+    required this.schoolDays,
+    required this.anchor,
+  });
+}
+
+/// 0-based rotation day index for [date].
+///
+/// Counts school days in [anchor, date), skipping [holidays]; dates before
+/// the anchor cycle backwards symmetrically.
+int rotationDayIndex({
+  required DateTime date,
+  required DayRotationConfig config,
+  required Set<DateTime> holidays,
+}) {
+  final a = _dayStart(config.anchor);
+  final d = _dayStart(date);
+  if (a == d) return 0;
+  final forward = d.isAfter(a);
+  final from = forward ? a : d;
+  final to = forward ? d : a;
+  var count = 0;
+  for (var cursor = from; cursor.isBefore(to); cursor = _nextDay(cursor)) {
+    if (config.schoolDays.contains(cursor.weekday) &&
+        !holidays.contains(cursor)) {
+      count++;
+    }
+  }
+  if (forward) return count % config.length;
+  return (config.length - (count % config.length)) % config.length;
+}
+
+/// 1-based label for a 0-based rotation [index]: numbers or letters (A-J).
+String rotationDayLabel(int index, {required bool letters}) {
+  if (!letters) return '${index + 1}';
+  return String.fromCharCode('A'.codeUnitAt(0) + (index % 26));
+}
+
+DateTime _dayStart(DateTime d) => DateTime(d.year, d.month, d.day);
+
+DateTime _nextDay(DateTime d) => shiftDays(_dayStart(d), 1);
 
 /// A class as the engine needs it.
 class ScheduledClass {
@@ -122,14 +186,14 @@ class ClassOccurrence {
 
   @override
   int get hashCode => Object.hash(
-        classId,
-        scheduleItemId,
-        date,
-        startMinutes,
-        endMinutes,
-        room,
-        isMoved,
-      );
+    classId,
+    scheduleItemId,
+    date,
+    startMinutes,
+    endMinutes,
+    room,
+    isMoved,
+  );
 
   @override
   String toString() =>

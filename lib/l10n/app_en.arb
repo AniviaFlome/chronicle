@@ -1,0 +1,761 @@
+{
+  "@@locale": "en",
+  "appTitle": "Chronicle",
+  "cancel": "Cancel",
+  "save": "Save",
+  "delete": "Delete",
+  "close": "Close",
+  "ok": "OK",
+  "copy": "Copy",
+  "@copy": {},
+  "errorAddSlot": "Could not add time slot",
+  "@errorAddSlot": {},
+  "errorUpdateSlot": "Could not update time slot",
+  "@errorUpdateSlot": {},
+  "errorSaveClass": "Could not save class",
+  "@errorSaveClass": {},
+  "errorDeleteClass": "Could not delete class",
+  "@errorDeleteClass": {},
+  "errorDeleteSlot": "Could not delete time slot",
+  "@errorDeleteSlot": {},
+  "navToday": "Today",
+  "navCalendar": "Calendar",
+  "navClasses": "Classes",
+  "navTasks": "Tasks",
+  "navAbsences": "Absences",
+  "navMenu": "Menu",
+  "navSettings": "Settings",
+  "campusLabel": "Campus",
+  "mealBreakfast": "Breakfast",
+  "mealLunch": "Lunch",
+  "mealDinner": "Dinner",
+  "mealVegan": "Vegan",
+  "menuKcal": "{n} kcal",
+  "@menuKcal": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "menuEmpty": "No menu published for this day",
+  "menuStale": "Cached menu · pull to refresh",
+  "menuError": "Could not load menu",
+  "menuRetry": "Retry",
+  "menuChooseSource": "Choose a menu source in Settings",
+  "menuSourceTitle": "Dining menu",
+  "menuSourceLabel": "Menu source",
+  "menuSourceNone": "None",
+  "allergensTitle": "Allergens",
+  "classFallback": "Class",
+  "absentBadge": "Absent",
+  "couldNotLoadYears": "Could not load years: {error}",
+  "@couldNotLoadYears": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "allYears": "All years",
+  "noYearOption": "No year",
+  "addAcademicYear": "Add academic year",
+  "editYear": "Edit year",
+  "nameLabel": "Name",
+  "startsLabel": "Starts",
+  "endsLabel": "Ends",
+  "dayRotationLabel": "Day rotation",
+  "dayRotationHint": "Rotating day labels (e.g. Day 1-6)",
+  "offLabel": "Off",
+  "daysCount": "{n} days",
+  "@daysCount": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "pickStartEnd": "Pick a start and an end date",
+  "endBeforeStart": "End date must not precede start date",
+  "couldNotSaveYear": "Could not save year: {error}",
+  "@couldNotSaveYear": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "pickPlaceholder": "Pick",
+  "noYearsYet": "No academic years yet.",
+  "filteringAllYears": "Filtering by: all years",
+  "filteringOneYear": "Filtering by: one year",
+  "yearActions": "Year actions",
+  "editAction": "Edit",
+  "deleteYearTitle": "Delete year?",
+  "deleteYearBody": "Delete \"{name}\"? Its classes keep working without a year.",
+  "@deleteYearBody": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "couldNotDelete": "Could not delete: {error}",
+  "@couldNotDelete": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "todayWithDate": "Today · {date}",
+  "@todayWithDate": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "couldNotLoadTasks": "Could not load tasks: {error}",
+  "@couldNotLoadTasks": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotLoadSchedule": "Could not load schedule: {error}",
+  "@couldNotLoadSchedule": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "nothingDueWeek": "Nothing due in the next 7 days.",
+  "absenceWarnings": "Absence warnings",
+  "todaysClasses": "Today's classes",
+  "noClassesToday": "No classes today.",
+  "tomorrowSection": "Tomorrow",
+  "noClassesTomorrow": "No classes tomorrow.",
+  "upcomingSection": "Upcoming",
+  "quotaOver": "{unexcused} unexcused absences — over the limit of {limit}",
+  "@quotaOver": {
+    "placeholders": {
+      "unexcused": {},
+      "limit": {}
+    }
+  },
+  "quotaOneLeft": "{unexcused} unexcused absences — one left before the limit of {limit}",
+  "@quotaOneLeft": {
+    "placeholders": {
+      "unexcused": {},
+      "limit": {}
+    }
+  },
+  "examLabel": "Exam",
+  "overduePrefix": "Overdue · ",
+  "dueOn": "Due {date}",
+  "@dueOn": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "dayStreak": "day streak",
+  "doneThisWeek": "done this week",
+  "focusedThisWeek": "focused this week",
+  "classesTitle": "Classes",
+  "addClass": "Add class",
+  "couldNotLoadClasses": "Could not load classes: {error}",
+  "@couldNotLoadClasses": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "showingYear": "Showing year",
+  "absenceLimit": "Absence limit: {limit}",
+  "@absenceLimit": {
+    "placeholders": {
+      "limit": {}
+    }
+  },
+  "noClassesYet": "No classes yet",
+  "addFirstClass": "Add your first class to start building your timetable.",
+  "tasksTitle": "Tasks",
+  "gradesTooltip": "Grades",
+  "focusTooltip": "Focus timer",
+  "addTask": "Add task",
+  "allFilter": "All",
+  "typeHomework": "Homework",
+  "typeEssay": "Essay",
+  "typeProject": "Group project",
+  "typeReading": "Reading",
+  "typeRevision": "Revision",
+  "typeReminder": "Reminder",
+  "hideDone": "Hide done",
+  "examCountdown": "Exam countdown",
+  "sectionOverdue": "Overdue",
+  "sectionUpcoming": "Upcoming",
+  "sectionNoDate": "No due date",
+  "sectionDone": "Done",
+  "noDateLabel": "No date",
+  "daysOverdue": "{n}d overdue",
+  "@daysOverdue": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "tomorrowWord": "Tomorrow",
+  "inDays": "In {n} days",
+  "@inDays": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "noTasksHere": "No tasks here",
+  "addTasksHint": "Add homework, exams and reminders to track them.",
+  "dueOnTime": "Due {date}{time}",
+  "@dueOnTime": {
+    "placeholders": {
+      "date": {},
+      "time": {}
+    }
+  },
+  "stepsCount": "{done}/{total} steps",
+  "@stepsCount": {
+    "placeholders": {
+      "done": {},
+      "total": {}
+    }
+  },
+  "repeatsLabel": "Repeats",
+  "remindDueTime": "At due time",
+  "remindMins": "{n} min before",
+  "@remindMins": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "remindHours": "{n, plural, =1{1 hour before} other{{n} hours before}}",
+  "@remindHours": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "remindDays": "{n, plural, =1{1 day before} other{{n} days before}}",
+  "@remindDays": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "remindWeeks": "{n, plural, =1{1 week before} other{{n} weeks before}}",
+  "@remindWeeks": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "repeatNever": "Never",
+  "repeatDaily": "Daily",
+  "repeatWeekly": "Weekly",
+  "repeatMonthly": "Monthly",
+  "priorityLow": "Low",
+  "priorityNormal": "Normal",
+  "priorityHigh": "High",
+  "remindersNeedDue": "Reminders need a due date — set one or remove them",
+  "deleteTaskTitle": "Delete task?",
+  "deleteTaskBody": "Delete \"{title}\" with its subtasks and reminders?",
+  "@deleteTaskBody": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "deleteTaskTooltip": "Delete task",
+  "editTask": "Edit task",
+  "titleLabel": "Title",
+  "titleRequired": "Title is required",
+  "typeLabel": "Type",
+  "priorityLabel": "Priority",
+  "classLabel": "Class",
+  "noClass": "No class",
+  "dueDateLabel": "Due date",
+  "dueTimeLabel": "Due time",
+  "notSet": "Not set",
+  "allDay": "All day",
+  "notesLabel": "Notes",
+  "trackProgress": "Track progress %",
+  "trackProgressHint": "Log partial completion, not just done",
+  "resultSection": "Result",
+  "stepsSection": "Steps",
+  "remindersSection": "Reminders",
+  "saveTask": "Save task",
+  "couldNotSaveTask": "Could not save task: {error}",
+  "@couldNotSaveTask": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "newStep": "New step",
+  "addStep": "Add step",
+  "couldNotLoadSteps": "Could not load steps: {error}",
+  "@couldNotLoadSteps": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotLoadReminders": "Could not load reminders: {error}",
+  "@couldNotLoadReminders": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotLoadExams": "Could not load exams: {error}",
+  "@couldNotLoadExams": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "preparesForExam": "Prepares for exam",
+  "noExam": "No exam",
+  "noRemindersHint": "No reminders. They need a due date to fire.",
+  "enterValidScore": "Enter a valid score and maximum",
+  "couldNotSaveGrade": "Could not save grade: {error}",
+  "@couldNotSaveGrade": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotLoadGrade": "Could not load grade: {error}",
+  "@couldNotLoadGrade": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "scoreLabel": "Score",
+  "outOfLabel": "Out of",
+  "deleteGradeTooltip": "Delete grade",
+  "resultScore": "Result: {score} / {max}",
+  "@resultScore": {
+    "placeholders": {
+      "score": {},
+      "max": {}
+    }
+  },
+  "listViewTooltip": "List view",
+  "gridViewTooltip": "Weeks grid view",
+  "couldNotLoad": "Could not load: {error}",
+  "@couldNotLoad": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "quotasTitle": "Quotas",
+  "noAbsencesRecorded": "No absences recorded.",
+  "excusedBadge": "Excused",
+  "unexcusedBadge": "Unexcused",
+  "allClasses": "All classes",
+  "noClassesToShow": "No classes to show.",
+  "weekPrefix": "W",
+  "quotaCount": "{unexcused} / {limit} unexcused",
+  "@quotaCount": {
+    "placeholders": {
+      "unexcused": {},
+      "limit": {}
+    }
+  },
+  "deleteAbsenceTooltip": "Delete absence record",
+  "timeGridTooltip": "Time grid view",
+  "addEvent": "Add event",
+  "prevWeek": "Previous week",
+  "nextWeek": "Next week",
+  "couldNotLoadWeek": "Could not load week: {error}",
+  "@couldNotLoadWeek": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotLoadEvents": "Could not load events: {error}",
+  "@couldNotLoadEvents": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotMoveClass": "Could not move class: {error}",
+  "@couldNotMoveClass": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotMoveEvent": "Could not move event: {error}",
+  "@couldNotMoveEvent": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "adjustTitle": "Adjust {title}",
+  "@adjustTitle": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "gradesTitle": "Grades",
+  "couldNotLoadGrades": "Could not load grades: {error}",
+  "@couldNotLoadGrades": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "noGradesYet": "No grades yet",
+  "recordExamsHint": "Record results on your exams to track GPA.",
+  "gpaSummary": "GPA · {n, plural, =1{1 graded exam} other{{n} graded exams}}",
+  "@gpaSummary": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "examsAverage": "{n, plural, =1{1 exam} other{{n} exams}} · {avg}% average",
+  "@examsAverage": {
+    "placeholders": {
+      "n": {},
+      "avg": {}
+    }
+  },
+  "focusTitle": "Focus",
+  "workingOn": "Working on (optional)",
+  "nothingOption": "Nothing",
+  "focusWorkLabel": "Work length",
+  "focusBreakLabel": "Break length",
+  "customMinutesLabel": "Custom minutes",
+  "minutesShort": "{n} min",
+  "@minutesShort": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "lockPortraitTitle": "Lock portrait",
+  "lockPortraitHint": "Keep the app upright on phones",
+  "startFocus": "Start focus session",
+  "giveUp": "Give up",
+  "skipBreak": "Skip break",
+  "todayChip": "today",
+  "phaseReady": "Ready",
+  "phaseFocus": "Focus",
+  "phaseBreak": "Break",
+  "endAfterStart": "End time must be after start time",
+  "couldNotSaveEvent": "Could not save event: {error}",
+  "@couldNotSaveEvent": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "deleteEventTitle": "Delete event?",
+  "deleteEventBody": "Delete \"{title}\"?",
+  "@deleteEventBody": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "editEvent": "Edit event",
+  "eventTitleHint": "Title (sport, appointment, club…)",
+  "dateLabel": "Date",
+  "locationLabel": "Location",
+  "allDayLabel": "All day",
+  "couldNotLoadClass": "Could not load class: {error}",
+  "@couldNotLoadClass": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotLoadAttendance": "Could not load attendance: {error}",
+  "@couldNotLoadAttendance": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "markAbsent": "Mark absent",
+  "editClass": "Edit class",
+  "couldNotMarkAbsent": "Could not mark absent: {error}",
+  "@couldNotMarkAbsent": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotOpenLink": "Could not open link",
+  "markPresent": "Mark present",
+  "reasonOptional": "Reason (optional)",
+  "selectCycleWeek": "Select at least one cycle week",
+  "selectRotationDay": "Select at least one rotation day",
+  "editSlot": "Edit time slot",
+  "addSlot": "Add time slot",
+  "dayLabel": "Day",
+  "startTimeLabel": "Start",
+  "endTimeLabel": "End",
+  "roomOverrideHint": "Room (optional, overrides class room)",
+  "everyWeek": "Every week",
+  "weekAbRotation": "Week A / B rotation",
+  "customCycle": "Custom cycle",
+  "weekA": "Week A",
+  "weekB": "Week B",
+  "weekABLabel": "Week {letter}",
+  "@weekABLabel": {
+    "placeholders": {
+      "letter": {}
+    }
+  },
+  "cycleLengthLabel": "Cycle length (weeks)",
+  "weeksCount": "{n} weeks",
+  "@weeksCount": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "classesOnWeeks": "Classes on weeks:",
+  "meetsOnRotationDays": "Meets on rotation days:",
+  "customCycleSummary": "Cycle {length}: weeks {weeks}",
+  "@customCycleSummary": {
+    "placeholders": {
+      "length": {},
+      "weeks": {}
+    }
+  },
+  "rotationDaysSummary": "Rotation days {days}",
+  "@rotationDaysSummary": {
+    "placeholders": {
+      "days": {}
+    }
+  },
+  "selectWeekday": "Select at least one weekday",
+  "selectTimes": "Select start and end times",
+  "deleteClassTitle": "Delete class?",
+  "deleteClassBody": "Delete {name}, its schedule and absence records? Tasks will be kept without a class.",
+  "@deleteClassBody": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "deleteClassTooltip": "Delete class",
+  "classNameLabel": "Class name",
+  "colorLabel": "Color",
+  "meetsOn": "Meets on",
+  "startsAtLabel": "Starts at",
+  "endsAtLabel": "Ends at",
+  "meetingHint": "Weekly meeting hours. Fine-tune per day, A/B weeks or custom cycles after saving.",
+  "teacherLabel": "Teacher",
+  "teacherEmailLabel": "Teacher email",
+  "roomLabel": "Room",
+  "buildingLabel": "Building",
+  "moduleLabel": "Module",
+  "onlineLinkLabel": "Online link",
+  "onlineLinkHint": "Video call or course page URL (optional)",
+  "absenceLimitLabel": "Absence limit",
+  "classReminderLabel": "Class reminder (minutes before)",
+  "classReminderHint": "Empty = follow default setting",
+  "notesFieldLabel": "Notes",
+  "activeLabel": "Active",
+  "saveClass": "Save class",
+  "meetingTimes": "Meeting times",
+  "addSlotTooltip": "Add time slot",
+  "couldNotLoadSlots": "Could not load slots: {error}",
+  "@couldNotLoadSlots": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "noSlotsYet": "No meeting times yet.",
+  "weeklyHoursHint": "Weekly hours for this class. Tap a slot to edit it.",
+  "deleteSlotTooltip": "Delete time slot",
+  "absencesSection": "Absences",
+  "couldNotLoadAbsences": "Could not load absences: {error}",
+  "@couldNotLoadAbsences": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "nameRequired": "Name is required",
+  "couldNotLoadSettings": "Could not load settings: {error}",
+  "@couldNotLoadSettings": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotSaveSetting": "Could not save setting: {error}",
+  "@couldNotSaveSetting": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "defaultDurationTitle": "Default duration (minutes)",
+  "defaultReminderTitle": "Default class reminder",
+  "minutesBeforeClass": "Minutes before class",
+  "emptyMeansOff": "Empty = off",
+  "enterNonNegative": "Enter a non-negative whole number",
+  "defaultLimitSaved": "Default absence limit saved",
+  "appearanceHeader": "Appearance",
+  "themeSystem": "System",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+  "themeLabel": "Theme",
+  "couldNotSaveTheme": "Could not save theme: {error}",
+  "@couldNotSaveTheme": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotSaveAccent": "Could not save accent: {error}",
+  "@couldNotSaveAccent": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "accentLabel": "Accent",
+  "generalHeader": "General",
+  "languagesHeader": "Languages",
+  "languageLabel": "Language",
+  "languageSystem": "System default",
+  "languageEnglish": "English",
+  "languageTurkish": "Türkçe",
+  "defaultAbsenceLimit": "Default absence limit",
+  "prefilledHint": "Prefilled for new classes. Empty = none.",
+  "academicYearsHeader": "Academic years",
+  "dataHeader": "Data",
+  "exportCalendar": "Export calendar (.ics)",
+  "exportCalendarHint": "Classes, tasks and events, next 90 days",
+  "importCalendar": "Import calendar (.ics)",
+  "importCalendarHint": "Adds events as Xtra entries",
+  "scheduleHeader": "Schedule",
+  "defaultClassStart": "Default class start",
+  "prefilledStartHint": "Prefilled for new classes and slots: {start}",
+  "@prefilledStartHint": {
+    "placeholders": {
+      "start": {}
+    }
+  },
+  "defaultClassDuration": "Default class duration",
+  "prefilledDurationHint": "Prefilled meeting length: {minutes} min",
+  "@prefilledDurationHint": {
+    "placeholders": {
+      "minutes": {}
+    }
+  },
+  "autoEndTitle": "Auto-set end time",
+  "autoEndHint": "Changing a start time sets end = start + default duration",
+  "reminderOffHint": "Off — no reminder before classes",
+  "remindsBeforeHint": "Reminds {minutes} min before each class",
+  "@remindsBeforeHint": {
+    "placeholders": {
+      "minutes": {}
+    }
+  },
+  "dayStartsLabel": "Day starts",
+  "dayEndsLabel": "Day ends",
+  "couldNotSave": "Could not save: {error}",
+  "@couldNotSave": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "gridRhythmSaved": "Grid rhythm saved",
+  "gridValidation": "Enter positive lesson and break lengths",
+  "gridTimeLabels": "Grid time labels",
+  "modeClassTimes": "Class times",
+  "modeFixed": "Fixed time",
+  "lessonMinLabel": "Lesson (min)",
+  "breakMinLabel": "Break (min)",
+  "loadingEllipsis": "Loading…",
+  "savedTo": "Saved to {uri}",
+  "@savedTo": {
+    "placeholders": {
+      "uri": {}
+    }
+  },
+  "couldNotExport": "Could not export: {error}",
+  "@couldNotExport": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotExportCalendar": "Could not export calendar: {error}",
+  "@couldNotExportCalendar": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotImportCalendar": "Could not import calendar: {error}",
+  "@couldNotImportCalendar": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "importedEvents": "{n, plural, =1{Imported 1 event} other{Imported {n} events}}",
+  "@importedEvents": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "notifChannel": "Task reminders",
+  "openAction": "Open",
+  "overdueTitle": "Overdue: {title}",
+  "@overdueTitle": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "wasDue": "Was due {date}",
+  "@wasDue": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "startsAt": "Starts at {time}",
+  "@startsAt": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "repeatUntilLabel": "Repeat until",
+  "foreverLabel": "Forever",
+  "pickTime": "Pick time",
+  "absenceSummaryPlain": "{unexcused} unexcused ({excused} excused)",
+  "@absenceSummaryPlain": {
+    "placeholders": {
+      "unexcused": {},
+      "excused": {}
+    }
+  },
+  "absenceSummaryQuota": "{unexcused} / {limit} unexcused ({excused} excused)",
+  "@absenceSummaryQuota": {
+    "placeholders": {
+      "unexcused": {},
+      "limit": {},
+      "excused": {}
+    }
+  },
+  "excusedAbsenceTitle": "Excused absence",
+  "unexcusedAbsenceTitle": "Unexcused absence",
+  "customColorTitle": "Custom color",
+  "fixedTimeHint": "Repeats from Day starts to Day ends",
+  "dataFolderTitle": "Data folder",
+  "dataFolderUnset": "Not set — pick a folder for data files",
+  "dataFolderHint": "One JSON file per table. Export on one device at a time.",
+  "dataFolderNeedsFolder": "Pick a data folder first",
+  "exportDataAction": "Export data",
+  "importDataAction": "Import data",
+  "dataExportDone": "Exported {rows} rows",
+  "@dataExportDone": {
+    "placeholders": {
+      "rows": {}
+    }
+  },
+  "dataImportDone": "Merged {upserted} · deleted {deleted}",
+  "@dataImportDone": {
+    "placeholders": {
+      "upserted": {},
+      "deleted": {}
+    }
+  },
+  "couldNotExportData": "Could not export data: {error}",
+  "@couldNotExportData": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotImportData": "Could not import data: {error}",
+  "@couldNotImportData": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "dataLastExport": "Last export: {date}",
+  "@dataLastExport": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "dataLastImport": "Last import: {date}",
+  "@dataLastImport": {
+    "placeholders": {
+      "date": {}
+    }
+  }
+}
