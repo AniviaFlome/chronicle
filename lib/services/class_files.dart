@@ -38,11 +38,15 @@ class ClassFilesService {
   }
 
   /// Copies picked files into [dir], calling [onFile] per stored file.
+  /// Stored paths are saved relative (`scope/id/name`) so rows survive
+  /// reinstalls and user changes; use [resolveStoredPath] to absolutize.
   /// Returns the number of files added.
-  Future<int> _importPicked(
-    Directory dir,
-    Future<void> Function(String name, String path, int size) onFile,
-  ) async {
+  Future<int> _importPicked({
+    required String scope,
+    required int id,
+    required Directory dir,
+    required Future<void> Function(String name, String path, int size) onFile,
+  }) async {
     final picked = await FilePicker.pickFiles();
     if (picked.isEmpty) return 0;
     var added = 0;
@@ -57,7 +61,8 @@ class ClassFilesService {
           await target.writeAsBytes(await f.readAsBytes());
         }
         final stat = await target.stat();
-        await onFile(name, target.path, stat.size);
+        final stored = '$scope/$id/${target.path.split('/').last}';
+        await onFile(name, stored, stat.size);
         added++;
       } catch (_) {
         // Skip unreadable files; continue with the rest.
@@ -74,8 +79,10 @@ class ClassFilesService {
   Future<int> pickAndSave(int classId) async {
     final dir = await _scopeDir('class_files', classId);
     return _importPicked(
-      dir,
-      (name, path, size) => db
+      scope: 'class_files',
+      id: classId,
+      dir: dir,
+      onFile: (name, path, size) => db
           .into(db.classFiles)
           .insert(
             ClassFilesCompanion.insert(
@@ -93,8 +100,10 @@ class ClassFilesService {
   Future<int> pickAndSaveYear(int yearId) async {
     final dir = await _scopeDir('year_files', yearId);
     return _importPicked(
-      dir,
-      (name, path, size) => db
+      scope: 'year_files',
+      id: yearId,
+      dir: dir,
+      onFile: (name, path, size) => db
           .into(db.yearFiles)
           .insert(
             YearFilesCompanion.insert(
@@ -108,6 +117,17 @@ class ClassFilesService {
     );
   }
 
+  /// Absolutizes a stored path: absolute (legacy) rows pass through,
+  /// relative rows resolve against the app support directory.
+  static Future<String> resolveStoredPath({
+    required Directory? root,
+    required String stored,
+  }) async {
+    if (stored.startsWith('/')) return stored;
+    final base = root ?? await getApplicationSupportDirectory();
+    return '${base.path}/$stored';
+  }
+
   /// Opens a stored file by name and path: share sheet where supported
   /// (Android and others), default-app open as fallback. The share plugin
   /// cannot share files on Linux (`UnimplementedError`), so Linux goes
@@ -116,7 +136,9 @@ class ClassFilesService {
     required String fileName,
     required String storedPath,
   }) async {
-    final file = File(storedPath);
+    final file = File(
+      await resolveStoredPath(root: storageRoot, stored: storedPath),
+    );
     if (!await file.exists()) throw StateError('File not found');
     if (!Platform.isLinux) {
       try {

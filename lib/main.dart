@@ -67,6 +67,12 @@ class StartupRunnerState extends ConsumerState<StartupRunner> {
     } catch (e) {
       debugPrint('Startup reminder sync failed: $e');
     }
+    if (!mounted) return;
+    try {
+      await ref.read(folderSyncControllerProvider).start();
+    } catch (e) {
+      debugPrint('Startup folder sync failed: $e');
+    }
   }
 
   @override

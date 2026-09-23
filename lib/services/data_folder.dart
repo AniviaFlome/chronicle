@@ -43,12 +43,36 @@ class DataFolderService {
   static const manifestFile = 'manifest.json';
   static const tombstonesFile = 'tombstones.json';
 
-  /// Subdirectory holding attachment content blobs, named `<uuid>[.ext]`.
+  /// Subdirectory holding attachment content blobs, named
+  /// `<stem>_<shortid>.<ext>` (human-readable, collision-free).
   static const filesDir = 'files';
 
-  /// Content-blob file name for an attachment: stable uuid plus a
-  /// sanitized extension so folder browsers stay useful.
+  /// Content-blob file name for an attachment: sanitized original stem plus
+  /// the first 8 uuid hex chars, so names stay readable and unique, e.g.
+  /// `syllabus_a1b2c3d4.pdf`. Lower-cased for case-insensitive filesystems.
   static String blobNameFor(String uuid, String fileName) {
+    final dot = fileName.lastIndexOf('.');
+    final hasExt = dot > 0 && dot < fileName.length - 1;
+    var stem = (hasExt ? fileName.substring(0, dot) : fileName).toLowerCase();
+    stem = stem.replaceAll(RegExp('[^a-z0-9_-]'), '_');
+    stem = stem.replaceAll(RegExp('_+'), '_');
+    stem = stem.replaceAll(RegExp(r'^_+|_+$'), '');
+    if (stem.length > 40) stem = stem.substring(0, 40);
+    if (stem.isEmpty) stem = 'file';
+    var ext = '';
+    if (hasExt) {
+      ext = fileName.substring(dot + 1).toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
+      if (ext.length > 10) ext = ext.substring(0, 10);
+    }
+    final short = uuid.replaceAll('-', '');
+    final tag = short.length > 8 ? short.substring(0, 8) : short;
+    final base = '${stem}_$tag';
+    return ext.isEmpty ? base : '$base.$ext';
+  }
+
+  /// Pre-redesign blob name (`<uuid>[.ext]`), checked as a fallback when
+  /// importing folders written by older builds.
+  static String legacyBlobNameFor(String uuid, String fileName) {
     final dot = fileName.lastIndexOf('.');
     var ext = dot > 0 && dot < fileName.length - 1
         ? fileName.substring(dot + 1).toLowerCase()
@@ -166,6 +190,43 @@ class DataFolderService {
         'yearFiles': await _rows(db.select(db.yearFiles)),
       };
       final tombstones = await db.select(db.syncTombstones).get();
+      // Exported metadata must not leak absolute device paths: store the
+      // path relative to app storage (import ignores it anyway and copies
+      // bytes locally). Legacy absolute rows keep working via the resolver.
+      // The support dir is only resolved when file rows exist, so plain
+      // unit tests without platform bindings still pass.
+      String supportPrefix = '';
+      if (tables['classFiles']!.isNotEmpty ||
+          tables['yearFiles']!.isNotEmpty) {
+        try {
+          final supportBase =
+              storageRoot ?? await getApplicationSupportDirectory();
+          supportPrefix = '${supportBase.path}/';
+        } catch (_) {
+          // No platform bindings: export paths as-is (or basenames).
+        }
+      }
+
+      String exportStoredPath(String stored) {
+        if (supportPrefix.isNotEmpty && stored.startsWith(supportPrefix)) {
+          return stored.substring(supportPrefix.length);
+        }
+        if (stored.startsWith('/')) return stored.split('/').last;
+        return stored;
+      }
+
+      List<Map<String, dynamic>> relativized(List<Map<String, dynamic>> rows) {
+        return [
+          for (final r in rows)
+            {
+              ...r,
+              'storedPath': exportStoredPath(r['storedPath'] as String? ?? ''),
+            },
+        ];
+      }
+
+      tables['classFiles'] = relativized(tables['classFiles']!);
+      tables['yearFiles'] = relativized(tables['yearFiles']!);
       var files = 0;
       var rows = 0;
       Future<void> writeJson(String name, Object value) async {
@@ -293,8 +354,20 @@ class DataFolderService {
     }
   }
 
-  Future<Map<String, dynamic>?> _readJson(Directory dir, String name) async {
-    final file = File('${dir.path}/$name');
+  /// Reads and validates the folder manifest, or null when missing or
+  /// foreign. Used by the auto-sync poll to decide whether an import is
+  /// worthwhile without parsing every table file.
+  Future<Map<String, dynamic>?> readManifest(Directory dir) async {
+    final manifest = await _readJson(dir, manifestFile);
+    if (manifest == null ||
+        manifest['app'] != appTag ||
+        manifest['formatVersion'] != formatVersion) {
+      return null;
+    }
+    return manifest;
+  }
+
+  Future<Map<String, dynamic>?> _readJson(Directory dir, String name) async {    final file = File('${dir.path}/$name');
     if (!await file.exists()) return null;
     try {
       final decoded = jsonDecode(await file.readAsString());
@@ -552,7 +625,12 @@ class DataFolderService {
     if ((row.updatedAt as int) > deletedAt) return false;
     await remove(row.id as int);
     try {
-      final file = File(row.storedPath as String);
+      final file = File(
+        await ClassFilesService.resolveStoredPath(
+          root: storageRoot,
+          stored: row.storedPath as String,
+        ),
+      );
       if (await file.exists()) await file.delete();
     } catch (_) {
       // Best-effort: the row is already gone.
@@ -1116,10 +1194,8 @@ class DataFolderService {
       if (uuid.isEmpty || isTombstoned(tombTable, uuid, updatedAt)) continue;
       final parentId = resolveParent(parentIdOf(row));
       if (parentId == null) continue;
-      final blob = File(
-        '${dir.path}/$filesDir/${blobNameFor(uuid, row.fileName as String)}',
-      );
-      if (!await blob.exists()) continue;
+      final blob = await _findBlob(dir, uuid, row.fileName as String);
+      if (blob == null) continue;
       final existing = await fetchExisting(uuid);
       final localPath = await _storeBlob(
         scope,
@@ -1159,8 +1235,22 @@ class DataFolderService {
     }
   }
 
+  /// Locates an attachment blob: current human-readable name first, then
+  /// the legacy `<uuid>[.ext]` name from older exports. Null when absent.
+  Future<File?> _findBlob(Directory dir, String uuid, String fileName) async {
+    final primary = File(
+      '${dir.path}/$filesDir/${blobNameFor(uuid, fileName)}',
+    );
+    if (await primary.exists()) return primary;
+    final legacy = File(
+      '${dir.path}/$filesDir/${legacyBlobNameFor(uuid, fileName)}',
+    );
+    if (await legacy.exists()) return legacy;
+    return null;
+  }
+
   /// Copies a folder blob into local app storage
-  /// (`<scope>/<parentId>/`), returning the local path.
+  /// (`<scope>/<parentId>/`), returning the *relative* stored path.
   Future<String> _storeBlob(
     String scope,
     int parentId,
@@ -1173,7 +1263,7 @@ class DataFolderService {
     if (!await dir.exists()) await dir.create(recursive: true);
     final target = await ClassFilesService.uniqueTarget(dir, fileName);
     await blob.copy(target.path);
-    return target.path;
+    return '$scope/$parentId/${target.path.split('/').last}';
   }
 }
 

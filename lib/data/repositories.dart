@@ -3,6 +3,8 @@ import 'package:uuid/uuid.dart';
 import 'dart:convert';
 import 'dart:io';
 
+import '../services/class_files.dart';
+
 import '../services/menu/menu_provider.dart';
 import '../utils/time_format.dart';
 import 'database.dart';
@@ -13,6 +15,11 @@ int syncNow() => DateTime.now().millisecondsSinceEpoch;
 
 /// Fresh stable identity for a synced row.
 String newUuid() => const Uuid().v4();
+
+/// Absolutizes a stored attachment path: absolute (legacy) rows pass
+/// through, relative rows resolve against the app support directory.
+Future<String> resolveAttachmentPath(String stored) =>
+    ClassFilesService.resolveStoredPath(root: null, stored: stored);
 
 extension ClassCompanions on ClassesCompanion {
   // intentionally minimal; UI constructs companions inline
@@ -124,7 +131,7 @@ class ClassRepository {
         }
         for (final f in files) {
           try {
-            final file = File(f.storedPath);
+            final file = File(await resolveAttachmentPath(f.storedPath));
             if (await file.exists()) await file.delete();
           } catch (_) {
             // Best-effort: a missing file must not block year deletion.
@@ -202,7 +209,7 @@ class ClassRepository {
         final files = await ClassFileRepository(db).forClass(id);
         for (final f in files) {
           try {
-            final file = File(f.storedPath);
+            final file = File(await resolveAttachmentPath(f.storedPath));
             if (await file.exists()) await file.delete();
           } catch (_) {
             // Best-effort: a missing file must not block class deletion.
@@ -1181,13 +1188,21 @@ class SettingsRepository {
   Future<void> setMenuLocation(String value) => set(menuLocationKey, value);
 
   static const menuProviderKey = 'menu_provider';
-
   /// Dining-menu source id, or '' for none. Menu page stays empty until
   /// the user picks a source. Defaults to ''.
   Future<String> menuProviderId() async =>
       (await get(menuProviderKey)) ?? '';
 
   Future<void> setMenuProviderId(String value) => set(menuProviderKey, value);
+
+  static const autoSyncKey = 'auto_sync';
+
+  /// Whether the data folder syncs automatically (debounced export on
+  /// changes, periodic import). Defaults to true.
+  Future<bool> autoSync() async => (await get(autoSyncKey)) != 'false';
+
+  Future<void> setAutoSync(bool value) =>
+      set(autoSyncKey, value ? 'true' : 'false');
 }
 
 class MenuCacheRepository {
@@ -1285,7 +1300,7 @@ class YearFileRepository {
     )..where((t) => t.id.equals(id))).go();
     if (row != null) {
       try {
-        final file = File(row.storedPath);
+        final file = File(await resolveAttachmentPath(row.storedPath));
         if (await file.exists()) await file.delete();
       } catch (_) {
         // Best-effort: DB row is already gone.
@@ -1333,7 +1348,7 @@ class ClassFileRepository {
     )..where((t) => t.id.equals(id))).go();
     if (row != null) {
       try {
-        final file = File(row.storedPath);
+        final file = File(await resolveAttachmentPath(row.storedPath));
         if (await file.exists()) await file.delete();
       } catch (_) {
         // Best-effort: DB row is already gone.

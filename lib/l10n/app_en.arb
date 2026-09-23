@@ -720,7 +720,6 @@
   "fixedTimeHint": "Repeats from Day starts to Day ends",
   "dataFolderTitle": "Data folder",
   "dataFolderUnset": "Not set — pick a folder for data files",
-  "dataFolderHint": "One JSON file per table. Export on one device at a time.",
   "dataFolderNeedsFolder": "Pick a data folder first",
   "exportDataAction": "Export data",
   "importDataAction": "Import data",
@@ -761,6 +760,8 @@
       "date": {}
     }
   },
+  "autoSyncTitle": "Auto-sync",
+  "autoSyncHint": "Export changes and import updates automatically",
   "classFilesSection": "Files",
   "addFiles": "Add files",
   "noFilesYet": "No files yet.",

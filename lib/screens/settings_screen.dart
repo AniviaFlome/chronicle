@@ -869,6 +869,7 @@ class _DataFolderTiles extends ConsumerWidget {
     final folder = status.value?.folder;
     final exported = status.value?.lastExportAt;
     final imported = status.value?.lastImportAt;
+    final autoSync = status.value?.autoSync ?? true;
     String subtitle;
     if (folder == null || folder.isEmpty) {
       subtitle = context.l10n.dataFolderUnset;
@@ -892,7 +893,6 @@ class _DataFolderTiles extends ConsumerWidget {
           ),
         );
       }
-      if (lines.length == 1) lines.add(context.l10n.dataFolderHint);
       subtitle = lines.join('\n');
     }
     return Column(
@@ -920,6 +920,32 @@ class _DataFolderTiles extends ConsumerWidget {
           leading: const Icon(Icons.download_outlined),
           title: Text(context.l10n.importDataAction),
           onTap: busy ? null : onImport,
+        ),
+        SwitchListTile(
+          secondary: const Icon(Icons.sync_outlined),
+          title: Text(context.l10n.autoSyncTitle),
+          subtitle: Text(context.l10n.autoSyncHint),
+          value: autoSync,
+          onChanged: busy
+              ? null
+              : (v) async {
+                  try {
+                    await ref
+                        .read(settingsRepositoryProvider)
+                        .setAutoSync(v);
+                    ref.invalidate(dataFolderStatusProvider);
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            context.l10n.couldNotSaveSetting('$e'),
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
         ),
       ],
     );

@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-23
+
+### Added
+- Automatic data-folder sync while the app runs: changes export a few
+  seconds after edits, folder updates import within ~30s and at startup.
+  Toggle in Settings → Data; manual Export/Import remain as override.
+
+### Fixed
+- Attachment references are relative paths, so files survive reinstalls
+  and user changes (legacy absolute rows still resolve). Sync blobs use
+  readable `stem_shortid.ext` names; exports carry no absolute device
+  paths. Old `uuid.ext` blobs still import.
+
 ## [1.1.0] - 2026-09-23
 
 ### Added

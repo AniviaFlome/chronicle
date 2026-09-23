@@ -1237,10 +1237,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dataFolderUnset => 'Not set — pick a folder for data files';
 
   @override
-  String get dataFolderHint =>
-      'One JSON file per table. Export on one device at a time.';
-
-  @override
   String get dataFolderNeedsFolder => 'Pick a data folder first';
 
   @override
@@ -1278,6 +1274,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String dataLastImport(Object date) {
     return 'Last import: $date';
   }
+
+  @override
+  String get autoSyncTitle => 'Auto-sync';
+
+  @override
+  String get autoSyncHint => 'Export changes and import updates automatically';
 
   @override
   String get classFilesSection => 'Files';

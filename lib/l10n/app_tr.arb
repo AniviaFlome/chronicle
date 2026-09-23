@@ -354,7 +354,6 @@
   "fixedTimeHint": "Gün başlangıcından gün bitişine tekrarlanır",
   "dataFolderTitle": "Veri klasörü",
   "dataFolderUnset": "Ayarlanmadı — veri dosyaları için bir klasör seçin",
-  "dataFolderHint": "Tablo başına bir JSON dosyası. Bir seferde tek cihazda dışa aktarın.",
   "dataFolderNeedsFolder": "Önce bir veri klasörü seçin",
   "exportDataAction": "Verileri dışa aktar",
   "importDataAction": "Verileri içe aktar",
@@ -374,5 +373,7 @@
   "deleteFileBody": "\"{name}\" silinsin mi?",
   "openFileTooltip": "Dosyayı aç",
   "deleteFileTooltip": "Dosyayı sil",
-  "couldNotAccessFile": "Seçilen dosya okunamadı. Sistem dosya seçici erişimi reddetti — tekrar deneyin."
+  "couldNotAccessFile": "Seçilen dosya okunamadı. Sistem dosya seçici erişimi reddetti — tekrar deneyin.",
+  "autoSyncTitle": "Otomatik eşitleme",
+  "autoSyncHint": "Değişiklikleri dışa, güncellemeleri içe otomatik aktar"
 }

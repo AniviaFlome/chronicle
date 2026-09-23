@@ -248,19 +248,48 @@ void main() {
   });
 
   group('file folder sync', () {
-    test('blobNameFor is stable and sanitized', () {
+    test('blobNameFor is readable and stable', () {
       expect(
-        DataFolderService.blobNameFor('abc-123', 'syllabus.pdf'),
-        'abc-123.pdf',
-      );
-      expect(DataFolderService.blobNameFor('abc-123', 'README'), 'abc-123');
-      expect(
-        DataFolderService.blobNameFor('abc-123', 'a.PPTX'),
-        'abc-123.pptx',
+        DataFolderService.blobNameFor(
+          'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+          'syllabus.pdf',
+        ),
+        'syllabus_a1b2c3d4.pdf',
       );
       expect(
-        DataFolderService.blobNameFor('abc-123', 'weird!.pdf '),
-        'abc-123.pdf',
+        DataFolderService.blobNameFor('abc-123', 'README'),
+        'readme_abc123',
+      );
+      expect(
+        DataFolderService.blobNameFor('abc-123', 'My Slides.PPTX'),
+        'my_slides_abc123.pptx',
+      );
+      // Legacy uuid-only names are still recognized on import.
+      expect(
+        DataFolderService.legacyBlobNameFor(
+          'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+          'syllabus.pdf',
+        ),
+        'a1b2c3d4-e5f6-7890-abcd-ef1234567890.pdf',
+      );
+    });
+
+    test('resolveStoredPath joins relative rows, passes absolute through', () async {
+      final base = await Directory.systemTemp.createTemp('chronicle-base');
+      addTearDown(() => base.delete(recursive: true));
+      expect(
+        await ClassFilesService.resolveStoredPath(
+          root: base,
+          stored: 'class_files/7/syllabus.pdf',
+        ),
+        '${base.path}/class_files/7/syllabus.pdf',
+      );
+      expect(
+        await ClassFilesService.resolveStoredPath(
+          root: base,
+          stored: '/elsewhere/x.pdf',
+        ),
+        '/elsewhere/x.pdf',
       );
     });
 
@@ -345,6 +374,18 @@ void main() {
         '${folder.path}/files',
       ).listSync().whereType<File>().toList();
       expect(blobs, hasLength(2));
+      // Blobs keep human-readable names (not uuid soup).
+      final blobNames = {
+        for (final b in blobs) b.path.split('/').last,
+      };
+      expect(
+        blobNames.any((n) => n.startsWith('syllabus_') && n.endsWith('.pdf')),
+        isTrue,
+      );
+      expect(
+        blobNames.any((n) => n.startsWith('program_') && n.endsWith('.pdf')),
+        isTrue,
+      );
 
       // Device B: different local ids (dummy class first) to prove the
       // parent FK remaps by uuid instead of raw id.
@@ -363,14 +404,29 @@ void main() {
       expect(filesB, hasLength(1));
       expect(filesB.single.uuid, classUuid);
       expect(filesB.single.fileName, 'syllabus.pdf');
-      expect(filesB.single.storedPath, startsWith(baseB.path));
-      expect(await File(filesB.single.storedPath).readAsString(), classBytes);
+      // Stored paths are relative (portable); bytes land under baseB.
+      expect(filesB.single.storedPath, isNot(startsWith('/')));
+      final restoredB = File('${baseB.path}/${filesB.single.storedPath}');
+      expect(await restoredB.exists(), isTrue);
+      expect(await restoredB.readAsString(), classBytes);
 
       final yearsB = await ClassRepository(dbB).years();
       expect(yearsB, hasLength(1));
       final yfilesB = await YearFileRepository(dbB).forYear(yearsB.single.id);
       expect(yfilesB, hasLength(1));
-      expect(await File(yfilesB.single.storedPath).readAsString(), yearBytes);
+      expect(yfilesB.single.storedPath, isNot(startsWith('/')));
+      expect(
+        await File(
+          '${baseB.path}/${yfilesB.single.storedPath}',
+        ).readAsString(),
+        yearBytes,
+      );
+
+      // Exported metadata carries no absolute device paths.
+      final classJson = await File(
+        '${folder.path}/class_files.json',
+      ).readAsString();
+      expect(classJson, isNot(contains(baseA.path)));
 
       // Re-import is a no-op (no churn).
       final again = await DataFolderService(dbB, null, baseB).importData();
@@ -391,7 +447,68 @@ void main() {
       expect(reimported.error, isNull);
       expect(reimported.rowsDeleted, 1);
       expect(await ClassFileRepository(dbB).forClass(physicsB.id), isEmpty);
-      expect(await File(filesB.single.storedPath).exists(), isFalse);
+      expect(await ClassFileRepository(dbB).forClass(physicsB.id), isEmpty);
+      expect(await restoredB.exists(), isFalse);
+    });
+
+    test('legacy uuid blobs still import', () async {
+      // Folders written before human-readable names carry `<uuid>[.ext]`
+      // blobs; import must still find them.
+      final folder = await Directory.systemTemp.createTemp('chronicle-leg');
+      addTearDown(() => folder.delete(recursive: true));
+      final baseB = await Directory.systemTemp.createTemp('chronicle-stC');
+      addTearDown(() => baseB.delete(recursive: true));
+      final dbB = AppDatabase(NativeDatabase.memory());
+      addTearDown(dbB.close);
+      await SettingsRepository(dbB).setDataFolder(folder.path);
+
+      final dbA = AppDatabase(NativeDatabase.memory());
+      addTearDown(dbA.close);
+      await SettingsRepository(dbA).setDataFolder(folder.path);
+      final classIdA = await ClassRepository(dbA).create(
+        ClassesCompanion.insert(name: 'Math', colorValue: 1),
+      );
+      final srcDir = await Directory.systemTemp.createTemp('chronicle-src');
+      addTearDown(() => srcDir.delete(recursive: true));
+      final src = File('${srcDir.path}/notes.txt');
+      await src.writeAsString('legacy-bytes');
+      await ClassFileRepository(dbA).create(
+        ClassFilesCompanion.insert(
+          classId: classIdA,
+          fileName: 'notes.txt',
+          storedPath: src.path,
+        ),
+      );
+      final uuid = (await ClassFileRepository(
+        dbA,
+      ).forClass(classIdA)).single.uuid;
+      await DataFolderService(dbA, null, baseB).exportData();
+      // Simulate an old export: rename the blob to the legacy uuid name.
+      final blobsDir = Directory('${folder.path}/files');
+      final current = blobsDir.listSync().whereType<File>().single;
+      final legacy = File(
+        '${blobsDir.path}/${DataFolderService.legacyBlobNameFor(uuid, 'notes.txt')}',
+      );
+      await current.rename(legacy.path);
+
+      final imported = await DataFolderService(
+        dbB,
+        null,
+        baseB,
+      ).importData();
+      expect(imported.error, isNull);
+      final classesB = await ClassRepository(dbB).all();
+      final filesB = await ClassFileRepository(
+        dbB,
+      ).forClass(classesB.singleWhere((c) => c.name == 'Math').id);
+      expect(filesB, hasLength(1));
+      expect(filesB.single.uuid, uuid);
+      expect(
+        await File(
+          '${baseB.path}/${filesB.single.storedPath}',
+        ).readAsString(),
+        'legacy-bytes',
+      );
     });
   });
 }

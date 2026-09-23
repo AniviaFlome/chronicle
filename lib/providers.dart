@@ -8,6 +8,7 @@ import 'domain/grades.dart';
 import 'domain/schedule_models.dart' as engine;
 import 'domain/schedule_occurrence_engine.dart';
 import 'services/class_files.dart';
+import 'services/folder_sync.dart';
 import 'services/notifications.dart';
 import 'services/data_folder.dart';
 import 'utils/time_format.dart';
@@ -458,16 +459,27 @@ final dataFolderServiceProvider = Provider<DataFolderService>((ref) {
   );
 });
 
+/// Automatic folder sync controller (app lifetime).
+final folderSyncControllerProvider = Provider<FolderSyncController>((ref) {
+  final controller = FolderSyncController(
+    service: ref.watch(dataFolderServiceProvider),
+  );
+  ref.onDispose(() => controller.dispose());
+  return controller;
+});
+
 /// Data folder + last export/import status for the settings UI.
 class DataFolderStatus {
   final String? folder;
   final int? lastExportAt;
   final int? lastImportAt;
+  final bool autoSync;
 
   const DataFolderStatus({
     required this.folder,
     required this.lastExportAt,
     required this.lastImportAt,
+    required this.autoSync,
   });
 }
 
@@ -479,5 +491,6 @@ final dataFolderStatusProvider = FutureProvider<DataFolderStatus>((
     folder: await settings.dataFolder(),
     lastExportAt: await settings.dataLastExportAt(),
     lastImportAt: await settings.dataLastImportAt(),
+    autoSync: await settings.autoSync(),
   );
 });

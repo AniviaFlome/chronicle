@@ -2186,12 +2186,6 @@ abstract class AppLocalizations {
   /// **'Not set — pick a folder for data files'**
   String get dataFolderUnset;
 
-  /// No description provided for @dataFolderHint.
-  ///
-  /// In en, this message translates to:
-  /// **'One JSON file per table. Export on one device at a time.'**
-  String get dataFolderHint;
-
   /// No description provided for @dataFolderNeedsFolder.
   ///
   /// In en, this message translates to:
@@ -2245,6 +2239,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Last import: {date}'**
   String dataLastImport(Object date);
+
+  /// No description provided for @autoSyncTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-sync'**
+  String get autoSyncTitle;
+
+  /// No description provided for @autoSyncHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Export changes and import updates automatically'**
+  String get autoSyncHint;
 
   /// No description provided for @classFilesSection.
   ///

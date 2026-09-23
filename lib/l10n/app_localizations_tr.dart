@@ -1207,10 +1207,6 @@ class AppLocalizationsTr extends AppLocalizations {
       'Ayarlanmadı — veri dosyaları için bir klasör seçin';
 
   @override
-  String get dataFolderHint =>
-      'Tablo başına bir JSON dosyası. Bir seferde tek cihazda dışa aktarın.';
-
-  @override
   String get dataFolderNeedsFolder => 'Önce bir veri klasörü seçin';
 
   @override
@@ -1248,6 +1244,13 @@ class AppLocalizationsTr extends AppLocalizations {
   String dataLastImport(Object date) {
     return 'Son içe aktarma: $date';
   }
+
+  @override
+  String get autoSyncTitle => 'Otomatik eşitleme';
+
+  @override
+  String get autoSyncHint =>
+      'Değişiklikleri dışa, güncellemeleri içe otomatik aktar';
 
   @override
   String get classFilesSection => 'Dosyalar';
