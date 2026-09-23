@@ -1293,4 +1293,16 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get couldNotAccessFile =>
       'Seçilen dosya okunamadı. Sistem dosya seçici erişimi reddetti — tekrar deneyin.';
+
+  @override
+  String get importErrorFolderMissing =>
+      'Veri klasörü bulunamadı. Ayarlar\'dan yeniden seçin.';
+
+  @override
+  String get importErrorManifestMissing =>
+      'Bu klasörde henüz Chronicle dışa aktarımı yok. Önce diğer cihazınızdan dışa aktarın.';
+
+  @override
+  String get importErrorInvalid =>
+      'Bu klasör bir Chronicle veri klasörü değil.';
 }

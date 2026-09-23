@@ -275,11 +275,19 @@ void main() {
     expect(result.rowsDeleted, greaterThanOrEqualTo(1));
   });
 
-  test('import from empty folder reports not-a-data-folder', () async {
+  test('import from empty folder reports manifest-missing', () async {
     final (db, service) = await makeDevice(folder);
     final result = await service.importData();
-    expect(result.error, 'not-a-data-folder');
+    expect(result.error, 'manifest-missing');
     expect((await ClassRepository(db).all()), isEmpty);
+    await db.close();
+  });
+
+  test('import from a missing folder reports folder-missing', () async {
+    final (db, service) = await makeDevice(folder);
+    await SettingsRepository(db).setDataFolder('${folder.path}/gone');
+    final result = await service.importData();
+    expect(result.error, 'folder-missing');
     await db.close();
   });
 }

@@ -6,6 +6,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -385,7 +386,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
       final result = await service.importData();
       if (result.error != null) {
-        _snack(l10n.couldNotImportData(result.error!));
+        _snack(switch (result.error!) {
+          'folder-missing' => l10n.importErrorFolderMissing,
+          'manifest-missing' => l10n.importErrorManifestMissing,
+          'not-a-data-folder' => l10n.importErrorInvalid,
+          final other => l10n.couldNotImportData(other),
+        });
         return;
       }
       await _refreshAfterDataChange(result.rowsUpserted, result.rowsDeleted);
@@ -842,8 +848,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ],
           ),
+          const _VersionFooter(),
         ],
       ),
+    );
+  }
+}
+
+/// App version line at the bottom of Settings.
+class _VersionFooter extends StatelessWidget {
+  const _VersionFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snapshot) {
+        final info = snapshot.data;
+        if (info == null) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+          child: Center(
+            child: Text(
+              '${info.appName} ${info.version} (${info.buildNumber})',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

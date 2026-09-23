@@ -1322,4 +1322,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get couldNotAccessFile =>
       'Could not read the selected file. The system file picker refused access — try again.';
+
+  @override
+  String get importErrorFolderMissing =>
+      'Data folder not found. Re-pick it in Settings.';
+
+  @override
+  String get importErrorManifestMissing =>
+      'No Chronicle export in this folder yet. Export from your other device first.';
+
+  @override
+  String get importErrorInvalid =>
+      'This folder is not a Chronicle data folder.';
 }

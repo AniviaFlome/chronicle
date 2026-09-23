@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-23
+
+### Fixed
+- Import errors say what's wrong (folder gone vs no export yet vs
+  foreign folder) instead of one blanket message.
+
 ## [1.2.0] - 2026-09-23
 
 ### Added

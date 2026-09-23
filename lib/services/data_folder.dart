@@ -324,11 +324,16 @@ class DataFolderService {
     }
     try {
       if (!await dir.exists()) {
-        return const DataFolderResult(error: 'not-a-data-folder');
+        return const DataFolderResult(error: 'folder-missing');
       }
-      final manifest = await _readJson(dir, manifestFile);
-      if (manifest == null ||
-          manifest['app'] != appTag ||
+      final manifestRaw = await _readJson(dir, manifestFile);
+      if (manifestRaw == null) {
+        // Folder exists but no export landed here yet (or the file is
+        // unreadable, e.g. a revoked Android folder grant).
+        return const DataFolderResult(error: 'manifest-missing');
+      }
+      final manifest = manifestRaw;
+      if (manifest['app'] != appTag ||
           manifest['formatVersion'] != formatVersion) {
         return const DataFolderResult(error: 'not-a-data-folder');
       }

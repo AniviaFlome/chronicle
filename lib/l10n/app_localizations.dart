@@ -2317,6 +2317,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not read the selected file. The system file picker refused access — try again.'**
   String get couldNotAccessFile;
+
+  /// No description provided for @importErrorFolderMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Data folder not found. Re-pick it in Settings.'**
+  String get importErrorFolderMissing;
+
+  /// No description provided for @importErrorManifestMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'No Chronicle export in this folder yet. Export from your other device first.'**
+  String get importErrorManifestMissing;
+
+  /// No description provided for @importErrorInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is not a Chronicle data folder.'**
+  String get importErrorInvalid;
 }
 
 class _AppLocalizationsDelegate

@@ -375,5 +375,8 @@
   "deleteFileTooltip": "Dosyayı sil",
   "couldNotAccessFile": "Seçilen dosya okunamadı. Sistem dosya seçici erişimi reddetti — tekrar deneyin.",
   "autoSyncTitle": "Otomatik eşitleme",
-  "autoSyncHint": "Değişiklikleri dışa, güncellemeleri içe otomatik aktar"
+  "autoSyncHint": "Değişiklikleri dışa, güncellemeleri içe otomatik aktar",
+  "importErrorFolderMissing": "Veri klasörü bulunamadı. Ayarlar'dan yeniden seçin.",
+  "importErrorManifestMissing": "Bu klasörde henüz Chronicle dışa aktarımı yok. Önce diğer cihazınızdan dışa aktarın.",
+  "importErrorInvalid": "Bu klasör bir Chronicle veri klasörü değil."
 }
