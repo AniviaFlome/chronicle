@@ -12,6 +12,7 @@ import '../theme.dart';
 import '../l10n/l10n.dart';
 import '../utils/time_format.dart';
 import 'class_edit_screen.dart';
+import 'mark_absence_dialog.dart';
 
 /// Opens the detail sheet for one class meeting: time, room, teacher and
 /// absence marking.
@@ -179,9 +180,9 @@ class _OccurrenceSheet extends ConsumerWidget {
   }
 
   Future<void> _markAbsent(BuildContext context, WidgetRef ref) async {
-    final result = await showDialog<_AbsentDraft>(
-      context: context,
-      builder: (_) => const _MarkAbsentDialog(),
+    final result = await showMarkAbsenceDialog(
+      context,
+      title: context.l10n.markAbsent,
     );
     if (result == null || !context.mounted) return;
     try {
@@ -195,6 +196,7 @@ class _OccurrenceSheet extends ConsumerWidget {
               endMinutes: occurrence.endMinutes,
               reason: Value(result.reason.isEmpty ? null : result.reason),
               isExcused: Value(result.excused),
+              kind: Value(result.kind),
             ),
           );
     } catch (e) {
@@ -296,61 +298,3 @@ class _AbsentState extends StatelessWidget {
   }
 }
 
-class _AbsentDraft {
-  final String reason;
-  final bool excused;
-  const _AbsentDraft(this.reason, this.excused);
-}
-
-class _MarkAbsentDialog extends StatefulWidget {
-  const _MarkAbsentDialog();
-
-  @override
-  State<_MarkAbsentDialog> createState() => _MarkAbsentDialogState();
-}
-
-class _MarkAbsentDialogState extends State<_MarkAbsentDialog> {
-  final _reason = TextEditingController();
-  bool _excused = false;
-
-  @override
-  void dispose() {
-    _reason.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(context.l10n.markAbsent),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextFormField(
-            controller: _reason,
-            decoration: InputDecoration(labelText: context.l10n.reasonOptional),
-            autofocus: true,
-          ),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(context.l10n.excusedBadge),
-            value: _excused,
-            onChanged: (v) => setState(() => _excused = v ?? false),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(context.l10n.cancel),
-        ),
-        FilledButton(
-          onPressed: () =>
-              Navigator.of(context)
-                  .pop(_AbsentDraft(_reason.text.trim(), _excused)),
-          child: Text(context.l10n.save),
-        ),
-      ],
-    );
-  }
-}

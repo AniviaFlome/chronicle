@@ -11,6 +11,9 @@ enum TaskPriority { low, normal, high }
 
 enum RepeatKind { daily, weekly, monthly }
 
+/// Theoretical vs practical (applied) sessions, for per-kind absence quotas.
+enum AbsenceKind { theory, practical }
+
 class AcademicYears extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text().withLength(min: 1, max: 120)();
@@ -59,7 +62,15 @@ class Classes extends Table {
   TextColumn get notes => text().nullable()();
 
   /// Max tolerated unexcused absences; null = no quota tracking.
+  /// Legacy single limit: applies to theory when the per-kind limits below
+  /// are unset.
   IntColumn get maxAbsences => integer().nullable()();
+
+  /// Max tolerated unexcused theoretical absences; null = none (or legacy).
+  IntColumn get maxAbsencesTheory => integer().nullable()();
+
+  /// Max tolerated unexcused practical absences; null = none.
+  IntColumn get maxAbsencesPractical => integer().nullable()();
 
   /// Minutes before class start to remind; null = follow default setting.
   IntColumn get reminderMinutes => integer().nullable()();
@@ -162,6 +173,9 @@ class Absences extends Table {
   IntColumn get endMinutes => integer()();
   TextColumn get reason => text().nullable()();
   BoolColumn get isExcused => boolean().withDefault(const Constant(false))();
+
+  /// Theory vs practical session. Null = legacy rows, counted as theory.
+  TextColumn get kind => textEnum<AbsenceKind>().nullable()();
   TextColumn get notes => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -315,6 +329,48 @@ class XtraEvents extends Table {
 
   /// Epoch millis of the last local modification; drives sync
   /// last-write-wins. 0 only transiently until the v6 backfill.
+  IntColumn get updatedAt => integer().withDefault(const Constant(0))();
+}
+
+/// File attachments for an academic year (official program PDFs, etc).
+/// Synced through the data folder: metadata in `year_files.json`, blobs in
+/// `files/`. Physical paths are device-local and remapped on import.
+class YearFiles extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get yearId =>
+      integer().references(AcademicYears, #id, onDelete: KeyAction.cascade)();
+  TextColumn get fileName => text().withLength(min: 1, max: 255)();
+  TextColumn get storedPath => text()();
+  IntColumn get sizeBytes => integer().withDefault(const Constant(0))();
+  TextColumn get mimeType => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// Stable cross-device identity for folder sync (Syncthing transport).
+  TextColumn get uuid => text().withDefault(const Constant(''))();
+
+  /// Epoch millis of the last local modification; drives sync
+  /// last-write-wins.
+  IntColumn get updatedAt => integer().withDefault(const Constant(0))();
+}
+
+/// File attachments for a class (syllabus PDFs, slides, images).
+/// Synced through the data folder: metadata in `class_files.json`, blobs in
+/// `files/`. Physical paths are device-local and remapped on import.
+class ClassFiles extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get classId =>
+      integer().references(Classes, #id, onDelete: KeyAction.cascade)();
+  TextColumn get fileName => text().withLength(min: 1, max: 255)();
+  TextColumn get storedPath => text()();
+  IntColumn get sizeBytes => integer().withDefault(const Constant(0))();
+  TextColumn get mimeType => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// Stable cross-device identity for folder sync (Syncthing transport).
+  TextColumn get uuid => text().withDefault(const Constant(''))();
+
+  /// Epoch millis of the last local modification; drives sync
+  /// last-write-wins.
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
 }
 

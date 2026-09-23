@@ -3,9 +3,11 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../data/database.dart';
 import '../data/repositories.dart';
+import 'class_files.dart';
 
 /// Local data-folder export/import. The app only reads/writes plain JSON
 /// files in a user-chosen folder; whatever syncs that folder externally
@@ -13,23 +15,48 @@ import '../data/repositories.dart';
 /// no background watchers.
 ///
 /// Layout (one JSON file per table):
-/// `manifest.json`, `<table>.json` for each synced table, `tombstones.json`.
-/// Export overwrites the files atomically (temp + rename). Import merges
-/// newer rows by `updatedAt` keyed on stable `uuid`s and applies tombstones,
-/// then leaves the files alone — export again to publish merged state.
+/// `manifest.json`, `<table>.json` for each synced table, `tombstones.json`,
+/// plus `files/<uuid>[.ext]` content blobs for class/year attachments
+/// (referenced by `class_files.json` / `year_files.json`).
+/// Export overwrites the files atomically (temp + rename) and prunes
+/// unreferenced blobs. Import merges newer rows by `updatedAt` keyed on
+/// stable `uuid`s and applies tombstones, then leaves the files alone —
+/// export again to publish merged state.
 /// Safe workflow is one device at a time: export, let the folder sync
 /// elsewhere, import on the other side.
 class DataFolderService {
   final AppDatabase db;
   final SettingsRepository settings;
 
-  DataFolderService(this.db, [SettingsRepository? settings])
-    : settings = settings ?? SettingsRepository(db);
+  /// Overrides the app support directory for attachment blobs (hermetic
+  /// sync tests).
+  final Directory? storageRoot;
+
+  DataFolderService(
+    this.db, [
+    SettingsRepository? settingsParam,
+    this.storageRoot,
+  ]) : settings = settingsParam ?? SettingsRepository(db);
 
   static const formatVersion = 1;
   static const appTag = 'chronicle-data';
   static const manifestFile = 'manifest.json';
   static const tombstonesFile = 'tombstones.json';
+
+  /// Subdirectory holding attachment content blobs, named `<uuid>[.ext]`.
+  static const filesDir = 'files';
+
+  /// Content-blob file name for an attachment: stable uuid plus a
+  /// sanitized extension so folder browsers stay useful.
+  static String blobNameFor(String uuid, String fileName) {
+    final dot = fileName.lastIndexOf('.');
+    var ext = dot > 0 && dot < fileName.length - 1
+        ? fileName.substring(dot + 1).toLowerCase()
+        : '';
+    ext = ext.replaceAll(RegExp('[^a-z0-9]'), '');
+    if (ext.length > 10) ext = ext.substring(0, 10);
+    return ext.isEmpty ? uuid : '$uuid.$ext';
+  }
 
   /// Snapshot key → file name. Keys use the same table names everywhere
   /// so exports stay comparable.
@@ -46,6 +73,8 @@ class DataFolderService {
     'grades': 'grades.json',
     'pomodoroSessions': 'pomodoro_sessions.json',
     'xtraEvents': 'xtra_events.json',
+    'classFiles': 'class_files.json',
+    'yearFiles': 'year_files.json',
   };
 
   /// User-chosen data folder. Null when not configured.
@@ -96,6 +125,8 @@ class DataFolderService {
     await fix(db.grades, 'grades');
     await fix(db.pomodoroSessions, 'pomodoro_sessions');
     await fix(db.xtraEvents, 'xtra_events');
+    await fix(db.classFiles, 'class_files');
+    await fix(db.yearFiles, 'year_files');
   }
 
   Future<List<Map<String, dynamic>>> _rows(
@@ -131,6 +162,8 @@ class DataFolderService {
         'grades': await _rows(db.select(db.grades)),
         'pomodoroSessions': await _rows(db.select(db.pomodoroSessions)),
         'xtraEvents': await _rows(db.select(db.xtraEvents)),
+        'classFiles': await _rows(db.select(db.classFiles)),
+        'yearFiles': await _rows(db.select(db.yearFiles)),
       };
       final tombstones = await db.select(db.syncTombstones).get();
       var files = 0;
@@ -147,6 +180,20 @@ class DataFolderService {
         await writeJson(tableFiles[entry.key]!, entry.value);
         rows += entry.value.length;
       }
+      final referencedBlobs = <String>{};
+      referencedBlobs.addAll(
+        await _exportBlobs(dir, [
+          for (final r in await db.select(db.classFiles).get())
+            (uuid: r.uuid, fileName: r.fileName, storedPath: r.storedPath),
+        ]),
+      );
+      referencedBlobs.addAll(
+        await _exportBlobs(dir, [
+          for (final r in await db.select(db.yearFiles).get())
+            (uuid: r.uuid, fileName: r.fileName, storedPath: r.storedPath),
+        ]),
+      );
+      await _pruneBlobs(dir, referencedBlobs);
       await writeJson(tombstonesFile, [
         for (final t in tombstones)
           {
@@ -167,6 +214,42 @@ class DataFolderService {
     } catch (e) {
       debugPrint('Data folder export failed: $e');
       return DataFolderResult(error: '$e');
+    }
+  }
+
+  /// Copies attachment blobs into `<dir>/files/`, named by stable uuid,
+  /// and returns the referenced blob names. Missing local blobs are
+  /// skipped (metadata still syncs).
+  Future<Set<String>> _exportBlobs(
+    Directory dir,
+    List<({String uuid, String fileName, String storedPath})> rows,
+  ) async {
+    final blobsDir = Directory('${dir.path}/$filesDir');
+    if (!await blobsDir.exists()) await blobsDir.create(recursive: true);
+    final referenced = <String>{};
+    for (final r in rows) {
+      final src = File(r.storedPath);
+      if (!await src.exists()) continue;
+      final name = blobNameFor(r.uuid, r.fileName);
+      referenced.add(name);
+      await src.copy('${blobsDir.path}/$name');
+    }
+    return referenced;
+  }
+
+  /// Deletes blobs in `<dir>/files/` that no attachment references anymore.
+  Future<void> _pruneBlobs(Directory dir, Set<String> referenced) async {
+    final blobsDir = Directory('${dir.path}/$filesDir');
+    if (!await blobsDir.exists()) return;
+    await for (final e in blobsDir.list()) {
+      if (e is File) {
+        final name = e.path.split('/').last;
+        if (!referenced.contains(name) && !name.endsWith('.tmp')) {
+          try {
+            await e.delete();
+          } catch (_) {}
+        }
+      }
     }
   }
 
@@ -194,7 +277,7 @@ class DataFolderService {
         if (list != null) tables[entry.key] = list;
       }
       final tombs = await _readJsonList(dir, tombstonesFile) ?? const [];
-      final merged = await _mergeData(tables, tombs);
+      final merged = await _mergeData(dir, tables, tombs);
       await settings.setDataLastImportAt(
         DateTime.now().millisecondsSinceEpoch,
       );
@@ -240,6 +323,7 @@ class DataFolderService {
 
   /// Merges table lists plus tombstones. Returns counts.
   Future<DataFolderResult> _mergeData(
+    Directory dir,
     Map<String, List<Map<String, dynamic>>> tables,
     List<Map<String, dynamic>> rawTombs,
   ) async {
@@ -283,7 +367,7 @@ class DataFolderService {
       }
 
       // 3. Upsert rows parents-first, skipping tombstoned or stale rows.
-      upserted += await _mergeRows(listOf, localTombs);
+      upserted += await _mergeRows(dir, listOf, localTombs);
     });
 
     return DataFolderResult(
@@ -306,6 +390,8 @@ class DataFolderService {
     'grades',
     'pomodoro_sessions',
     'xtra_events',
+    'class_files',
+    'year_files',
   };
 
   /// Deletes the local row with [uuid] in [tableKey] when its updatedAt is
@@ -430,13 +516,56 @@ class DataFolderService {
             db.xtraEvents,
           )..where((t) => t.id.equals(id))).go(),
         );
+      // Attachment rows also drop their blobs from disk.
+      case 'class_files':
+        return _removeFile(
+          () => (db.select(
+            db.classFiles,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          (id) => (db.delete(
+            db.classFiles,
+          )..where((t) => t.id.equals(id))).go(),
+          deletedAt,
+        );
+      case 'year_files':
+        return _removeFile(
+          () => (db.select(
+            db.yearFiles,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          (id) => (db.delete(
+            db.yearFiles,
+          )..where((t) => t.id.equals(id))).go(),
+          deletedAt,
+        );
     }
     return false;
   }
 
+  /// [_deleteIfStale] for attachment tables: removes the row plus its blob.
+  Future<bool> _removeFile(
+    Future<dynamic> Function() fetch,
+    Future<int> Function(int id) remove,
+    int deletedAt,
+  ) async {
+    final row = await fetch();
+    if (row == null) return false;
+    if ((row.updatedAt as int) > deletedAt) return false;
+    await remove(row.id as int);
+    try {
+      final file = File(row.storedPath as String);
+      if (await file.exists()) await file.delete();
+    } catch (_) {
+      // Best-effort: the row is already gone.
+    }
+    return true;
+  }
+
   /// Upserts every table. FKs are remapped file-id → local-id via uuid maps
   /// built from the imported files (full state) plus local rows.
+  /// Attachment bytes come from `<dir>/files/` and are copied into local
+  /// app storage; incoming absolute paths are never trusted.
   Future<int> _mergeRows(
+    Directory dir,
     List<Map<String, dynamic>> Function(String key) listOf,
     Map<(String, String), int> tombstones,
   ) async {
@@ -871,7 +1000,180 @@ class DataFolderService {
       }
     }
 
+    // Class files (class FK remapped by uuid; bytes copied locally).
+    count += await _mergeFileRows(
+      dir: dir,
+      fileMaps: listOf('classFiles'),
+      parentFiles: fileClasses,
+      parentMap: classMap,
+      tombTable: 'class_files',
+      isTombstoned: tombstoned,
+      fetchExisting: (uuid) => (db.select(
+        db.classFiles,
+      )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+      insert: (row, parentId, storedPath) => db
+          .into(db.classFiles)
+          .insert(
+            row.toCompanion(true).copyWith(
+              id: const Value<int>.absent(),
+              classId: Value(parentId),
+              storedPath: Value(storedPath),
+            ),
+          ),
+      update: (row, existing, parentId, storedPath) => db
+          .update(db.classFiles)
+          .replace(
+            row.copyWith(
+              id: existing.id,
+              classId: parentId,
+              storedPath: storedPath,
+            ),
+          ),
+      parentIdOf: (row) => row.classId as int,
+      scope: 'class_files',
+    );
+
+    // Year files (year FK remapped by uuid; bytes copied locally).
+    count += await _mergeFileRows(
+      dir: dir,
+      fileMaps: listOf('yearFiles'),
+      parentFiles: fileYears,
+      parentMap: yearMap,
+      tombTable: 'year_files',
+      isTombstoned: tombstoned,
+      fetchExisting: (uuid) => (db.select(
+        db.yearFiles,
+      )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+      insert: (row, parentId, storedPath) => db
+          .into(db.yearFiles)
+          .insert(
+            row.toCompanion(true).copyWith(
+              id: const Value<int>.absent(),
+              yearId: Value(parentId),
+              storedPath: Value(storedPath),
+            ),
+          ),
+      update: (row, existing, parentId, storedPath) => db
+          .update(db.yearFiles)
+          .replace(
+            row.copyWith(
+              id: existing.id,
+              yearId: parentId,
+              storedPath: storedPath,
+            ),
+          ),
+      parentIdOf: (row) => row.yearId as int,
+      scope: 'year_files',
+    );
+
     return count;
+  }
+
+  /// Merges one attachment table. Parents are remapped file-id → local-id
+  /// via uuid; bytes are copied from the folder's `files/` dir into local
+  /// app storage (the incoming absolute path is never trusted). Rows whose
+  /// blob is missing from the folder are skipped.
+  Future<int> _mergeFileRows({
+    required Directory dir,
+    required List<Map<String, dynamic>> fileMaps,
+    required List<Map<String, dynamic>> parentFiles,
+    required Map<String, ({int id, int updatedAt})> parentMap,
+    required String tombTable,
+    required bool Function(String table, String uuid, int updatedAt)
+    isTombstoned,
+    required Future<dynamic> Function(String uuid) fetchExisting,
+    required Future<void> Function(dynamic row, int parentId, String storedPath)
+    insert,
+    required Future<void> Function(
+      dynamic row,
+      dynamic existing,
+      int parentId,
+      String storedPath,
+    )
+    update,
+    required int Function(dynamic row) parentIdOf,
+    required String scope,
+  }) async {
+    // Local helper mirroring _mergeRows' file-id → local-id remap.
+    int? resolveParent(int fileId) {
+      String? uuid;
+      for (final m in parentFiles) {
+        if (m['id'] == fileId) {
+          uuid = m['uuid'] as String?;
+          break;
+        }
+      }
+      if (uuid == null || uuid.isEmpty) return null;
+      return parentMap[uuid]?.id;
+    }
+
+    var count = 0;
+    for (final m in fileMaps) {
+      final dynamic row = _fileRowFromJson(tombTable, m);
+      if (row == null) continue;
+      final String uuid = row.uuid as String;
+      final int updatedAt = row.updatedAt as int;
+      if (uuid.isEmpty || isTombstoned(tombTable, uuid, updatedAt)) continue;
+      final parentId = resolveParent(parentIdOf(row));
+      if (parentId == null) continue;
+      final blob = File(
+        '${dir.path}/$filesDir/${blobNameFor(uuid, row.fileName as String)}',
+      );
+      if (!await blob.exists()) continue;
+      final existing = await fetchExisting(uuid);
+      final localPath = await _storeBlob(
+        scope,
+        parentId,
+        row.fileName as String,
+        blob,
+      );
+      if (existing == null) {
+        await insert(row, parentId, localPath);
+        count++;
+      } else if (updatedAt > (existing.updatedAt as int)) {
+        final oldPath = existing.storedPath as String;
+        await update(row, existing, parentId, localPath);
+        if (oldPath != localPath) {
+          try {
+            final old = File(oldPath);
+            if (await old.exists()) await old.delete();
+          } catch (_) {}
+        }
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /// Parses one attachment metadata map for [tombTable], or null when the
+  /// payload is malformed. Returns the typed drift row as dynamic.
+  dynamic _fileRowFromJson(String tombTable, Map<String, dynamic> m) {
+    try {
+      return switch (tombTable) {
+        'class_files' => ClassFile.fromJson(m),
+        'year_files' => YearFile.fromJson(m),
+        _ => null,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Copies a folder blob into local app storage
+  /// (`<scope>/<parentId>/`), returning the local path.
+  Future<String> _storeBlob(
+    String scope,
+    int parentId,
+    String fileName,
+    File blob,
+  ) async {
+    final base =
+        storageRoot ?? await getApplicationSupportDirectory();
+    final dir = Directory('${base.path}/$scope/$parentId');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final target = await ClassFilesService.uniqueTarget(dir, fileName);
+    await blob.copy(target.path);
+    return target.path;
   }
 }
 

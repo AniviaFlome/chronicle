@@ -1160,6 +1160,18 @@ abstract class AppLocalizations {
   /// **'Next week'**
   String get nextWeek;
 
+  /// No description provided for @prevDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous day'**
+  String get prevDay;
+
+  /// No description provided for @nextDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Next day'**
+  String get nextDay;
+
   /// No description provided for @couldNotLoadWeek.
   ///
   /// In en, this message translates to:
@@ -1231,18 +1243,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Focus'**
   String get focusTitle;
-
-  /// No description provided for @workingOn.
-  ///
-  /// In en, this message translates to:
-  /// **'Working on (optional)'**
-  String get workingOn;
-
-  /// No description provided for @nothingOption.
-  ///
-  /// In en, this message translates to:
-  /// **'Nothing'**
-  String get nothingOption;
 
   /// No description provided for @focusWorkLabel.
   ///
@@ -1657,6 +1657,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Absence limit'**
   String get absenceLimitLabel;
+
+  /// No description provided for @theoryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Theory'**
+  String get theoryLabel;
+
+  /// No description provided for @practicalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Practical'**
+  String get practicalLabel;
+
+  /// No description provided for @sessionKindLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Session'**
+  String get sessionKindLabel;
 
   /// No description provided for @classReminderLabel.
   ///
@@ -2227,6 +2245,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Last import: {date}'**
   String dataLastImport(Object date);
+
+  /// No description provided for @classFilesSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get classFilesSection;
+
+  /// No description provided for @addFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Add files'**
+  String get addFiles;
+
+  /// No description provided for @noFilesYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No files yet.'**
+  String get noFilesYet;
+
+  /// No description provided for @couldNotLoadFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load files: {error}'**
+  String couldNotLoadFiles(Object error);
+
+  /// No description provided for @couldNotPickFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not add files: {error}'**
+  String couldNotPickFiles(Object error);
+
+  /// No description provided for @couldNotOpenFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open file: {error}'**
+  String couldNotOpenFile(Object error);
+
+  /// No description provided for @deleteFileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete file?'**
+  String get deleteFileTitle;
+
+  /// No description provided for @deleteFileBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{name}\"?'**
+  String deleteFileBody(Object name);
+
+  /// No description provided for @openFileTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Open file'**
+  String get openFileTooltip;
+
+  /// No description provided for @deleteFileTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete file'**
+  String get deleteFileTooltip;
+
+  /// No description provided for @couldNotAccessFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the selected file. The system file picker refused access — try again.'**
+  String get couldNotAccessFile;
 }
 
 class _AppLocalizationsDelegate

@@ -7,6 +7,7 @@ import '../data/schedule_repository.dart';
 import '../providers.dart';
 import '../l10n/l10n.dart';
 import '../utils/time_format.dart';
+import 'attachment_panel.dart';
 
 /// Academic-year picker shared by the class editor, classes screen and
 /// settings. Null means "no year".
@@ -352,6 +353,58 @@ class YearsSection extends ConsumerWidget {
   }
 }
 
+/// Bottom sheet listing an academic year's attached files (official
+/// program PDFs, etc.) with add/open/delete. Synced like class files.
+class _YearFilesSheet extends ConsumerWidget {
+  final AcademicYear year;
+
+  const _YearFilesSheet({required this.year});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final files = ref.watch(yearFilesForYearProvider(year.id));
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(year.name, style: Theme.of(context).textTheme.titleLarge),
+            Flexible(
+              child: SingleChildScrollView(
+                child: AttachmentPanel(
+                  files: files.whenData(
+                    (list) => [
+                      for (final f in list)
+                        AttachedFile(
+                          id: f.id,
+                          fileName: f.fileName,
+                          storedPath: f.storedPath,
+                          sizeBytes: f.sizeBytes,
+                        ),
+                    ],
+                  ),
+                  onAdd: () =>
+                      ref.read(classFilesServiceProvider).pickAndSaveYear(year.id),
+                  onOpen: (f) => ref
+                      .read(classFilesServiceProvider)
+                      .openStoredFile(
+                        fileName: f.fileName,
+                        storedPath: f.storedPath,
+                      ),
+                  onDelete: (f) =>
+                      ref.read(yearFileRepositoryProvider).delete(f.id),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Edit/delete menu for one academic year.
 class _YearActions extends ConsumerWidget {
   final AcademicYear year;
@@ -365,6 +418,10 @@ class _YearActions extends ConsumerWidget {
       onSelected: (action) => _handle(context, ref, action),
       itemBuilder: (_) => [
         PopupMenuItem(value: 'edit', child: Text(context.l10n.editAction)),
+        PopupMenuItem(
+          value: 'files',
+          child: Text(context.l10n.classFilesSection),
+        ),
         PopupMenuItem(value: 'delete', child: Text(context.l10n.delete)),
       ],
     );
@@ -377,6 +434,15 @@ class _YearActions extends ConsumerWidget {
   ) async {
     if (action == 'edit') {
       await showYearDialog(context, ref, existing: year);
+      return;
+    }
+    if (action == 'files') {
+      if (!context.mounted) return;
+      await showModalBottomSheet(
+        context: context,
+        showDragHandle: true,
+        builder: (_) => _YearFilesSheet(year: year),
+      );
       return;
     }
     if (action != 'delete' || !context.mounted) return;

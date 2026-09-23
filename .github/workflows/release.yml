@@ -59,6 +59,13 @@ jobs:
       - name: Build Linux bundle tarball
         run: |
           flutter build linux --release
+          # drift loads sqlite via dlopen("libsqlite3.so"): ship a copy in
+          # bundle/lib plus a launcher that prefers it, so the tarball runs
+          # on systems without a global sqlite install.
+          SQLITE_SO=$(ldconfig -p | grep -m1 'libsqlite3.so.0 ' | awk '{print $NF}')
+          cp "$SQLITE_SO" build/linux/x64/release/bundle/lib/libsqlite3.so
+          printf '#!/bin/sh\nDIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nexport LD_LIBRARY_PATH="$DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\nexec "$DIR/chronicle" "$@"\n' > build/linux/x64/release/bundle/chronicle.sh
+          chmod +x build/linux/x64/release/bundle/chronicle.sh
           cd build/linux/x64/release/bundle
           tar -czvf $GITHUB_WORKSPACE/chronicle-linux-${{ github.ref_name }}.tar.gz *
 

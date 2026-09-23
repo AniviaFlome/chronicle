@@ -13,13 +13,11 @@ enum _Phase { idle, work, rest }
 
 /// Pomodoro focus timer. Sessions are recorded for streaks and statistics.
 class FocusScreen extends ConsumerStatefulWidget {
-  final int? taskId;
   final int workSeconds;
   final int breakSeconds;
 
   const FocusScreen({
     super.key,
-    this.taskId,
     this.workSeconds = 25 * 60,
     this.breakSeconds = 5 * 60,
   });
@@ -34,7 +32,6 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
 
   _Phase _phase = _Phase.idle;
   int _remaining = 0;
-  int? _taskId;
   late int _workSecondsState;
   late int _breakSecondsState;
   final _customWork = TextEditingController();
@@ -48,7 +45,6 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
     _remaining = widget.workSeconds;
     _workSecondsState = widget.workSeconds;
     _breakSecondsState = widget.breakSeconds;
-    _taskId = widget.taskId;
     _loadDurations();
   }
 
@@ -166,7 +162,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
             PomodoroSessionsCompanion.insert(
               startedAt: _workStartedAt ?? DateTime.now(),
               workMinutes: (_workSecondsState / 60).ceil().clamp(1, 24 * 60),
-              taskId: Value(_taskId),
+              taskId: const Value(null),
             ),
           );
     } catch (e) {
@@ -197,7 +193,6 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final sessions = ref.watch(sessionsStreamProvider);
-    final tasks = ref.watch(tasksStreamProvider);
 
     final today = DateTime.now();
     final todayMidnight = DateTime(today.year, today.month, today.day);
@@ -213,9 +208,6 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
       if (day == todayMidnight) sessionsToday++;
     }
     final streak = currentStreak(activeDays, todayMidnight);
-    final openTasks = (tasks.value ?? const [])
-        .where((t) => !t.task.isDone)
-        .toList();
 
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.focusTitle)),
@@ -243,30 +235,24 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
                           color: theme.colorScheme.outline,
                         ),
                       ),
-                      Text(
-                        _mmss(_remaining),
-                        style: theme.textTheme.displayMedium,
+                      // Fixed width + scale-down: large system fonts must
+                      // never push the countdown into the progress ring.
+                      SizedBox(
+                        width: 164,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.center,
+                          child: Text(
+                            _mmss(_remaining),
+                            style: theme.textTheme.displayMedium,
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<int?>(
-            initialValue: _taskId,
-            decoration: InputDecoration(
-              labelText: context.l10n.workingOn,
-            ),
-            items: [
-              DropdownMenuItem(value: null, child: Text(context.l10n.nothingOption)),
-              for (final t in openTasks)
-                DropdownMenuItem(value: t.task.id, child: Text(t.task.title)),
-            ],
-            onChanged: _phase == _Phase.idle
-                ? (v) => setState(() => _taskId = v)
-                : null,
           ),
           const SizedBox(height: 16),
           if (_phase == _Phase.idle) ...[

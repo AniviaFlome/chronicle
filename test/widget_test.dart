@@ -13,6 +13,7 @@ import 'package:chronicle/screens/dashboard_screen.dart';
 import 'package:chronicle/screens/error_dialog.dart';
 import 'package:chronicle/screens/focus_screen.dart';
 import 'package:chronicle/screens/grades_screen.dart';
+import 'package:chronicle/screens/mark_absence_dialog.dart';
 import 'package:chronicle/screens/occurrence_sheet.dart';
 import 'package:chronicle/screens/schedule_slot_dialog.dart';
 import 'package:chronicle/screens/settings_screen.dart';
@@ -22,6 +23,7 @@ import 'package:chronicle/screens/xtra_dialog.dart';
 import 'package:chronicle/screens/class_edit_screen.dart';
 import 'package:drift/native.dart';
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,6 +66,40 @@ String todayShortName() => const [
 ][DateTime.now().weekday - 1];
 
 void main() {
+  testWidgets('Mark-absent dialog returns the picked kind', (tester) async {
+    AbsenceDraft? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async {
+                result = await showMarkAbsenceDialog(
+                  context,
+                  title: 'Mark absent',
+                );
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Theory'), findsOneWidget);
+    expect(find.text('Practical'), findsOneWidget);
+    await tester.tap(find.text('Practical'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(result, isNotNull);
+    expect(result!.kind, AbsenceKind.practical);
+    expect(result!.excused, isFalse);
+  });
+
   testWidgets('Class form rejects invalid quotas and saves zero', (
     tester,
   ) async {
@@ -2180,6 +2216,56 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
+  testWidgets('Absences switch moves into the AppBar on Android', (
+    tester,
+  ) async {
+    // try/finally (not addTearDown): the binding verifies foundation
+    // invariants before teardowns run.
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final db = AppDatabase(NativeDatabase.memory());
+      await tester.runAsync(
+        () => db
+            .into(db.classes)
+            .insert(
+              ClassesCompanion.insert(name: 'Math', colorValue: 0xFF4F6BED),
+            ),
+      );
+      try {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [appDatabaseProvider.overrideWithValue(db)],
+            child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const AbsencesScreen(),
+            ),
+          ),
+        );
+        await pumpForAsync(tester);
+        // The switch lives in the AppBar title row, not in the filter body.
+        expect(find.byTooltip('Weeks grid view'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(AppBar),
+            matching: find.byType(SegmentedButton<String>),
+          ),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+      } finally {
+        await tester.runAsync(() => db.close());
+      }
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('Absences view switch persists across screen rebuilds', (
     tester,
   ) async {
@@ -2235,6 +2321,75 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Time grid view'));
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Bottom nav fits seven destinations on a narrow phone', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: const ChronicleApp(),
+      ),
+    );
+    await pumpForAsync(tester);
+    // Seven destinations share ~360px in a fixed-geometry bar: every label
+    // stays visible on a single line and icons never shift on tab switches
+    // (the old stock bar wrapped "Absences" to two lines).
+    const labels = [
+      'Today',
+      'Calendar',
+      'Classes',
+      'Tasks',
+      'Absences',
+      'Menu',
+      'Settings',
+    ];
+    // Only bar labels sit inside an InkWell; body texts with the same
+    // wording (e.g. screen titles) must not pollute the assertions.
+    Finder barLabel(String label) => find.descendant(
+      of: find.byType(InkWell),
+      matching: find.text(label),
+    );
+    for (final label in labels) {
+      expect(barLabel(label), findsOneWidget);
+    }
+    const navIcons = [
+      Icons.dashboard_outlined,
+      Icons.calendar_month_outlined,
+      Icons.school_outlined,
+      Icons.checklist_outlined,
+      Icons.event_busy_outlined,
+      Icons.restaurant_outlined,
+      Icons.settings_outlined,
+    ];
+    // Only bar icons sit inside an InkWell; body icons (e.g. the empty
+    // classes illustration) must not pollute the measurement.
+    Finder barIcon(IconData icon) => find.descendant(
+      of: find.byType(InkWell),
+      matching: find.byIcon(icon),
+    );
+    List<double> iconCenters() => [
+      for (final icon in navIcons) tester.getCenter(barIcon(icon)).dx,
+    ];
+    final before = iconCenters();
+    expect(before, hasLength(7));
+    // Switch tabs: labels stay and icon positions do not move.
+    await tester.tap(barIcon(Icons.school_outlined));
+    await pumpForAsync(tester);
+    expect(find.text('No classes yet'), findsOneWidget);
+    for (final label in labels) {
+      expect(barLabel(label), findsOneWidget);
+    }
+    expect(iconCenters(), before);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();

@@ -168,12 +168,34 @@ void main() {
     expect(migratedClass.uuid, isNotEmpty);
     expect(migratedClass.updatedAt, greaterThan(0));
     // v6/v7 tables exist.
-    for (final name in ['sync_tombstones', 'menu_cache']) {
+    for (final name in [
+      'sync_tombstones',
+      'menu_cache',
+      'class_files',
+      'year_files',
+    ]) {
       final info = await db
           .customSelect("SELECT name FROM sqlite_master WHERE name = '$name'")
           .get();
       expect(info, hasLength(1), reason: 'missing table $name');
     }
+    // v9 per-kind quota columns exist.
+    for (final column in ['max_absences_theory', 'max_absences_practical']) {
+      final classColumns = await db
+          .customSelect("PRAGMA table_info('classes')")
+          .get();
+      expect(
+        [for (final c in classColumns) c.data['name'] as String],
+        contains(column),
+      );
+    }
+    final absenceColumns = await db
+        .customSelect("PRAGMA table_info('absences')")
+        .get();
+    expect(
+      [for (final c in absenceColumns) c.data['name'] as String],
+      contains('kind'),
+    );
 
     // Old data survives.
     expect(await db.select(db.classes).get(), hasLength(1));

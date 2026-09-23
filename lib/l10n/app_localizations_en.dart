@@ -625,6 +625,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nextWeek => 'Next week';
 
   @override
+  String get prevDay => 'Previous day';
+
+  @override
+  String get nextDay => 'Next day';
+
+  @override
   String couldNotLoadWeek(Object error) {
     return 'Could not load week: $error';
   }
@@ -687,12 +693,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get focusTitle => 'Focus';
-
-  @override
-  String get workingOn => 'Working on (optional)';
-
-  @override
-  String get nothingOption => 'Nothing';
 
   @override
   String get focusWorkLabel => 'Work length';
@@ -923,6 +923,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get absenceLimitLabel => 'Absence limit';
+
+  @override
+  String get theoryLabel => 'Theory';
+
+  @override
+  String get practicalLabel => 'Practical';
+
+  @override
+  String get sessionKindLabel => 'Session';
 
   @override
   String get classReminderLabel => 'Class reminder (minutes before)';
@@ -1269,4 +1278,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String dataLastImport(Object date) {
     return 'Last import: $date';
   }
+
+  @override
+  String get classFilesSection => 'Files';
+
+  @override
+  String get addFiles => 'Add files';
+
+  @override
+  String get noFilesYet => 'No files yet.';
+
+  @override
+  String couldNotLoadFiles(Object error) {
+    return 'Could not load files: $error';
+  }
+
+  @override
+  String couldNotPickFiles(Object error) {
+    return 'Could not add files: $error';
+  }
+
+  @override
+  String couldNotOpenFile(Object error) {
+    return 'Could not open file: $error';
+  }
+
+  @override
+  String get deleteFileTitle => 'Delete file?';
+
+  @override
+  String deleteFileBody(Object name) {
+    return 'Delete \"$name\"?';
+  }
+
+  @override
+  String get openFileTooltip => 'Open file';
+
+  @override
+  String get deleteFileTooltip => 'Delete file';
+
+  @override
+  String get couldNotAccessFile =>
+      'Could not read the selected file. The system file picker refused access — try again.';
 }

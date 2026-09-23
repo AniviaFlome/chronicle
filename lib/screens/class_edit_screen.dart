@@ -9,7 +9,9 @@ import '../l10n/l10n.dart';
 import '../providers.dart';
 import '../theme.dart';
 import '../utils/time_format.dart';
+import 'attachment_panel.dart';
 import 'error_dialog.dart';
+import 'mark_absence_dialog.dart';
 import 'schedule_slot_dialog.dart';
 import 'year_widgets.dart';
 
@@ -213,6 +215,10 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
       onlineLink: Value(_emptyToNull(_onlineLink.text)),
       notes: Value(_emptyToNull(_notes.text)),
       maxAbsences: Value(int.tryParse(_maxAbsences.text.trim())),
+      // Per-kind quotas were dropped: keep those columns cleared so no
+      // stale split limits linger.
+      maxAbsencesTheory: const Value(null),
+      maxAbsencesPractical: const Value(null),
       reminderMinutes: Value(int.tryParse(_reminder.text.trim())),
       yearId: Value(_yearId),
       active: Value(_active),
@@ -553,6 +559,8 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
                 classId: widget.existing!.id,
                 limit: widget.existing!.maxAbsences,
               ),
+              const Divider(height: 32),
+              _FilesSection(classId: widget.existing!.id),
             ],
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -852,31 +860,76 @@ class _AbsenceSection extends ConsumerWidget {
                   )
                 else
                   for (final a in list)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Text(a.date.substring(5).replaceAll('-', '/')),
-                      title: Text(
-                        '${hhmm(a.startMinutes)} - ${hhmm(a.endMinutes)}',
-                      ),
-                      subtitle: Text(
-                        [
-                          if (a.reason != null && a.reason!.isNotEmpty)
-                            a.reason!,
-                          a.isExcused ? context.l10n.excusedBadge : context.l10n.unexcusedBadge,
-                        ].join(' · '),
-                      ),
-                      trailing: IconButton(
-                        tooltip: context.l10n.deleteAbsenceTooltip,
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () =>
-                            ref.read(absenceRepositoryProvider).unmark(a.id),
-                      ),
-                    ),
+                    _AbsenceRow(absence: a),
               ],
             );
           },
         ),
       ],
+    );
+  }
+}
+
+/// One recorded absence row with its session kind.
+class _AbsenceRow extends ConsumerWidget {
+  final Absence absence;
+
+  const _AbsenceRow({required this.absence});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final a = absence;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Text(a.date.substring(5).replaceAll('-', '/')),
+      title: Text('${hhmm(a.startMinutes)} - ${hhmm(a.endMinutes)}'),
+      subtitle: Text(
+        [
+          absenceKindInline(context.l10n, kindOfAbsence(a)),
+          if (a.reason != null && a.reason!.isNotEmpty) a.reason!,
+          a.isExcused
+              ? context.l10n.excusedBadge
+              : context.l10n.unexcusedBadge,
+        ].join(' · '),
+      ),
+      trailing: IconButton(
+        tooltip: context.l10n.deleteAbsenceTooltip,
+        icon: const Icon(Icons.delete_outline),
+        onPressed: () => ref.read(absenceRepositoryProvider).unmark(a.id),
+      ),
+    );
+  }
+}
+
+
+/// File attachments for a saved class (syllabus PDFs, slides, images).
+/// Picked via the platform picker, copied into app storage, synced
+/// through the data folder.
+class _FilesSection extends ConsumerWidget {
+  final int classId;
+
+  const _FilesSection({required this.classId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final files = ref.watch(classFilesForClassProvider(classId));
+    return AttachmentPanel(
+      files: files.whenData(
+        (list) => [
+          for (final f in list)
+            AttachedFile(
+              id: f.id,
+              fileName: f.fileName,
+              storedPath: f.storedPath,
+              sizeBytes: f.sizeBytes,
+            ),
+        ],
+      ),
+      onAdd: () => ref.read(classFilesServiceProvider).pickAndSave(classId),
+      onOpen: (f) => ref
+          .read(classFilesServiceProvider)
+          .openStoredFile(fileName: f.fileName, storedPath: f.storedPath),
+      onDelete: (f) => ref.read(classFileRepositoryProvider).delete(f.id),
     );
   }
 }

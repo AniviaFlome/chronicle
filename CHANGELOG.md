@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-23
+
+### Added
+- File attachments for classes and academic years (PDFs, slides, program
+  files). Picked via the platform picker, opened in the default app,
+  synced through the data folder.
+- Absence records carry an optional theory/practical tag, picked in the
+  mark-absent dialog and shown in absence lists.
+
+### Fixed
+- Focus timer: dropped the "working on" picker; countdown stays inside
+  the progress ring with large fonts.
+- Menu: date no longer claims every day is today; Beytepe/Sıhhiye switch
+  fits narrow phones; allergen chips and legend highlight match their
+  shapes; day chevrons labeled correctly.
+- Phone bottom bar: all 7 labels visible, single-line, no shifting; on
+  Android the Absences view switch sits in the title row.
+- Class file errors show a plain message; Linux release bundles sqlite.
+
+### Changed
+- Launcher icon is now a 7-day strip (was a calendar page).
+
 ## [1.0.0] - 2026-09-21
 
 ### Added

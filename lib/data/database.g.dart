@@ -748,6 +748,27 @@ class $ClassesTable extends Classes with TableInfo<$ClassesTable, ClassesData> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _maxAbsencesTheoryMeta = const VerificationMeta(
+    'maxAbsencesTheory',
+  );
+  @override
+  late final GeneratedColumn<int> maxAbsencesTheory = GeneratedColumn<int>(
+    'max_absences_theory',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _maxAbsencesPracticalMeta =
+      const VerificationMeta('maxAbsencesPractical');
+  @override
+  late final GeneratedColumn<int> maxAbsencesPractical = GeneratedColumn<int>(
+    'max_absences_practical',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _reminderMinutesMeta = const VerificationMeta(
     'reminderMinutes',
   );
@@ -810,6 +831,8 @@ class $ClassesTable extends Classes with TableInfo<$ClassesTable, ClassesData> {
     onlineLink,
     notes,
     maxAbsences,
+    maxAbsencesTheory,
+    maxAbsencesPractical,
     reminderMinutes,
     active,
     uuid,
@@ -918,6 +941,24 @@ class $ClassesTable extends Classes with TableInfo<$ClassesTable, ClassesData> {
         ),
       );
     }
+    if (data.containsKey('max_absences_theory')) {
+      context.handle(
+        _maxAbsencesTheoryMeta,
+        maxAbsencesTheory.isAcceptableOrUnknown(
+          data['max_absences_theory']!,
+          _maxAbsencesTheoryMeta,
+        ),
+      );
+    }
+    if (data.containsKey('max_absences_practical')) {
+      context.handle(
+        _maxAbsencesPracticalMeta,
+        maxAbsencesPractical.isAcceptableOrUnknown(
+          data['max_absences_practical']!,
+          _maxAbsencesPracticalMeta,
+        ),
+      );
+    }
     if (data.containsKey('reminder_minutes')) {
       context.handle(
         _reminderMinutesMeta,
@@ -1010,6 +1051,14 @@ class $ClassesTable extends Classes with TableInfo<$ClassesTable, ClassesData> {
         DriftSqlType.int,
         data['${effectivePrefix}max_absences'],
       ),
+      maxAbsencesTheory: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}max_absences_theory'],
+      ),
+      maxAbsencesPractical: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}max_absences_practical'],
+      ),
       reminderMinutes: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}reminder_minutes'],
@@ -1053,7 +1102,15 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
   final String? notes;
 
   /// Max tolerated unexcused absences; null = no quota tracking.
+  /// Legacy single limit: applies to theory when the per-kind limits below
+  /// are unset.
   final int? maxAbsences;
+
+  /// Max tolerated unexcused theoretical absences; null = none (or legacy).
+  final int? maxAbsencesTheory;
+
+  /// Max tolerated unexcused practical absences; null = none.
+  final int? maxAbsencesPractical;
 
   /// Minutes before class start to remind; null = follow default setting.
   final int? reminderMinutes;
@@ -1081,6 +1138,8 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
     this.onlineLink,
     this.notes,
     this.maxAbsences,
+    this.maxAbsencesTheory,
+    this.maxAbsencesPractical,
     this.reminderMinutes,
     required this.active,
     required this.uuid,
@@ -1124,6 +1183,12 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
     }
     if (!nullToAbsent || maxAbsences != null) {
       map['max_absences'] = Variable<int>(maxAbsences);
+    }
+    if (!nullToAbsent || maxAbsencesTheory != null) {
+      map['max_absences_theory'] = Variable<int>(maxAbsencesTheory);
+    }
+    if (!nullToAbsent || maxAbsencesPractical != null) {
+      map['max_absences_practical'] = Variable<int>(maxAbsencesPractical);
     }
     if (!nullToAbsent || reminderMinutes != null) {
       map['reminder_minutes'] = Variable<int>(reminderMinutes);
@@ -1170,6 +1235,12 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
       maxAbsences: maxAbsences == null && nullToAbsent
           ? const Value.absent()
           : Value(maxAbsences),
+      maxAbsencesTheory: maxAbsencesTheory == null && nullToAbsent
+          ? const Value.absent()
+          : Value(maxAbsencesTheory),
+      maxAbsencesPractical: maxAbsencesPractical == null && nullToAbsent
+          ? const Value.absent()
+          : Value(maxAbsencesPractical),
       reminderMinutes: reminderMinutes == null && nullToAbsent
           ? const Value.absent()
           : Value(reminderMinutes),
@@ -1199,6 +1270,10 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
       onlineLink: serializer.fromJson<String?>(json['onlineLink']),
       notes: serializer.fromJson<String?>(json['notes']),
       maxAbsences: serializer.fromJson<int?>(json['maxAbsences']),
+      maxAbsencesTheory: serializer.fromJson<int?>(json['maxAbsencesTheory']),
+      maxAbsencesPractical: serializer.fromJson<int?>(
+        json['maxAbsencesPractical'],
+      ),
       reminderMinutes: serializer.fromJson<int?>(json['reminderMinutes']),
       active: serializer.fromJson<bool>(json['active']),
       uuid: serializer.fromJson<String>(json['uuid']),
@@ -1223,6 +1298,8 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
       'onlineLink': serializer.toJson<String?>(onlineLink),
       'notes': serializer.toJson<String?>(notes),
       'maxAbsences': serializer.toJson<int?>(maxAbsences),
+      'maxAbsencesTheory': serializer.toJson<int?>(maxAbsencesTheory),
+      'maxAbsencesPractical': serializer.toJson<int?>(maxAbsencesPractical),
       'reminderMinutes': serializer.toJson<int?>(reminderMinutes),
       'active': serializer.toJson<bool>(active),
       'uuid': serializer.toJson<String>(uuid),
@@ -1245,6 +1322,8 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
     Value<String?> onlineLink = const Value.absent(),
     Value<String?> notes = const Value.absent(),
     Value<int?> maxAbsences = const Value.absent(),
+    Value<int?> maxAbsencesTheory = const Value.absent(),
+    Value<int?> maxAbsencesPractical = const Value.absent(),
     Value<int?> reminderMinutes = const Value.absent(),
     bool? active,
     String? uuid,
@@ -1264,6 +1343,12 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
     onlineLink: onlineLink.present ? onlineLink.value : this.onlineLink,
     notes: notes.present ? notes.value : this.notes,
     maxAbsences: maxAbsences.present ? maxAbsences.value : this.maxAbsences,
+    maxAbsencesTheory: maxAbsencesTheory.present
+        ? maxAbsencesTheory.value
+        : this.maxAbsencesTheory,
+    maxAbsencesPractical: maxAbsencesPractical.present
+        ? maxAbsencesPractical.value
+        : this.maxAbsencesPractical,
     reminderMinutes: reminderMinutes.present
         ? reminderMinutes.value
         : this.reminderMinutes,
@@ -1295,6 +1380,12 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
       maxAbsences: data.maxAbsences.present
           ? data.maxAbsences.value
           : this.maxAbsences,
+      maxAbsencesTheory: data.maxAbsencesTheory.present
+          ? data.maxAbsencesTheory.value
+          : this.maxAbsencesTheory,
+      maxAbsencesPractical: data.maxAbsencesPractical.present
+          ? data.maxAbsencesPractical.value
+          : this.maxAbsencesPractical,
       reminderMinutes: data.reminderMinutes.present
           ? data.reminderMinutes.value
           : this.reminderMinutes,
@@ -1321,6 +1412,8 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
           ..write('onlineLink: $onlineLink, ')
           ..write('notes: $notes, ')
           ..write('maxAbsences: $maxAbsences, ')
+          ..write('maxAbsencesTheory: $maxAbsencesTheory, ')
+          ..write('maxAbsencesPractical: $maxAbsencesPractical, ')
           ..write('reminderMinutes: $reminderMinutes, ')
           ..write('active: $active, ')
           ..write('uuid: $uuid, ')
@@ -1345,6 +1438,8 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
     onlineLink,
     notes,
     maxAbsences,
+    maxAbsencesTheory,
+    maxAbsencesPractical,
     reminderMinutes,
     active,
     uuid,
@@ -1368,6 +1463,8 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
           other.onlineLink == this.onlineLink &&
           other.notes == this.notes &&
           other.maxAbsences == this.maxAbsences &&
+          other.maxAbsencesTheory == this.maxAbsencesTheory &&
+          other.maxAbsencesPractical == this.maxAbsencesPractical &&
           other.reminderMinutes == this.reminderMinutes &&
           other.active == this.active &&
           other.uuid == this.uuid &&
@@ -1389,6 +1486,8 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
   final Value<String?> onlineLink;
   final Value<String?> notes;
   final Value<int?> maxAbsences;
+  final Value<int?> maxAbsencesTheory;
+  final Value<int?> maxAbsencesPractical;
   final Value<int?> reminderMinutes;
   final Value<bool> active;
   final Value<String> uuid;
@@ -1408,6 +1507,8 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
     this.onlineLink = const Value.absent(),
     this.notes = const Value.absent(),
     this.maxAbsences = const Value.absent(),
+    this.maxAbsencesTheory = const Value.absent(),
+    this.maxAbsencesPractical = const Value.absent(),
     this.reminderMinutes = const Value.absent(),
     this.active = const Value.absent(),
     this.uuid = const Value.absent(),
@@ -1428,6 +1529,8 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
     this.onlineLink = const Value.absent(),
     this.notes = const Value.absent(),
     this.maxAbsences = const Value.absent(),
+    this.maxAbsencesTheory = const Value.absent(),
+    this.maxAbsencesPractical = const Value.absent(),
     this.reminderMinutes = const Value.absent(),
     this.active = const Value.absent(),
     this.uuid = const Value.absent(),
@@ -1449,6 +1552,8 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
     Expression<String>? onlineLink,
     Expression<String>? notes,
     Expression<int>? maxAbsences,
+    Expression<int>? maxAbsencesTheory,
+    Expression<int>? maxAbsencesPractical,
     Expression<int>? reminderMinutes,
     Expression<bool>? active,
     Expression<String>? uuid,
@@ -1469,6 +1574,9 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
       if (onlineLink != null) 'online_link': onlineLink,
       if (notes != null) 'notes': notes,
       if (maxAbsences != null) 'max_absences': maxAbsences,
+      if (maxAbsencesTheory != null) 'max_absences_theory': maxAbsencesTheory,
+      if (maxAbsencesPractical != null)
+        'max_absences_practical': maxAbsencesPractical,
       if (reminderMinutes != null) 'reminder_minutes': reminderMinutes,
       if (active != null) 'active': active,
       if (uuid != null) 'uuid': uuid,
@@ -1491,6 +1599,8 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
     Value<String?>? onlineLink,
     Value<String?>? notes,
     Value<int?>? maxAbsences,
+    Value<int?>? maxAbsencesTheory,
+    Value<int?>? maxAbsencesPractical,
     Value<int?>? reminderMinutes,
     Value<bool>? active,
     Value<String>? uuid,
@@ -1511,6 +1621,8 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
       onlineLink: onlineLink ?? this.onlineLink,
       notes: notes ?? this.notes,
       maxAbsences: maxAbsences ?? this.maxAbsences,
+      maxAbsencesTheory: maxAbsencesTheory ?? this.maxAbsencesTheory,
+      maxAbsencesPractical: maxAbsencesPractical ?? this.maxAbsencesPractical,
       reminderMinutes: reminderMinutes ?? this.reminderMinutes,
       active: active ?? this.active,
       uuid: uuid ?? this.uuid,
@@ -1563,6 +1675,12 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
     if (maxAbsences.present) {
       map['max_absences'] = Variable<int>(maxAbsences.value);
     }
+    if (maxAbsencesTheory.present) {
+      map['max_absences_theory'] = Variable<int>(maxAbsencesTheory.value);
+    }
+    if (maxAbsencesPractical.present) {
+      map['max_absences_practical'] = Variable<int>(maxAbsencesPractical.value);
+    }
     if (reminderMinutes.present) {
       map['reminder_minutes'] = Variable<int>(reminderMinutes.value);
     }
@@ -1595,6 +1713,8 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
           ..write('onlineLink: $onlineLink, ')
           ..write('notes: $notes, ')
           ..write('maxAbsences: $maxAbsences, ')
+          ..write('maxAbsencesTheory: $maxAbsencesTheory, ')
+          ..write('maxAbsencesPractical: $maxAbsencesPractical, ')
           ..write('reminderMinutes: $reminderMinutes, ')
           ..write('active: $active, ')
           ..write('uuid: $uuid, ')
@@ -3561,6 +3681,15 @@ class $AbsencesTable extends Absences with TableInfo<$AbsencesTable, Absence> {
     ),
     defaultValue: const Constant(false),
   );
+  @override
+  late final GeneratedColumnWithTypeConverter<AbsenceKind?, String> kind =
+      GeneratedColumn<String>(
+        'kind',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      ).withConverter<AbsenceKind?>($AbsencesTable.$converterkindn);
   static const VerificationMeta _notesMeta = const VerificationMeta('notes');
   @override
   late final GeneratedColumn<String> notes = GeneratedColumn<String>(
@@ -3613,6 +3742,7 @@ class $AbsencesTable extends Absences with TableInfo<$AbsencesTable, Absence> {
     endMinutes,
     reason,
     isExcused,
+    kind,
     notes,
     createdAt,
     uuid,
@@ -3741,6 +3871,12 @@ class $AbsencesTable extends Absences with TableInfo<$AbsencesTable, Absence> {
         DriftSqlType.bool,
         data['${effectivePrefix}is_excused'],
       )!,
+      kind: $AbsencesTable.$converterkindn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}kind'],
+        ),
+      ),
       notes: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
@@ -3764,6 +3900,11 @@ class $AbsencesTable extends Absences with TableInfo<$AbsencesTable, Absence> {
   $AbsencesTable createAlias(String alias) {
     return $AbsencesTable(attachedDatabase, alias);
   }
+
+  static JsonTypeConverter2<AbsenceKind, String, String> $converterkind =
+      const EnumNameConverter<AbsenceKind>(AbsenceKind.values);
+  static JsonTypeConverter2<AbsenceKind?, String?, String?> $converterkindn =
+      JsonTypeConverter2.asNullable($converterkind);
 }
 
 class Absence extends DataClass implements Insertable<Absence> {
@@ -3778,6 +3919,9 @@ class Absence extends DataClass implements Insertable<Absence> {
   final int endMinutes;
   final String? reason;
   final bool isExcused;
+
+  /// Theory vs practical session. Null = legacy rows, counted as theory.
+  final AbsenceKind? kind;
   final String? notes;
   final DateTime createdAt;
 
@@ -3796,6 +3940,7 @@ class Absence extends DataClass implements Insertable<Absence> {
     required this.endMinutes,
     this.reason,
     required this.isExcused,
+    this.kind,
     this.notes,
     required this.createdAt,
     required this.uuid,
@@ -3813,6 +3958,11 @@ class Absence extends DataClass implements Insertable<Absence> {
       map['reason'] = Variable<String>(reason);
     }
     map['is_excused'] = Variable<bool>(isExcused);
+    if (!nullToAbsent || kind != null) {
+      map['kind'] = Variable<String>(
+        $AbsencesTable.$converterkindn.toSql(kind),
+      );
+    }
     if (!nullToAbsent || notes != null) {
       map['notes'] = Variable<String>(notes);
     }
@@ -3833,6 +3983,7 @@ class Absence extends DataClass implements Insertable<Absence> {
           ? const Value.absent()
           : Value(reason),
       isExcused: Value(isExcused),
+      kind: kind == null && nullToAbsent ? const Value.absent() : Value(kind),
       notes: notes == null && nullToAbsent
           ? const Value.absent()
           : Value(notes),
@@ -3855,6 +4006,9 @@ class Absence extends DataClass implements Insertable<Absence> {
       endMinutes: serializer.fromJson<int>(json['endMinutes']),
       reason: serializer.fromJson<String?>(json['reason']),
       isExcused: serializer.fromJson<bool>(json['isExcused']),
+      kind: $AbsencesTable.$converterkindn.fromJson(
+        serializer.fromJson<String?>(json['kind']),
+      ),
       notes: serializer.fromJson<String?>(json['notes']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       uuid: serializer.fromJson<String>(json['uuid']),
@@ -3872,6 +4026,9 @@ class Absence extends DataClass implements Insertable<Absence> {
       'endMinutes': serializer.toJson<int>(endMinutes),
       'reason': serializer.toJson<String?>(reason),
       'isExcused': serializer.toJson<bool>(isExcused),
+      'kind': serializer.toJson<String?>(
+        $AbsencesTable.$converterkindn.toJson(kind),
+      ),
       'notes': serializer.toJson<String?>(notes),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'uuid': serializer.toJson<String>(uuid),
@@ -3887,6 +4044,7 @@ class Absence extends DataClass implements Insertable<Absence> {
     int? endMinutes,
     Value<String?> reason = const Value.absent(),
     bool? isExcused,
+    Value<AbsenceKind?> kind = const Value.absent(),
     Value<String?> notes = const Value.absent(),
     DateTime? createdAt,
     String? uuid,
@@ -3899,6 +4057,7 @@ class Absence extends DataClass implements Insertable<Absence> {
     endMinutes: endMinutes ?? this.endMinutes,
     reason: reason.present ? reason.value : this.reason,
     isExcused: isExcused ?? this.isExcused,
+    kind: kind.present ? kind.value : this.kind,
     notes: notes.present ? notes.value : this.notes,
     createdAt: createdAt ?? this.createdAt,
     uuid: uuid ?? this.uuid,
@@ -3917,6 +4076,7 @@ class Absence extends DataClass implements Insertable<Absence> {
           : this.endMinutes,
       reason: data.reason.present ? data.reason.value : this.reason,
       isExcused: data.isExcused.present ? data.isExcused.value : this.isExcused,
+      kind: data.kind.present ? data.kind.value : this.kind,
       notes: data.notes.present ? data.notes.value : this.notes,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       uuid: data.uuid.present ? data.uuid.value : this.uuid,
@@ -3934,6 +4094,7 @@ class Absence extends DataClass implements Insertable<Absence> {
           ..write('endMinutes: $endMinutes, ')
           ..write('reason: $reason, ')
           ..write('isExcused: $isExcused, ')
+          ..write('kind: $kind, ')
           ..write('notes: $notes, ')
           ..write('createdAt: $createdAt, ')
           ..write('uuid: $uuid, ')
@@ -3951,6 +4112,7 @@ class Absence extends DataClass implements Insertable<Absence> {
     endMinutes,
     reason,
     isExcused,
+    kind,
     notes,
     createdAt,
     uuid,
@@ -3967,6 +4129,7 @@ class Absence extends DataClass implements Insertable<Absence> {
           other.endMinutes == this.endMinutes &&
           other.reason == this.reason &&
           other.isExcused == this.isExcused &&
+          other.kind == this.kind &&
           other.notes == this.notes &&
           other.createdAt == this.createdAt &&
           other.uuid == this.uuid &&
@@ -3981,6 +4144,7 @@ class AbsencesCompanion extends UpdateCompanion<Absence> {
   final Value<int> endMinutes;
   final Value<String?> reason;
   final Value<bool> isExcused;
+  final Value<AbsenceKind?> kind;
   final Value<String?> notes;
   final Value<DateTime> createdAt;
   final Value<String> uuid;
@@ -3993,6 +4157,7 @@ class AbsencesCompanion extends UpdateCompanion<Absence> {
     this.endMinutes = const Value.absent(),
     this.reason = const Value.absent(),
     this.isExcused = const Value.absent(),
+    this.kind = const Value.absent(),
     this.notes = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.uuid = const Value.absent(),
@@ -4006,6 +4171,7 @@ class AbsencesCompanion extends UpdateCompanion<Absence> {
     required int endMinutes,
     this.reason = const Value.absent(),
     this.isExcused = const Value.absent(),
+    this.kind = const Value.absent(),
     this.notes = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.uuid = const Value.absent(),
@@ -4022,6 +4188,7 @@ class AbsencesCompanion extends UpdateCompanion<Absence> {
     Expression<int>? endMinutes,
     Expression<String>? reason,
     Expression<bool>? isExcused,
+    Expression<String>? kind,
     Expression<String>? notes,
     Expression<DateTime>? createdAt,
     Expression<String>? uuid,
@@ -4035,6 +4202,7 @@ class AbsencesCompanion extends UpdateCompanion<Absence> {
       if (endMinutes != null) 'end_minutes': endMinutes,
       if (reason != null) 'reason': reason,
       if (isExcused != null) 'is_excused': isExcused,
+      if (kind != null) 'kind': kind,
       if (notes != null) 'notes': notes,
       if (createdAt != null) 'created_at': createdAt,
       if (uuid != null) 'uuid': uuid,
@@ -4050,6 +4218,7 @@ class AbsencesCompanion extends UpdateCompanion<Absence> {
     Value<int>? endMinutes,
     Value<String?>? reason,
     Value<bool>? isExcused,
+    Value<AbsenceKind?>? kind,
     Value<String?>? notes,
     Value<DateTime>? createdAt,
     Value<String>? uuid,
@@ -4063,6 +4232,7 @@ class AbsencesCompanion extends UpdateCompanion<Absence> {
       endMinutes: endMinutes ?? this.endMinutes,
       reason: reason ?? this.reason,
       isExcused: isExcused ?? this.isExcused,
+      kind: kind ?? this.kind,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       uuid: uuid ?? this.uuid,
@@ -4094,6 +4264,11 @@ class AbsencesCompanion extends UpdateCompanion<Absence> {
     if (isExcused.present) {
       map['is_excused'] = Variable<bool>(isExcused.value);
     }
+    if (kind.present) {
+      map['kind'] = Variable<String>(
+        $AbsencesTable.$converterkindn.toSql(kind.value),
+      );
+    }
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
     }
@@ -4119,6 +4294,7 @@ class AbsencesCompanion extends UpdateCompanion<Absence> {
           ..write('endMinutes: $endMinutes, ')
           ..write('reason: $reason, ')
           ..write('isExcused: $isExcused, ')
+          ..write('kind: $kind, ')
           ..write('notes: $notes, ')
           ..write('createdAt: $createdAt, ')
           ..write('uuid: $uuid, ')
@@ -8101,6 +8277,1114 @@ class MenuCacheCompanion extends UpdateCompanion<MenuCacheData> {
   }
 }
 
+class $ClassFilesTable extends ClassFiles
+    with TableInfo<$ClassFilesTable, ClassFile> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ClassFilesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _classIdMeta = const VerificationMeta(
+    'classId',
+  );
+  @override
+  late final GeneratedColumn<int> classId = GeneratedColumn<int>(
+    'class_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES classes (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _fileNameMeta = const VerificationMeta(
+    'fileName',
+  );
+  @override
+  late final GeneratedColumn<String> fileName = GeneratedColumn<String>(
+    'file_name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 255,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _storedPathMeta = const VerificationMeta(
+    'storedPath',
+  );
+  @override
+  late final GeneratedColumn<String> storedPath = GeneratedColumn<String>(
+    'stored_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sizeBytesMeta = const VerificationMeta(
+    'sizeBytes',
+  );
+  @override
+  late final GeneratedColumn<int> sizeBytes = GeneratedColumn<int>(
+    'size_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _mimeTypeMeta = const VerificationMeta(
+    'mimeType',
+  );
+  @override
+  late final GeneratedColumn<String> mimeType = GeneratedColumn<String>(
+    'mime_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
+  @override
+  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
+    'uuid',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    classId,
+    fileName,
+    storedPath,
+    sizeBytes,
+    mimeType,
+    createdAt,
+    uuid,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'class_files';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ClassFile> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('class_id')) {
+      context.handle(
+        _classIdMeta,
+        classId.isAcceptableOrUnknown(data['class_id']!, _classIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_classIdMeta);
+    }
+    if (data.containsKey('file_name')) {
+      context.handle(
+        _fileNameMeta,
+        fileName.isAcceptableOrUnknown(data['file_name']!, _fileNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fileNameMeta);
+    }
+    if (data.containsKey('stored_path')) {
+      context.handle(
+        _storedPathMeta,
+        storedPath.isAcceptableOrUnknown(data['stored_path']!, _storedPathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_storedPathMeta);
+    }
+    if (data.containsKey('size_bytes')) {
+      context.handle(
+        _sizeBytesMeta,
+        sizeBytes.isAcceptableOrUnknown(data['size_bytes']!, _sizeBytesMeta),
+      );
+    }
+    if (data.containsKey('mime_type')) {
+      context.handle(
+        _mimeTypeMeta,
+        mimeType.isAcceptableOrUnknown(data['mime_type']!, _mimeTypeMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('uuid')) {
+      context.handle(
+        _uuidMeta,
+        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ClassFile map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ClassFile(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      classId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}class_id'],
+      )!,
+      fileName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_name'],
+      )!,
+      storedPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stored_path'],
+      )!,
+      sizeBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size_bytes'],
+      )!,
+      mimeType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mime_type'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      uuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uuid'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ClassFilesTable createAlias(String alias) {
+    return $ClassFilesTable(attachedDatabase, alias);
+  }
+}
+
+class ClassFile extends DataClass implements Insertable<ClassFile> {
+  final int id;
+  final int classId;
+  final String fileName;
+  final String storedPath;
+  final int sizeBytes;
+  final String? mimeType;
+  final DateTime createdAt;
+
+  /// Stable cross-device identity for folder sync (Syncthing transport).
+  final String uuid;
+
+  /// Epoch millis of the last local modification; drives sync
+  /// last-write-wins.
+  final int updatedAt;
+  const ClassFile({
+    required this.id,
+    required this.classId,
+    required this.fileName,
+    required this.storedPath,
+    required this.sizeBytes,
+    this.mimeType,
+    required this.createdAt,
+    required this.uuid,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['class_id'] = Variable<int>(classId);
+    map['file_name'] = Variable<String>(fileName);
+    map['stored_path'] = Variable<String>(storedPath);
+    map['size_bytes'] = Variable<int>(sizeBytes);
+    if (!nullToAbsent || mimeType != null) {
+      map['mime_type'] = Variable<String>(mimeType);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['uuid'] = Variable<String>(uuid);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  ClassFilesCompanion toCompanion(bool nullToAbsent) {
+    return ClassFilesCompanion(
+      id: Value(id),
+      classId: Value(classId),
+      fileName: Value(fileName),
+      storedPath: Value(storedPath),
+      sizeBytes: Value(sizeBytes),
+      mimeType: mimeType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mimeType),
+      createdAt: Value(createdAt),
+      uuid: Value(uuid),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory ClassFile.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ClassFile(
+      id: serializer.fromJson<int>(json['id']),
+      classId: serializer.fromJson<int>(json['classId']),
+      fileName: serializer.fromJson<String>(json['fileName']),
+      storedPath: serializer.fromJson<String>(json['storedPath']),
+      sizeBytes: serializer.fromJson<int>(json['sizeBytes']),
+      mimeType: serializer.fromJson<String?>(json['mimeType']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      uuid: serializer.fromJson<String>(json['uuid']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'classId': serializer.toJson<int>(classId),
+      'fileName': serializer.toJson<String>(fileName),
+      'storedPath': serializer.toJson<String>(storedPath),
+      'sizeBytes': serializer.toJson<int>(sizeBytes),
+      'mimeType': serializer.toJson<String?>(mimeType),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'uuid': serializer.toJson<String>(uuid),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  ClassFile copyWith({
+    int? id,
+    int? classId,
+    String? fileName,
+    String? storedPath,
+    int? sizeBytes,
+    Value<String?> mimeType = const Value.absent(),
+    DateTime? createdAt,
+    String? uuid,
+    int? updatedAt,
+  }) => ClassFile(
+    id: id ?? this.id,
+    classId: classId ?? this.classId,
+    fileName: fileName ?? this.fileName,
+    storedPath: storedPath ?? this.storedPath,
+    sizeBytes: sizeBytes ?? this.sizeBytes,
+    mimeType: mimeType.present ? mimeType.value : this.mimeType,
+    createdAt: createdAt ?? this.createdAt,
+    uuid: uuid ?? this.uuid,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  ClassFile copyWithCompanion(ClassFilesCompanion data) {
+    return ClassFile(
+      id: data.id.present ? data.id.value : this.id,
+      classId: data.classId.present ? data.classId.value : this.classId,
+      fileName: data.fileName.present ? data.fileName.value : this.fileName,
+      storedPath: data.storedPath.present
+          ? data.storedPath.value
+          : this.storedPath,
+      sizeBytes: data.sizeBytes.present ? data.sizeBytes.value : this.sizeBytes,
+      mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      uuid: data.uuid.present ? data.uuid.value : this.uuid,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ClassFile(')
+          ..write('id: $id, ')
+          ..write('classId: $classId, ')
+          ..write('fileName: $fileName, ')
+          ..write('storedPath: $storedPath, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('uuid: $uuid, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    classId,
+    fileName,
+    storedPath,
+    sizeBytes,
+    mimeType,
+    createdAt,
+    uuid,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ClassFile &&
+          other.id == this.id &&
+          other.classId == this.classId &&
+          other.fileName == this.fileName &&
+          other.storedPath == this.storedPath &&
+          other.sizeBytes == this.sizeBytes &&
+          other.mimeType == this.mimeType &&
+          other.createdAt == this.createdAt &&
+          other.uuid == this.uuid &&
+          other.updatedAt == this.updatedAt);
+}
+
+class ClassFilesCompanion extends UpdateCompanion<ClassFile> {
+  final Value<int> id;
+  final Value<int> classId;
+  final Value<String> fileName;
+  final Value<String> storedPath;
+  final Value<int> sizeBytes;
+  final Value<String?> mimeType;
+  final Value<DateTime> createdAt;
+  final Value<String> uuid;
+  final Value<int> updatedAt;
+  const ClassFilesCompanion({
+    this.id = const Value.absent(),
+    this.classId = const Value.absent(),
+    this.fileName = const Value.absent(),
+    this.storedPath = const Value.absent(),
+    this.sizeBytes = const Value.absent(),
+    this.mimeType = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.uuid = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  ClassFilesCompanion.insert({
+    this.id = const Value.absent(),
+    required int classId,
+    required String fileName,
+    required String storedPath,
+    this.sizeBytes = const Value.absent(),
+    this.mimeType = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.uuid = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : classId = Value(classId),
+       fileName = Value(fileName),
+       storedPath = Value(storedPath);
+  static Insertable<ClassFile> custom({
+    Expression<int>? id,
+    Expression<int>? classId,
+    Expression<String>? fileName,
+    Expression<String>? storedPath,
+    Expression<int>? sizeBytes,
+    Expression<String>? mimeType,
+    Expression<DateTime>? createdAt,
+    Expression<String>? uuid,
+    Expression<int>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (classId != null) 'class_id': classId,
+      if (fileName != null) 'file_name': fileName,
+      if (storedPath != null) 'stored_path': storedPath,
+      if (sizeBytes != null) 'size_bytes': sizeBytes,
+      if (mimeType != null) 'mime_type': mimeType,
+      if (createdAt != null) 'created_at': createdAt,
+      if (uuid != null) 'uuid': uuid,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  ClassFilesCompanion copyWith({
+    Value<int>? id,
+    Value<int>? classId,
+    Value<String>? fileName,
+    Value<String>? storedPath,
+    Value<int>? sizeBytes,
+    Value<String?>? mimeType,
+    Value<DateTime>? createdAt,
+    Value<String>? uuid,
+    Value<int>? updatedAt,
+  }) {
+    return ClassFilesCompanion(
+      id: id ?? this.id,
+      classId: classId ?? this.classId,
+      fileName: fileName ?? this.fileName,
+      storedPath: storedPath ?? this.storedPath,
+      sizeBytes: sizeBytes ?? this.sizeBytes,
+      mimeType: mimeType ?? this.mimeType,
+      createdAt: createdAt ?? this.createdAt,
+      uuid: uuid ?? this.uuid,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (classId.present) {
+      map['class_id'] = Variable<int>(classId.value);
+    }
+    if (fileName.present) {
+      map['file_name'] = Variable<String>(fileName.value);
+    }
+    if (storedPath.present) {
+      map['stored_path'] = Variable<String>(storedPath.value);
+    }
+    if (sizeBytes.present) {
+      map['size_bytes'] = Variable<int>(sizeBytes.value);
+    }
+    if (mimeType.present) {
+      map['mime_type'] = Variable<String>(mimeType.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (uuid.present) {
+      map['uuid'] = Variable<String>(uuid.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ClassFilesCompanion(')
+          ..write('id: $id, ')
+          ..write('classId: $classId, ')
+          ..write('fileName: $fileName, ')
+          ..write('storedPath: $storedPath, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('uuid: $uuid, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $YearFilesTable extends YearFiles
+    with TableInfo<$YearFilesTable, YearFile> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $YearFilesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _yearIdMeta = const VerificationMeta('yearId');
+  @override
+  late final GeneratedColumn<int> yearId = GeneratedColumn<int>(
+    'year_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES academic_years (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _fileNameMeta = const VerificationMeta(
+    'fileName',
+  );
+  @override
+  late final GeneratedColumn<String> fileName = GeneratedColumn<String>(
+    'file_name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 255,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _storedPathMeta = const VerificationMeta(
+    'storedPath',
+  );
+  @override
+  late final GeneratedColumn<String> storedPath = GeneratedColumn<String>(
+    'stored_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sizeBytesMeta = const VerificationMeta(
+    'sizeBytes',
+  );
+  @override
+  late final GeneratedColumn<int> sizeBytes = GeneratedColumn<int>(
+    'size_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _mimeTypeMeta = const VerificationMeta(
+    'mimeType',
+  );
+  @override
+  late final GeneratedColumn<String> mimeType = GeneratedColumn<String>(
+    'mime_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
+  @override
+  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
+    'uuid',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    yearId,
+    fileName,
+    storedPath,
+    sizeBytes,
+    mimeType,
+    createdAt,
+    uuid,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'year_files';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<YearFile> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('year_id')) {
+      context.handle(
+        _yearIdMeta,
+        yearId.isAcceptableOrUnknown(data['year_id']!, _yearIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_yearIdMeta);
+    }
+    if (data.containsKey('file_name')) {
+      context.handle(
+        _fileNameMeta,
+        fileName.isAcceptableOrUnknown(data['file_name']!, _fileNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fileNameMeta);
+    }
+    if (data.containsKey('stored_path')) {
+      context.handle(
+        _storedPathMeta,
+        storedPath.isAcceptableOrUnknown(data['stored_path']!, _storedPathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_storedPathMeta);
+    }
+    if (data.containsKey('size_bytes')) {
+      context.handle(
+        _sizeBytesMeta,
+        sizeBytes.isAcceptableOrUnknown(data['size_bytes']!, _sizeBytesMeta),
+      );
+    }
+    if (data.containsKey('mime_type')) {
+      context.handle(
+        _mimeTypeMeta,
+        mimeType.isAcceptableOrUnknown(data['mime_type']!, _mimeTypeMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('uuid')) {
+      context.handle(
+        _uuidMeta,
+        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  YearFile map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return YearFile(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      yearId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}year_id'],
+      )!,
+      fileName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_name'],
+      )!,
+      storedPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stored_path'],
+      )!,
+      sizeBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size_bytes'],
+      )!,
+      mimeType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mime_type'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      uuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uuid'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $YearFilesTable createAlias(String alias) {
+    return $YearFilesTable(attachedDatabase, alias);
+  }
+}
+
+class YearFile extends DataClass implements Insertable<YearFile> {
+  final int id;
+  final int yearId;
+  final String fileName;
+  final String storedPath;
+  final int sizeBytes;
+  final String? mimeType;
+  final DateTime createdAt;
+
+  /// Stable cross-device identity for folder sync (Syncthing transport).
+  final String uuid;
+
+  /// Epoch millis of the last local modification; drives sync
+  /// last-write-wins.
+  final int updatedAt;
+  const YearFile({
+    required this.id,
+    required this.yearId,
+    required this.fileName,
+    required this.storedPath,
+    required this.sizeBytes,
+    this.mimeType,
+    required this.createdAt,
+    required this.uuid,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['year_id'] = Variable<int>(yearId);
+    map['file_name'] = Variable<String>(fileName);
+    map['stored_path'] = Variable<String>(storedPath);
+    map['size_bytes'] = Variable<int>(sizeBytes);
+    if (!nullToAbsent || mimeType != null) {
+      map['mime_type'] = Variable<String>(mimeType);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['uuid'] = Variable<String>(uuid);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  YearFilesCompanion toCompanion(bool nullToAbsent) {
+    return YearFilesCompanion(
+      id: Value(id),
+      yearId: Value(yearId),
+      fileName: Value(fileName),
+      storedPath: Value(storedPath),
+      sizeBytes: Value(sizeBytes),
+      mimeType: mimeType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mimeType),
+      createdAt: Value(createdAt),
+      uuid: Value(uuid),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory YearFile.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return YearFile(
+      id: serializer.fromJson<int>(json['id']),
+      yearId: serializer.fromJson<int>(json['yearId']),
+      fileName: serializer.fromJson<String>(json['fileName']),
+      storedPath: serializer.fromJson<String>(json['storedPath']),
+      sizeBytes: serializer.fromJson<int>(json['sizeBytes']),
+      mimeType: serializer.fromJson<String?>(json['mimeType']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      uuid: serializer.fromJson<String>(json['uuid']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'yearId': serializer.toJson<int>(yearId),
+      'fileName': serializer.toJson<String>(fileName),
+      'storedPath': serializer.toJson<String>(storedPath),
+      'sizeBytes': serializer.toJson<int>(sizeBytes),
+      'mimeType': serializer.toJson<String?>(mimeType),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'uuid': serializer.toJson<String>(uuid),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  YearFile copyWith({
+    int? id,
+    int? yearId,
+    String? fileName,
+    String? storedPath,
+    int? sizeBytes,
+    Value<String?> mimeType = const Value.absent(),
+    DateTime? createdAt,
+    String? uuid,
+    int? updatedAt,
+  }) => YearFile(
+    id: id ?? this.id,
+    yearId: yearId ?? this.yearId,
+    fileName: fileName ?? this.fileName,
+    storedPath: storedPath ?? this.storedPath,
+    sizeBytes: sizeBytes ?? this.sizeBytes,
+    mimeType: mimeType.present ? mimeType.value : this.mimeType,
+    createdAt: createdAt ?? this.createdAt,
+    uuid: uuid ?? this.uuid,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  YearFile copyWithCompanion(YearFilesCompanion data) {
+    return YearFile(
+      id: data.id.present ? data.id.value : this.id,
+      yearId: data.yearId.present ? data.yearId.value : this.yearId,
+      fileName: data.fileName.present ? data.fileName.value : this.fileName,
+      storedPath: data.storedPath.present
+          ? data.storedPath.value
+          : this.storedPath,
+      sizeBytes: data.sizeBytes.present ? data.sizeBytes.value : this.sizeBytes,
+      mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      uuid: data.uuid.present ? data.uuid.value : this.uuid,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('YearFile(')
+          ..write('id: $id, ')
+          ..write('yearId: $yearId, ')
+          ..write('fileName: $fileName, ')
+          ..write('storedPath: $storedPath, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('uuid: $uuid, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    yearId,
+    fileName,
+    storedPath,
+    sizeBytes,
+    mimeType,
+    createdAt,
+    uuid,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is YearFile &&
+          other.id == this.id &&
+          other.yearId == this.yearId &&
+          other.fileName == this.fileName &&
+          other.storedPath == this.storedPath &&
+          other.sizeBytes == this.sizeBytes &&
+          other.mimeType == this.mimeType &&
+          other.createdAt == this.createdAt &&
+          other.uuid == this.uuid &&
+          other.updatedAt == this.updatedAt);
+}
+
+class YearFilesCompanion extends UpdateCompanion<YearFile> {
+  final Value<int> id;
+  final Value<int> yearId;
+  final Value<String> fileName;
+  final Value<String> storedPath;
+  final Value<int> sizeBytes;
+  final Value<String?> mimeType;
+  final Value<DateTime> createdAt;
+  final Value<String> uuid;
+  final Value<int> updatedAt;
+  const YearFilesCompanion({
+    this.id = const Value.absent(),
+    this.yearId = const Value.absent(),
+    this.fileName = const Value.absent(),
+    this.storedPath = const Value.absent(),
+    this.sizeBytes = const Value.absent(),
+    this.mimeType = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.uuid = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  YearFilesCompanion.insert({
+    this.id = const Value.absent(),
+    required int yearId,
+    required String fileName,
+    required String storedPath,
+    this.sizeBytes = const Value.absent(),
+    this.mimeType = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.uuid = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : yearId = Value(yearId),
+       fileName = Value(fileName),
+       storedPath = Value(storedPath);
+  static Insertable<YearFile> custom({
+    Expression<int>? id,
+    Expression<int>? yearId,
+    Expression<String>? fileName,
+    Expression<String>? storedPath,
+    Expression<int>? sizeBytes,
+    Expression<String>? mimeType,
+    Expression<DateTime>? createdAt,
+    Expression<String>? uuid,
+    Expression<int>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (yearId != null) 'year_id': yearId,
+      if (fileName != null) 'file_name': fileName,
+      if (storedPath != null) 'stored_path': storedPath,
+      if (sizeBytes != null) 'size_bytes': sizeBytes,
+      if (mimeType != null) 'mime_type': mimeType,
+      if (createdAt != null) 'created_at': createdAt,
+      if (uuid != null) 'uuid': uuid,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  YearFilesCompanion copyWith({
+    Value<int>? id,
+    Value<int>? yearId,
+    Value<String>? fileName,
+    Value<String>? storedPath,
+    Value<int>? sizeBytes,
+    Value<String?>? mimeType,
+    Value<DateTime>? createdAt,
+    Value<String>? uuid,
+    Value<int>? updatedAt,
+  }) {
+    return YearFilesCompanion(
+      id: id ?? this.id,
+      yearId: yearId ?? this.yearId,
+      fileName: fileName ?? this.fileName,
+      storedPath: storedPath ?? this.storedPath,
+      sizeBytes: sizeBytes ?? this.sizeBytes,
+      mimeType: mimeType ?? this.mimeType,
+      createdAt: createdAt ?? this.createdAt,
+      uuid: uuid ?? this.uuid,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (yearId.present) {
+      map['year_id'] = Variable<int>(yearId.value);
+    }
+    if (fileName.present) {
+      map['file_name'] = Variable<String>(fileName.value);
+    }
+    if (storedPath.present) {
+      map['stored_path'] = Variable<String>(storedPath.value);
+    }
+    if (sizeBytes.present) {
+      map['size_bytes'] = Variable<int>(sizeBytes.value);
+    }
+    if (mimeType.present) {
+      map['mime_type'] = Variable<String>(mimeType.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (uuid.present) {
+      map['uuid'] = Variable<String>(uuid.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('YearFilesCompanion(')
+          ..write('id: $id, ')
+          ..write('yearId: $yearId, ')
+          ..write('fileName: $fileName, ')
+          ..write('storedPath: $storedPath, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('uuid: $uuid, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SettingsTable extends Settings with TableInfo<$SettingsTable, Setting> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -8326,6 +9610,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $XtraEventsTable xtraEvents = $XtraEventsTable(this);
   late final $SyncTombstonesTable syncTombstones = $SyncTombstonesTable(this);
   late final $MenuCacheTable menuCache = $MenuCacheTable(this);
+  late final $ClassFilesTable classFiles = $ClassFilesTable(this);
+  late final $YearFilesTable yearFiles = $YearFilesTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -8346,6 +9632,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     xtraEvents,
     syncTombstones,
     menuCache,
+    classFiles,
+    yearFiles,
     settings,
   ];
   @override
@@ -8420,6 +9708,20 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       ),
       result: [TableUpdate('pomodoro_sessions', kind: UpdateKind.update)],
     ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'classes',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('class_files', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'academic_years',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('year_files', kind: UpdateKind.delete)],
+    ),
   ]);
 }
 
@@ -8469,6 +9771,24 @@ final class $$AcademicYearsTableReferences
     ).filter((f) => f.yearId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_classesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$YearFilesTable, List<YearFile>>
+  _yearFilesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.yearFiles,
+    aliasName: 'academic_years__id__year_files__year_id',
+  );
+
+  $$YearFilesTableProcessedTableManager get yearFilesRefs {
+    final manager = $$YearFilesTableTableManager(
+      $_db,
+      $_db.yearFiles,
+    ).filter((f) => f.yearId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_yearFilesRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -8545,6 +9865,31 @@ class $$AcademicYearsTableFilterComposer
           }) => $$ClassesTableFilterComposer(
             $db: $db,
             $table: $db.classes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> yearFilesRefs(
+    Expression<bool> Function($$YearFilesTableFilterComposer f) f,
+  ) {
+    final $$YearFilesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.yearFiles,
+      getReferencedColumn: (t) => t.yearId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$YearFilesTableFilterComposer(
+            $db: $db,
+            $table: $db.yearFiles,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -8676,6 +10021,31 @@ class $$AcademicYearsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> yearFilesRefs<T extends Object>(
+    Expression<T> Function($$YearFilesTableAnnotationComposer a) f,
+  ) {
+    final $$YearFilesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.yearFiles,
+      getReferencedColumn: (t) => t.yearId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$YearFilesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.yearFiles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$AcademicYearsTableTableManager
@@ -8691,7 +10061,7 @@ class $$AcademicYearsTableTableManager
           $$AcademicYearsTableUpdateCompanionBuilder,
           (AcademicYear, $$AcademicYearsTableReferences),
           AcademicYear,
-          PrefetchHooks Function({bool classesRefs})
+          PrefetchHooks Function({bool classesRefs, bool yearFilesRefs})
         > {
   $$AcademicYearsTableTableManager(_$AppDatabase db, $AcademicYearsTable table)
     : super(
@@ -8756,36 +10126,63 @@ class $$AcademicYearsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({classesRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (classesRefs) db.classes],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (classesRefs)
-                    await $_getPrefetchedData<
-                      AcademicYear,
-                      $AcademicYearsTable,
-                      ClassesData
-                    >(
-                      currentTable: table,
-                      referencedTable: $$AcademicYearsTableReferences
-                          ._classesRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$AcademicYearsTableReferences(
-                            db,
-                            table,
-                            p0,
-                          ).classesRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.yearId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({classesRefs = false, yearFilesRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (classesRefs) db.classes,
+                    if (yearFilesRefs) db.yearFiles,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (classesRefs)
+                        await $_getPrefetchedData<
+                          AcademicYear,
+                          $AcademicYearsTable,
+                          ClassesData
+                        >(
+                          currentTable: table,
+                          referencedTable: $$AcademicYearsTableReferences
+                              ._classesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$AcademicYearsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).classesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.yearId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (yearFilesRefs)
+                        await $_getPrefetchedData<
+                          AcademicYear,
+                          $AcademicYearsTable,
+                          YearFile
+                        >(
+                          currentTable: table,
+                          referencedTable: $$AcademicYearsTableReferences
+                              ._yearFilesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$AcademicYearsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).yearFilesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.yearId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -8802,7 +10199,7 @@ typedef $$AcademicYearsTableProcessedTableManager =
       $$AcademicYearsTableUpdateCompanionBuilder,
       (AcademicYear, $$AcademicYearsTableReferences),
       AcademicYear,
-      PrefetchHooks Function({bool classesRefs})
+      PrefetchHooks Function({bool classesRefs, bool yearFilesRefs})
     >;
 typedef $$ClassesTableCreateCompanionBuilder = ClassesCompanion Function({
   Value<int> id,
@@ -8819,6 +10216,8 @@ typedef $$ClassesTableCreateCompanionBuilder = ClassesCompanion Function({
   Value<String?> onlineLink,
   Value<String?> notes,
   Value<int?> maxAbsences,
+  Value<int?> maxAbsencesTheory,
+  Value<int?> maxAbsencesPractical,
   Value<int?> reminderMinutes,
   Value<bool> active,
   Value<String> uuid,
@@ -8839,6 +10238,8 @@ typedef $$ClassesTableUpdateCompanionBuilder = ClassesCompanion Function({
   Value<String?> onlineLink,
   Value<String?> notes,
   Value<int?> maxAbsences,
+  Value<int?> maxAbsencesTheory,
+  Value<int?> maxAbsencesPractical,
   Value<int?> reminderMinutes,
   Value<bool> active,
   Value<String> uuid,
@@ -8921,6 +10322,24 @@ final class $$ClassesTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$ClassFilesTable, List<ClassFile>>
+  _classFilesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.classFiles,
+    aliasName: 'classes__id__class_files__class_id',
+  );
+
+  $$ClassFilesTableProcessedTableManager get classFilesRefs {
+    final manager = $$ClassFilesTableTableManager(
+      $_db,
+      $_db.classFiles,
+    ).filter((f) => f.classId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_classFilesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ClassesTableFilterComposer
@@ -8994,6 +10413,16 @@ class $$ClassesTableFilterComposer
 
   ColumnFilters<int> get maxAbsences => $composableBuilder(
     column: $table.maxAbsences,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maxAbsencesTheory => $composableBuilder(
+    column: $table.maxAbsencesTheory,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maxAbsencesPractical => $composableBuilder(
+    column: $table.maxAbsencesPractical,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9114,6 +10543,31 @@ class $$ClassesTableFilterComposer
     );
     return f(composer);
   }
+
+  Expression<bool> classFilesRefs(
+    Expression<bool> Function($$ClassFilesTableFilterComposer f) f,
+  ) {
+    final $$ClassFilesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.classFiles,
+      getReferencedColumn: (t) => t.classId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ClassFilesTableFilterComposer(
+            $db: $db,
+            $table: $db.classFiles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ClassesTableOrderingComposer
@@ -9187,6 +10641,16 @@ class $$ClassesTableOrderingComposer
 
   ColumnOrderings<int> get maxAbsences => $composableBuilder(
     column: $table.maxAbsences,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maxAbsencesTheory => $composableBuilder(
+    column: $table.maxAbsencesTheory,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maxAbsencesPractical => $composableBuilder(
+    column: $table.maxAbsencesPractical,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -9287,6 +10751,16 @@ class $$ClassesTableAnnotationComposer
 
   GeneratedColumn<int> get maxAbsences => $composableBuilder(
     column: $table.maxAbsences,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get maxAbsencesTheory => $composableBuilder(
+    column: $table.maxAbsencesTheory,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get maxAbsencesPractical => $composableBuilder(
+    column: $table.maxAbsencesPractical,
     builder: (column) => column,
   );
 
@@ -9401,6 +10875,31 @@ class $$ClassesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> classFilesRefs<T extends Object>(
+    Expression<T> Function($$ClassFilesTableAnnotationComposer a) f,
+  ) {
+    final $$ClassFilesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.classFiles,
+      getReferencedColumn: (t) => t.classId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ClassFilesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.classFiles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ClassesTableTableManager
@@ -9421,6 +10920,7 @@ class $$ClassesTableTableManager
             bool scheduleItemsRefs,
             bool absencesRefs,
             bool tasksRefs,
+            bool classFilesRefs,
           })
         > {
   $$ClassesTableTableManager(_$AppDatabase db, $ClassesTable table)
@@ -9450,6 +10950,8 @@ class $$ClassesTableTableManager
                 Value<String?> onlineLink = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<int?> maxAbsences = const Value.absent(),
+                Value<int?> maxAbsencesTheory = const Value.absent(),
+                Value<int?> maxAbsencesPractical = const Value.absent(),
                 Value<int?> reminderMinutes = const Value.absent(),
                 Value<bool> active = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
@@ -9469,6 +10971,8 @@ class $$ClassesTableTableManager
                 onlineLink: onlineLink,
                 notes: notes,
                 maxAbsences: maxAbsences,
+                maxAbsencesTheory: maxAbsencesTheory,
+                maxAbsencesPractical: maxAbsencesPractical,
                 reminderMinutes: reminderMinutes,
                 active: active,
                 uuid: uuid,
@@ -9490,6 +10994,8 @@ class $$ClassesTableTableManager
                 Value<String?> onlineLink = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<int?> maxAbsences = const Value.absent(),
+                Value<int?> maxAbsencesTheory = const Value.absent(),
+                Value<int?> maxAbsencesPractical = const Value.absent(),
                 Value<int?> reminderMinutes = const Value.absent(),
                 Value<bool> active = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
@@ -9509,6 +11015,8 @@ class $$ClassesTableTableManager
                 onlineLink: onlineLink,
                 notes: notes,
                 maxAbsences: maxAbsences,
+                maxAbsencesTheory: maxAbsencesTheory,
+                maxAbsencesPractical: maxAbsencesPractical,
                 reminderMinutes: reminderMinutes,
                 active: active,
                 uuid: uuid,
@@ -9528,6 +11036,7 @@ class $$ClassesTableTableManager
                 scheduleItemsRefs = false,
                 absencesRefs = false,
                 tasksRefs = false,
+                classFilesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -9535,6 +11044,7 @@ class $$ClassesTableTableManager
                     if (scheduleItemsRefs) db.scheduleItems,
                     if (absencesRefs) db.absences,
                     if (tasksRefs) db.tasks,
+                    if (classFilesRefs) db.classFiles,
                   ],
                   addJoins:
                       <
@@ -9627,6 +11137,27 @@ class $$ClassesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (classFilesRefs)
+                        await $_getPrefetchedData<
+                          ClassesData,
+                          $ClassesTable,
+                          ClassFile
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ClassesTableReferences
+                              ._classFilesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ClassesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).classFilesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.classId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -9652,6 +11183,7 @@ typedef $$ClassesTableProcessedTableManager =
         bool scheduleItemsRefs,
         bool absencesRefs,
         bool tasksRefs,
+        bool classFilesRefs,
       })
     >;
 typedef $$ScheduleItemsTableCreateCompanionBuilder =
@@ -10898,6 +12430,7 @@ typedef $$AbsencesTableCreateCompanionBuilder = AbsencesCompanion Function({
   required int endMinutes,
   Value<String?> reason,
   Value<bool> isExcused,
+  Value<AbsenceKind?> kind,
   Value<String?> notes,
   Value<DateTime> createdAt,
   Value<String> uuid,
@@ -10911,6 +12444,7 @@ typedef $$AbsencesTableUpdateCompanionBuilder = AbsencesCompanion Function({
   Value<int> endMinutes,
   Value<String?> reason,
   Value<bool> isExcused,
+  Value<AbsenceKind?> kind,
   Value<String?> notes,
   Value<DateTime> createdAt,
   Value<String> uuid,
@@ -10977,6 +12511,12 @@ class $$AbsencesTableFilterComposer
     column: $table.isExcused,
     builder: (column) => ColumnFilters(column),
   );
+
+  ColumnWithTypeConverterFilters<AbsenceKind?, AbsenceKind, String> get kind =>
+      $composableBuilder(
+        column: $table.kind,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<String> get notes => $composableBuilder(
     column: $table.notes,
@@ -11061,6 +12601,11 @@ class $$AbsencesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get notes => $composableBuilder(
     column: $table.notes,
     builder: (column) => ColumnOrderings(column),
@@ -11136,6 +12681,9 @@ class $$AbsencesTableAnnotationComposer
   GeneratedColumn<bool> get isExcused =>
       $composableBuilder(column: $table.isExcused, builder: (column) => column);
 
+  GeneratedColumnWithTypeConverter<AbsenceKind?, String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
 
@@ -11207,6 +12755,7 @@ class $$AbsencesTableTableManager
                 Value<int> endMinutes = const Value.absent(),
                 Value<String?> reason = const Value.absent(),
                 Value<bool> isExcused = const Value.absent(),
+                Value<AbsenceKind?> kind = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
@@ -11219,6 +12768,7 @@ class $$AbsencesTableTableManager
                 endMinutes: endMinutes,
                 reason: reason,
                 isExcused: isExcused,
+                kind: kind,
                 notes: notes,
                 createdAt: createdAt,
                 uuid: uuid,
@@ -11233,6 +12783,7 @@ class $$AbsencesTableTableManager
                 required int endMinutes,
                 Value<String?> reason = const Value.absent(),
                 Value<bool> isExcused = const Value.absent(),
+                Value<AbsenceKind?> kind = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
@@ -11245,6 +12796,7 @@ class $$AbsencesTableTableManager
                 endMinutes: endMinutes,
                 reason: reason,
                 isExcused: isExcused,
+                kind: kind,
                 notes: notes,
                 createdAt: createdAt,
                 uuid: uuid,
@@ -14379,6 +15931,776 @@ typedef $$MenuCacheTableProcessedTableManager =
       MenuCacheData,
       PrefetchHooks Function()
     >;
+typedef $$ClassFilesTableCreateCompanionBuilder = ClassFilesCompanion Function({
+  Value<int> id,
+  required int classId,
+  required String fileName,
+  required String storedPath,
+  Value<int> sizeBytes,
+  Value<String?> mimeType,
+  Value<DateTime> createdAt,
+  Value<String> uuid,
+  Value<int> updatedAt,
+});
+typedef $$ClassFilesTableUpdateCompanionBuilder = ClassFilesCompanion Function({
+  Value<int> id,
+  Value<int> classId,
+  Value<String> fileName,
+  Value<String> storedPath,
+  Value<int> sizeBytes,
+  Value<String?> mimeType,
+  Value<DateTime> createdAt,
+  Value<String> uuid,
+  Value<int> updatedAt,
+});
+
+final class $$ClassFilesTableReferences
+    extends BaseReferences<_$AppDatabase, $ClassFilesTable, ClassFile> {
+  $$ClassFilesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ClassesTable _classIdTable(_$AppDatabase db) =>
+      db.classes.createAlias('class_files__class_id__classes__id');
+
+  $$ClassesTableProcessedTableManager get classId {
+    final $_column = $_itemColumn<int>('class_id')!;
+
+    final manager = $$ClassesTableTableManager(
+      $_db,
+      $_db.classes,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_classIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ClassFilesTableFilterComposer
+    extends Composer<_$AppDatabase, $ClassFilesTable> {
+  $$ClassFilesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get storedPath => $composableBuilder(
+    column: $table.storedPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uuid => $composableBuilder(
+    column: $table.uuid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ClassesTableFilterComposer get classId {
+    final $$ClassesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.classId,
+      referencedTable: $db.classes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ClassesTableFilterComposer(
+            $db: $db,
+            $table: $db.classes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ClassFilesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ClassFilesTable> {
+  $$ClassFilesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get storedPath => $composableBuilder(
+    column: $table.storedPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get uuid => $composableBuilder(
+    column: $table.uuid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ClassesTableOrderingComposer get classId {
+    final $$ClassesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.classId,
+      referencedTable: $db.classes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ClassesTableOrderingComposer(
+            $db: $db,
+            $table: $db.classes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ClassFilesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ClassFilesTable> {
+  $$ClassFilesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get fileName =>
+      $composableBuilder(column: $table.fileName, builder: (column) => column);
+
+  GeneratedColumn<String> get storedPath => $composableBuilder(
+    column: $table.storedPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sizeBytes =>
+      $composableBuilder(column: $table.sizeBytes, builder: (column) => column);
+
+  GeneratedColumn<String> get mimeType =>
+      $composableBuilder(column: $table.mimeType, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get uuid =>
+      $composableBuilder(column: $table.uuid, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$ClassesTableAnnotationComposer get classId {
+    final $$ClassesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.classId,
+      referencedTable: $db.classes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ClassesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.classes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ClassFilesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ClassFilesTable,
+          ClassFile,
+          $$ClassFilesTableFilterComposer,
+          $$ClassFilesTableOrderingComposer,
+          $$ClassFilesTableAnnotationComposer,
+          $$ClassFilesTableCreateCompanionBuilder,
+          $$ClassFilesTableUpdateCompanionBuilder,
+          (ClassFile, $$ClassFilesTableReferences),
+          ClassFile,
+          PrefetchHooks Function({bool classId})
+        > {
+  $$ClassFilesTableTableManager(_$AppDatabase db, $ClassFilesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ClassFilesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ClassFilesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ClassFilesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> classId = const Value.absent(),
+                Value<String> fileName = const Value.absent(),
+                Value<String> storedPath = const Value.absent(),
+                Value<int> sizeBytes = const Value.absent(),
+                Value<String?> mimeType = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> uuid = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => ClassFilesCompanion(
+                id: id,
+                classId: classId,
+                fileName: fileName,
+                storedPath: storedPath,
+                sizeBytes: sizeBytes,
+                mimeType: mimeType,
+                createdAt: createdAt,
+                uuid: uuid,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int classId,
+                required String fileName,
+                required String storedPath,
+                Value<int> sizeBytes = const Value.absent(),
+                Value<String?> mimeType = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> uuid = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => ClassFilesCompanion.insert(
+                id: id,
+                classId: classId,
+                fileName: fileName,
+                storedPath: storedPath,
+                sizeBytes: sizeBytes,
+                mimeType: mimeType,
+                createdAt: createdAt,
+                uuid: uuid,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ClassFilesTable, ClassFile>(table),
+                  $$ClassFilesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({classId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (classId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.classId,
+                        referencedTable: $$ClassFilesTableReferences
+                            ._classIdTable(db),
+                        referencedColumn: $$ClassFilesTableReferences
+                            ._classIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ClassFilesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ClassFilesTable,
+      ClassFile,
+      $$ClassFilesTableFilterComposer,
+      $$ClassFilesTableOrderingComposer,
+      $$ClassFilesTableAnnotationComposer,
+      $$ClassFilesTableCreateCompanionBuilder,
+      $$ClassFilesTableUpdateCompanionBuilder,
+      (ClassFile, $$ClassFilesTableReferences),
+      ClassFile,
+      PrefetchHooks Function({bool classId})
+    >;
+typedef $$YearFilesTableCreateCompanionBuilder = YearFilesCompanion Function({
+  Value<int> id,
+  required int yearId,
+  required String fileName,
+  required String storedPath,
+  Value<int> sizeBytes,
+  Value<String?> mimeType,
+  Value<DateTime> createdAt,
+  Value<String> uuid,
+  Value<int> updatedAt,
+});
+typedef $$YearFilesTableUpdateCompanionBuilder = YearFilesCompanion Function({
+  Value<int> id,
+  Value<int> yearId,
+  Value<String> fileName,
+  Value<String> storedPath,
+  Value<int> sizeBytes,
+  Value<String?> mimeType,
+  Value<DateTime> createdAt,
+  Value<String> uuid,
+  Value<int> updatedAt,
+});
+
+final class $$YearFilesTableReferences
+    extends BaseReferences<_$AppDatabase, $YearFilesTable, YearFile> {
+  $$YearFilesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $AcademicYearsTable _yearIdTable(_$AppDatabase db) =>
+      db.academicYears.createAlias('year_files__year_id__academic_years__id');
+
+  $$AcademicYearsTableProcessedTableManager get yearId {
+    final $_column = $_itemColumn<int>('year_id')!;
+
+    final manager = $$AcademicYearsTableTableManager(
+      $_db,
+      $_db.academicYears,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_yearIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$YearFilesTableFilterComposer
+    extends Composer<_$AppDatabase, $YearFilesTable> {
+  $$YearFilesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get storedPath => $composableBuilder(
+    column: $table.storedPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uuid => $composableBuilder(
+    column: $table.uuid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$AcademicYearsTableFilterComposer get yearId {
+    final $$AcademicYearsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.yearId,
+      referencedTable: $db.academicYears,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AcademicYearsTableFilterComposer(
+            $db: $db,
+            $table: $db.academicYears,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$YearFilesTableOrderingComposer
+    extends Composer<_$AppDatabase, $YearFilesTable> {
+  $$YearFilesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get storedPath => $composableBuilder(
+    column: $table.storedPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get uuid => $composableBuilder(
+    column: $table.uuid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$AcademicYearsTableOrderingComposer get yearId {
+    final $$AcademicYearsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.yearId,
+      referencedTable: $db.academicYears,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AcademicYearsTableOrderingComposer(
+            $db: $db,
+            $table: $db.academicYears,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$YearFilesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $YearFilesTable> {
+  $$YearFilesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get fileName =>
+      $composableBuilder(column: $table.fileName, builder: (column) => column);
+
+  GeneratedColumn<String> get storedPath => $composableBuilder(
+    column: $table.storedPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sizeBytes =>
+      $composableBuilder(column: $table.sizeBytes, builder: (column) => column);
+
+  GeneratedColumn<String> get mimeType =>
+      $composableBuilder(column: $table.mimeType, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get uuid =>
+      $composableBuilder(column: $table.uuid, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$AcademicYearsTableAnnotationComposer get yearId {
+    final $$AcademicYearsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.yearId,
+      referencedTable: $db.academicYears,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AcademicYearsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.academicYears,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$YearFilesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $YearFilesTable,
+          YearFile,
+          $$YearFilesTableFilterComposer,
+          $$YearFilesTableOrderingComposer,
+          $$YearFilesTableAnnotationComposer,
+          $$YearFilesTableCreateCompanionBuilder,
+          $$YearFilesTableUpdateCompanionBuilder,
+          (YearFile, $$YearFilesTableReferences),
+          YearFile,
+          PrefetchHooks Function({bool yearId})
+        > {
+  $$YearFilesTableTableManager(_$AppDatabase db, $YearFilesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$YearFilesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$YearFilesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$YearFilesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> yearId = const Value.absent(),
+                Value<String> fileName = const Value.absent(),
+                Value<String> storedPath = const Value.absent(),
+                Value<int> sizeBytes = const Value.absent(),
+                Value<String?> mimeType = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> uuid = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => YearFilesCompanion(
+                id: id,
+                yearId: yearId,
+                fileName: fileName,
+                storedPath: storedPath,
+                sizeBytes: sizeBytes,
+                mimeType: mimeType,
+                createdAt: createdAt,
+                uuid: uuid,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int yearId,
+                required String fileName,
+                required String storedPath,
+                Value<int> sizeBytes = const Value.absent(),
+                Value<String?> mimeType = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> uuid = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => YearFilesCompanion.insert(
+                id: id,
+                yearId: yearId,
+                fileName: fileName,
+                storedPath: storedPath,
+                sizeBytes: sizeBytes,
+                mimeType: mimeType,
+                createdAt: createdAt,
+                uuid: uuid,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$YearFilesTable, YearFile>(table),
+                  $$YearFilesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({yearId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (yearId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.yearId,
+                        referencedTable: $$YearFilesTableReferences
+                            ._yearIdTable(db),
+                        referencedColumn: $$YearFilesTableReferences
+                            ._yearIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$YearFilesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $YearFilesTable,
+      YearFile,
+      $$YearFilesTableFilterComposer,
+      $$YearFilesTableOrderingComposer,
+      $$YearFilesTableAnnotationComposer,
+      $$YearFilesTableCreateCompanionBuilder,
+      $$YearFilesTableUpdateCompanionBuilder,
+      (YearFile, $$YearFilesTableReferences),
+      YearFile,
+      PrefetchHooks Function({bool yearId})
+    >;
 typedef $$SettingsTableCreateCompanionBuilder = SettingsCompanion Function({
   required String key,
   required String value,
@@ -14545,6 +16867,10 @@ class $AppDatabaseManager {
       $$SyncTombstonesTableTableManager(_db, _db.syncTombstones);
   $$MenuCacheTableTableManager get menuCache =>
       $$MenuCacheTableTableManager(_db, _db.menuCache);
+  $$ClassFilesTableTableManager get classFiles =>
+      $$ClassFilesTableTableManager(_db, _db.classFiles);
+  $$YearFilesTableTableManager get yearFiles =>
+      $$YearFilesTableTableManager(_db, _db.yearFiles);
   $$SettingsTableTableManager get settings =>
       $$SettingsTableTableManager(_db, _db.settings);
 }

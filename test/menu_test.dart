@@ -53,6 +53,30 @@ class _FakeMenuProvider implements MenuProvider {
   }
 }
 
+/// Two-campus fake mirroring the real Hacettepe locations, for testing the
+/// Beytepe/Sıhhiye switch layout on narrow phone screens.
+class _TwoLocationFakeMenuProvider implements MenuProvider {
+  MenuDay? day;
+
+  @override
+  String get id => 'fake2';
+
+  @override
+  String get displayName => 'Fake2';
+
+  @override
+  Map<String, String> get locations => const {
+    '1': 'Beytepe',
+    '2': 'Sıhhiye',
+  };
+
+  @override
+  Future<MenuDay> fetchDay(DateTime date, String locationId) async {
+    if (day == null) throw const MenuFetchException('offline');
+    return day!;
+  }
+}
+
 MenuDay _fakeDay() => MenuDay(
   date: DateTime(2026, 9, 21),
   locationId: '1',
@@ -275,6 +299,46 @@ void main() {
       expect(find.text('Mantı'), findsOneWidget);
     });
 
+    testWidgets('allergen panel expands with a circular toggle', (
+      tester,
+    ) async {
+      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(() => db.close());
+      final fake = _FakeMenuProvider()..day = _fakeDay();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MenuScreen(provider: fake),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // The legend lives in the tree (collapsed); the toggle ripple is
+      // circular and tapping flips the panel open and shut.
+      final toggle = find.ancestor(
+        of: find.byIcon(Icons.expand_more),
+        matching: find.byType(InkWell),
+      );
+      expect(toggle, findsOneWidget);
+      expect(
+        tester.widget<InkWell>(toggle).customBorder,
+        isA<CircleBorder>(),
+      );
+      AnimatedRotation rotation() => tester.widget<AnimatedRotation>(
+        find.descendant(of: toggle, matching: find.byType(AnimatedRotation)),
+      );
+      expect(rotation().turns, 0);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(rotation().turns, 0.5);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(rotation().turns, 0);
+    });
+
     testWidgets('allergen chip opens its description', (tester) async {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(() => db.close());
@@ -290,9 +354,23 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('A'));
+      // The collapsed legend also contains an "A" badge inside a static
+      // ListTile (which still builds an InkWell); the dish chip comes
+      // first in tree order.
+      await tester.tap(
+        find
+            .ancestor(of: find.text('A'), matching: find.byType(InkWell))
+            .first,
+      );
       await tester.pumpAndSettle();
-      expect(find.text('Test allergen'), findsOneWidget);
+      // The legend row carries the same text; assert on the dialog copy.
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Test allergen'),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('slow day loads do not overwrite newer days', (
@@ -324,7 +402,7 @@ void main() {
       final nextIso = iso(DateTime(today.year, today.month, today.day + 1));
       // Initial load for today is still in flight; move to tomorrow.
       expect(gated.gates.containsKey(todayIso), isTrue);
-      await tester.tap(find.byTooltip('Next week'));
+      await tester.tap(find.byTooltip('Next day'));
       await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
       await tester.pump();
       expect(gated.gates.containsKey(nextIso), isTrue);
@@ -395,6 +473,65 @@ void main() {
       await tester.pumpAndSettle();
       // Cached Hacettepe day renders with no explicit provider passed.
       expect(find.text('Mantı'), findsOneWidget);
+    });
+
+    testWidgets('date label never claims a non-today day is today', (
+      tester,
+    ) async {      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(() => db.close());
+      final gated = _GatedFakeMenuProvider();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MenuScreen(provider: gated),
+          ),
+        ),
+      );
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+      await tester.pump();
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      String iso(DateTime d) =>
+          '${d.year.toString().padLeft(4, '0')}-'
+          '${d.month.toString().padLeft(2, '0')}-'
+          '${d.day.toString().padLeft(2, '0')}';
+      // On today: date button shows the iso only, no extra Today button.
+      expect(find.text(iso(today)), findsOneWidget);
+      expect(find.textContaining('·'), findsNothing);
+      // Move to tomorrow: date updates and a jump-back Today button appears.
+      await tester.tap(find.byTooltip('Next day'));
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+      await tester.pump();
+      final tomorrow = DateTime(today.year, today.month, today.day + 1);
+      expect(find.text(iso(tomorrow)), findsOneWidget);
+      expect(find.text('Today'), findsOneWidget);
+    });
+
+    testWidgets('campus switch fits a narrow phone screen', (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(() => db.close());
+      final fake = _TwoLocationFakeMenuProvider()..day = _fakeDay();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MenuScreen(provider: fake),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // Both campuses are laid out with no overflow on a 360px phone.
+      expect(find.text('Beytepe'), findsOneWidget);
+      expect(find.text('Sıhhiye'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

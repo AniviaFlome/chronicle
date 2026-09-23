@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'data/database.dart';
 import 'data/repositories.dart';
 import 'data/schedule_repository.dart';
+import 'data/tables.dart';
 import 'domain/grades.dart';
 import 'domain/schedule_models.dart' as engine;
 import 'domain/schedule_occurrence_engine.dart';
+import 'services/class_files.dart';
 import 'services/notifications.dart';
 import 'services/data_folder.dart';
 import 'utils/time_format.dart';
@@ -34,6 +36,27 @@ final pomodoroRepositoryProvider = Provider(
 final xtraRepositoryProvider = Provider(
   (ref) => XtraRepository(ref.watch(appDatabaseProvider)),
 );
+final classFileRepositoryProvider = Provider(
+  (ref) => ClassFileRepository(ref.watch(appDatabaseProvider)),
+);
+final yearFileRepositoryProvider = Provider(
+  (ref) => YearFileRepository(ref.watch(appDatabaseProvider)),
+);
+final classFilesServiceProvider = Provider(
+  (ref) => ClassFilesService(ref.watch(appDatabaseProvider)),
+);
+final classFilesForClassProvider = StreamProvider.family<List<ClassFile>, int>((
+  ref,
+  classId,
+) {
+  return ref.watch(classFileRepositoryProvider).watchForClass(classId);
+});
+final yearFilesForYearProvider = StreamProvider.family<List<YearFile>, int>((
+  ref,
+  yearId,
+) {
+  return ref.watch(yearFileRepositoryProvider).watchForYear(yearId);
+});
 final scheduleRepositoryProvider = Provider(
   (ref) => ScheduleRepository(ref.watch(appDatabaseProvider)),
 );
@@ -378,7 +401,9 @@ final dayRangeProvider = FutureProvider<({int start, int end})>((ref) async {
   return (start: start, end: end);
 });
 
-/// Per-class quota state derived from classes + absences.
+/// Per-class quota state derived from classes + absences. Quotas are
+/// total-based against the single absence limit; theory/practical tags on
+/// records are informational only.
 class QuotaWarning {
   final ClassesData classRow;
   final int unexcused;
@@ -391,6 +416,10 @@ class QuotaWarning {
 
   bool get oneLeft => limit >= 2 && unexcused == limit - 1;
 }
+
+/// Kind of an absence row; legacy null kinds count as theory.
+AbsenceKind kindOfAbsence(Absence a) =>
+    a.kind == AbsenceKind.practical ? AbsenceKind.practical : AbsenceKind.theory;
 
 final quotaWarningsProvider = Provider<List<QuotaWarning>>((ref) {
   final classes =

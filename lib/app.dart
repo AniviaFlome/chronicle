@@ -142,18 +142,102 @@ class _Shell extends StatelessWidget {
         ],
       ),
       bottomNavigationBar: MediaQuery.of(context).size.width < 600
-          ? NavigationBar(
+          ? _PhoneNavBar(
               selectedIndex: selectedIndex,
-              onDestinationSelected: (i) => context.go(items[i].location),
-              destinations: [
-                for (final item in items)
-                  NavigationDestination(
-                    icon: Icon(item.icon),
-                    label: item.label(context.l10n),
-                  ),
-              ],
+              items: items,
+              onSelect: (i) => context.go(items[i].location),
             )
           : null,
+    );
+  }
+}
+
+/// Phone bottom bar with always-visible labels.
+///
+/// The stock [NavigationBar] cannot fit seven labels in ~360px (its label
+/// has no maxLines, so "Absences" wrapped to two lines), and showing only
+/// the selected label makes every item jump on tab switches. This bar
+/// instead gives each destination an equal [Expanded] slot with a
+/// single-line ellipsis label, so nothing wraps and nothing moves.
+class _PhoneNavBar extends StatelessWidget {
+  final int selectedIndex;
+  final List<_NavItem> items;
+  final ValueChanged<int> onSelect;
+
+  const _PhoneNavBar({
+    required this.selectedIndex,
+    required this.items,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final scheme = Theme.of(context).colorScheme;
+    final labelStyle = Theme.of(context).textTheme.labelSmall;
+    return Material(
+      color: scheme.surfaceContainer,
+      child: SafeArea(
+        top: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Active pill fits inside its slot with room to spare.
+            final pillWidth = (constraints.maxWidth / items.length - 8)
+                .clamp(40.0, 64.0);
+            return SizedBox(
+              height: 80,
+              child: Row(
+                children: [
+                  for (var i = 0; i < items.length; i++)
+                    Expanded(
+                      child: Tooltip(
+                        message: items[i].label(l10n),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () => onSelect(i),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: pillWidth,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  color: i == selectedIndex
+                                      ? scheme.secondaryContainer
+                                      : Colors.transparent,
+                                ),
+                                child: Icon(
+                                  items[i].icon,
+                                  size: 24,
+                                  color: i == selectedIndex
+                                      ? scheme.onSecondaryContainer
+                                      : scheme.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                items[i].label(l10n),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: labelStyle?.copyWith(
+                                  color: i == selectedIndex
+                                      ? scheme.onSurface
+                                      : scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

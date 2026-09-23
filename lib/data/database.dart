@@ -25,6 +25,8 @@ part 'database.g.dart';
     XtraEvents,
     SyncTombstones,
     MenuCache,
+    ClassFiles,
+    YearFiles,
     Settings,
   ],
 )
@@ -32,7 +34,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 10;
 
   static QueryExecutor _openConnection() {
     return driftDatabase(name: 'chronicle');
@@ -165,6 +167,27 @@ class AppDatabase extends _$AppDatabase {
       if (from < 7) {
         await m.createTable(menuCache);
       }
+      if (from < 8) {
+        // Class file attachments (synced since v10 via uuid/updatedAt).
+        await m.createTable(classFiles);
+      }
+      if (from < 9) {
+        // Per-kind absence quotas (+ absence kinds, legacy null = theory)
+        // and academic-year file attachments (synced since v10).
+        await m.createTable(yearFiles);
+        await _addColumnIfMissing(m, classes, classes.maxAbsencesTheory);
+        await _addColumnIfMissing(m, classes, classes.maxAbsencesPractical);
+        await _addColumnIfMissing(m, absences, absences.kind);
+      }
+      if (from < 10) {
+        // File attachments join folder sync: stable identity columns.
+        // Backfilled below for existing rows.
+        await _addColumnIfMissing(m, classFiles, classFiles.uuid);
+        await _addColumnIfMissing(m, classFiles, classFiles.updatedAt);
+        await _addColumnIfMissing(m, yearFiles, yearFiles.uuid);
+        await _addColumnIfMissing(m, yearFiles, yearFiles.updatedAt);
+        await _backfillSyncColumns(m);
+      }
     },
     beforeOpen: (_) => customStatement('PRAGMA foreign_keys = ON'),
   );
@@ -205,9 +228,23 @@ class AppDatabase extends _$AppDatabase {
       grades,
       pomodoroSessions,
       xtraEvents,
+      classFiles,
+      yearFiles,
     ];
     final now = DateTime.now().millisecondsSinceEpoch;
+    // Tables may not exist yet when backfilling an older migration step
+    // (e.g. file tables during the v6 backfill); skip those — their own
+    // migration step backfills later via this same method.
+    final existingTables = {
+      for (final row in await m.database
+          .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
+          .get())
+        (row.data['name'] as String).toLowerCase(),
+    };
     for (final table in tables) {
+      if (!existingTables.contains(table.actualTableName.toLowerCase())) {
+        continue;
+      }
       final pending = await m.database
           .customSelect(
             "SELECT id FROM ${table.actualTableName} "

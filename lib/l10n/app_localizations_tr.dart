@@ -609,6 +609,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get nextWeek => 'Sonraki hafta';
 
   @override
+  String get prevDay => 'Önceki gün';
+
+  @override
+  String get nextDay => 'Sonraki gün';
+
+  @override
   String couldNotLoadWeek(Object error) {
     return 'Hafta yüklenemedi: $error';
   }
@@ -659,12 +665,6 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get focusTitle => 'Odaklan';
-
-  @override
-  String get workingOn => 'Üzerinde çalışılan (isteğe bağlı)';
-
-  @override
-  String get nothingOption => 'Yok';
 
   @override
   String get focusWorkLabel => 'Çalışma süresi';
@@ -897,6 +897,15 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get absenceLimitLabel => 'Devamsızlık sınırı';
+
+  @override
+  String get theoryLabel => 'Teorik';
+
+  @override
+  String get practicalLabel => 'Uygulama';
+
+  @override
+  String get sessionKindLabel => 'Ders türü';
 
   @override
   String get classReminderLabel => 'Ders hatırlatıcısı (dakika önce)';
@@ -1239,4 +1248,46 @@ class AppLocalizationsTr extends AppLocalizations {
   String dataLastImport(Object date) {
     return 'Son içe aktarma: $date';
   }
+
+  @override
+  String get classFilesSection => 'Dosyalar';
+
+  @override
+  String get addFiles => 'Dosya ekle';
+
+  @override
+  String get noFilesYet => 'Henüz dosya yok.';
+
+  @override
+  String couldNotLoadFiles(Object error) {
+    return 'Dosyalar yüklenemedi: $error';
+  }
+
+  @override
+  String couldNotPickFiles(Object error) {
+    return 'Dosyalar eklenemedi: $error';
+  }
+
+  @override
+  String couldNotOpenFile(Object error) {
+    return 'Dosya açılamadı: $error';
+  }
+
+  @override
+  String get deleteFileTitle => 'Dosya silinsin mi?';
+
+  @override
+  String deleteFileBody(Object name) {
+    return '\"$name\" silinsin mi?';
+  }
+
+  @override
+  String get openFileTooltip => 'Dosyayı aç';
+
+  @override
+  String get deleteFileTooltip => 'Dosyayı sil';
+
+  @override
+  String get couldNotAccessFile =>
+      'Seçilen dosya okunamadı. Sistem dosya seçici erişimi reddetti — tekrar deneyin.';
 }

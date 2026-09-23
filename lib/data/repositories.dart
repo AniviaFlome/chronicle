@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:convert';
+import 'dart:io';
 
 import '../services/menu/menu_provider.dart';
 import '../utils/time_format.dart';
@@ -58,6 +59,8 @@ abstract final class SyncTables {
   static const grades = 'grades';
   static const sessions = 'pomodoro_sessions';
   static const xtra = 'xtra_events';
+  static const classFiles = 'class_files';
+  static const yearFiles = 'year_files';
 }
 
 class ClassRepository {
@@ -105,13 +108,32 @@ class ClassRepository {
 
   /// Deletes a year and records a tombstone so the delete syncs.
   /// Member classes are FK-set-null (no tombstones); both sides derive the
-  /// same outcome from the same tombstone set.
+  /// same outcome from the same tombstone set. Attached year files are
+  /// tombstoned too, and removed from disk best-effort.
   Future<int> deleteYear(int id) async {
     final row =
         await (db.select(
           db.academicYears,
         )..where((y) => y.id.equals(id))).getSingleOrNull();
-    if (row != null) await recordTombstone(db, SyncTables.years, row.uuid);
+    if (row != null) {
+      await recordTombstone(db, SyncTables.years, row.uuid);
+      try {
+        final files = await YearFileRepository(db).forYear(id);
+        for (final f in files) {
+          await recordTombstone(db, SyncTables.yearFiles, f.uuid);
+        }
+        for (final f in files) {
+          try {
+            final file = File(f.storedPath);
+            if (await file.exists()) await file.delete();
+          } catch (_) {
+            // Best-effort: a missing file must not block year deletion.
+          }
+        }
+      } catch (_) {
+        // Best-effort cleanup only.
+      }
+    }
     return (db.delete(db.academicYears)..where((y) => y.id.equals(id))).go();
   }
 
@@ -148,7 +170,8 @@ class ClassRepository {
       .replace(row.copyWith(updatedAt: syncNow()));
 
   /// Deletes a class, tombstoning it plus cascade children (slots,
-  /// exceptions, absences) so deletes converge on peer devices.
+  /// exceptions, absences, attached files) so deletes converge on peer
+  /// devices. File blobs are removed from disk best-effort.
   Future<int> delete(int id) async {
     final now = syncNow();
     final row =
@@ -168,6 +191,25 @@ class ClassRepository {
       final classAbsences = await AbsenceRepository(db).forClass(id);
       for (final a in classAbsences) {
         await recordTombstone(db, SyncTables.absences, a.uuid, now);
+      }
+      final classFiles = await ClassFileRepository(db).forClass(id);
+      for (final f in classFiles) {
+        await recordTombstone(db, SyncTables.classFiles, f.uuid, now);
+      }
+      // Remove file blobs from disk; rows go via FK cascade (or
+      // explicit delete when cascade is off, e.g. tests).
+      try {
+        final files = await ClassFileRepository(db).forClass(id);
+        for (final f in files) {
+          try {
+            final file = File(f.storedPath);
+            if (await file.exists()) await file.delete();
+          } catch (_) {
+            // Best-effort: a missing file must not block class deletion.
+          }
+        }
+      } catch (_) {
+        // Best-effort cleanup only.
       }
     }
     return (db.delete(db.classes)..where((c) => c.id.equals(id))).go();
@@ -1202,5 +1244,101 @@ class MenuCacheRepository {
             fetchedAt: Value(DateTime.now().millisecondsSinceEpoch),
           ),
         );
+  }
+}
+
+/// File attachments for an academic year. Synced through the data folder
+/// like other tables; rows cascade-delete with the year. Physical files are
+/// removed best-effort on delete; a missing file never fails the delete.
+class YearFileRepository {
+  final AppDatabase db;
+  YearFileRepository(this.db);
+
+  Stream<List<YearFile>> watchForYear(int yearId) =>
+      (db.select(db.yearFiles)
+            ..where((t) => t.yearId.equals(yearId))
+            ..orderBy([(t) => OrderingTerm.asc(t.fileName)]))
+          .watch();
+
+  Future<List<YearFile>> forYear(int yearId) =>
+      (db.select(db.yearFiles)
+            ..where((t) => t.yearId.equals(yearId))
+            ..orderBy([(t) => OrderingTerm.asc(t.fileName)]))
+          .get();
+
+  Future<int> create(YearFilesCompanion entry) => db
+      .into(db.yearFiles)
+      .insert(
+        entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
+      );
+
+  Future<int> delete(int id) async {
+    final row =
+        await (db.select(
+          db.yearFiles,
+        )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row != null) {
+      await recordTombstone(db, SyncTables.yearFiles, row.uuid);
+    }
+    final count = await (db.delete(
+      db.yearFiles,
+    )..where((t) => t.id.equals(id))).go();
+    if (row != null) {
+      try {
+        final file = File(row.storedPath);
+        if (await file.exists()) await file.delete();
+      } catch (_) {
+        // Best-effort: DB row is already gone.
+      }
+    }
+    return count;
+  }
+}
+
+/// File attachments for a class. Synced through the data folder like
+/// other tables; rows cascade-delete with the class. Physical files are
+/// removed best-effort on delete; a missing file never fails the delete.
+class ClassFileRepository {
+  final AppDatabase db;
+  ClassFileRepository(this.db);
+
+  Stream<List<ClassFile>> watchForClass(int classId) =>
+      (db.select(db.classFiles)
+            ..where((t) => t.classId.equals(classId))
+            ..orderBy([(t) => OrderingTerm.asc(t.fileName)]))
+          .watch();
+
+  Future<List<ClassFile>> forClass(int classId) =>
+      (db.select(db.classFiles)
+            ..where((t) => t.classId.equals(classId))
+            ..orderBy([(t) => OrderingTerm.asc(t.fileName)]))
+          .get();
+
+  Future<int> create(ClassFilesCompanion entry) => db
+      .into(db.classFiles)
+      .insert(
+        entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
+      );
+
+  Future<int> delete(int id) async {
+    final row =
+        await (db.select(
+          db.classFiles,
+        )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row != null) {
+      await recordTombstone(db, SyncTables.classFiles, row.uuid);
+    }
+    final count = await (db.delete(
+      db.classFiles,
+    )..where((t) => t.id.equals(id))).go();
+    if (row != null) {
+      try {
+        final file = File(row.storedPath);
+        if (await file.exists()) await file.delete();
+      } catch (_) {
+        // Best-effort: DB row is already gone.
+      }
+    }
+    return count;
   }
 }

@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +8,7 @@ import '../providers.dart';
 import '../theme.dart';
 import '../l10n/l10n.dart';
 import '../utils/time_format.dart';
+import 'mark_absence_dialog.dart';
 
 enum _ExcusedFilter { all, excused, unexcused }
 
@@ -69,6 +71,14 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
     );
   }
 
+  /// View switch, or null when it lives in the AppBar instead.
+  /// Uses [defaultTargetPlatform] (not `Platform.isAndroid`) so widget
+  /// tests can override the platform.
+  Widget? _viewSwitchOrNull(BuildContext context) =>
+      defaultTargetPlatform == TargetPlatform.android
+      ? null
+      : _viewSwitch(context);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -77,7 +87,18 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
     final activeYear = ref.watch(activeYearIdProvider).value;
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.navAbsences)),
+      appBar: AppBar(
+        title: Text(context.l10n.navAbsences),
+        // Android only: the list/grid switch sits next to the title
+        // instead of floating on its own line below the filters.
+        actions: [
+          if (defaultTargetPlatform == TargetPlatform.android)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Center(child: _viewSwitch(context)),
+            ),
+        ],
+      ),
       body: classes.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text(context.l10n.couldNotLoad('$e'))),
@@ -121,7 +142,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                         : null,
                     classes: classList,
                     onClass: (v) => setState(() => _classId = v),
-                    trailing: _viewSwitch(context),
+                    trailing: _viewSwitchOrNull(context),
                   ),
                 );
               }
@@ -157,7 +178,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                         : null,
                     classes: classList,
                     onClass: (v) => setState(() => _classId = v),
-                    trailing: _viewSwitch(context),
+                    trailing: _viewSwitchOrNull(context),
                   ),
                   const SizedBox(height: 16),
                   if (visible.isEmpty)
@@ -720,7 +741,14 @@ class _MatrixCell extends ConsumerWidget {
 
   Future<void> _toggle(BuildContext context, WidgetRef ref) async {
     if (items.isEmpty) {
-      // Tick: mark absence on the first day of the week.
+      // Tick: mark absence on the first day of the week (kind picked in
+      // the same dialog as everywhere else; cancel aborts the mark).
+      final draft = await showMarkAbsenceDialog(
+        context,
+        title: context.l10n.markAbsent,
+        initialExcused: createExcused,
+      );
+      if (draft == null || !context.mounted) return;
       try {
         await ref
             .read(absenceRepositoryProvider)
@@ -730,7 +758,11 @@ class _MatrixCell extends ConsumerWidget {
                 date: isoFromDateTime(weekStart),
                 startMinutes: 540,
                 endMinutes: 600,
-                isExcused: Value(createExcused),
+                reason: Value(
+                  draft.reason.isEmpty ? null : draft.reason,
+                ),
+                isExcused: Value(draft.excused),
+                kind: Value(draft.kind),
               ),
             );
       } catch (e) {

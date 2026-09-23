@@ -4,8 +4,7 @@ Flutter student planner. NixOS-first repo; `flutter`/`dart` only exist inside `n
 
 ## Shell / build
 - Always run via `nix develop --command bash -c "..."` from repo root.
-- Linux bundle: `nix develop --command bash -c "flutter build linux --release"`. Packaged via Nix (no global `/usr/lib` needed); the old `tool/build_linux.sh` LD_LIBRARY_PATH workaround was removed.
-- `flake.nix` devShell sets `SQLITE_LIB` + `LD_LIBRARY_PATH` for drift.
+- Linux bundle: `nix develop --command bash -c "flutter build linux --release"`. `flake.nix` devShell sets `SQLITE_LIB` + `LD_LIBRARY_PATH` for drift. The GitHub release tarball additionally bundles `libsqlite3.so` with a `chronicle.sh` launcher (sets `LD_LIBRARY_PATH` to `bundle/lib`), so end-user systems need no global sqlite install.
 
 ## Release
 - Version lives in `pubspec.yaml` (`1.0.0+1` → versionName/versionCode). Push tag `vX.Y.Z` to publish.
@@ -30,7 +29,7 @@ Flutter student planner. NixOS-first repo; `flutter`/`dart` only exist inside `n
 - Schedule: `ScheduleRepository.loadEngine` → `domain/schedule_occurrence_engine.dart`; date math lives in `lib/utils/time_format.dart`.
 - Themes: `lib/theme.dart` `buildAppTheme` + `classBlockColor`/`classAccentColor`/`classOnBlockColor`. Class side-bars/blocks must use `classAccentColor`, backgrounds `classBlockColor`, text `classOnBlockColor` — never raw `Color(colorValue)` for fills.
 - Dining menu (`lib/services/menu/`, `/menu` route): `MenuProvider` abstraction + `menuSources` registry (only `hacettepe` ships). Page is empty until a source is picked in Settings → Dining menu (`menu_provider` key, default ''). Display-only scraping with 6h cache (`MenuCache` table, excluded from sync/backup).
-- Local data folder (`lib/services/data_folder.dart`): user-picked folder holding one JSON file per table (`manifest.json`, `<table>.json`, `tombstones.json`). Manual Export overwrites the files; manual Import merges newer rows by `updatedAt` keyed on `uuid`, with `SyncTombstones` for deletes. No network, no background watchers, no external-service integration — whatever syncs the folder is outside the app. One device at a time: export, let the folder sync elsewhere, import on the other side.
+- Local data folder (`lib/services/data_folder.dart`): user-picked folder holding one JSON file per table (`manifest.json`, `<table>.json`, `tombstones.json`) plus `files/<uuid>[.ext]` content blobs for class/year attachments (referenced by `class_files.json`/`year_files.json`; blob bytes copied locally on import, incoming absolute paths never trusted). Manual Export overwrites the files and prunes unreferenced blobs; manual Import merges newer rows by `updatedAt` keyed on `uuid`, with `SyncTombstones` for deletes. No network, no background watchers, no external-service integration — whatever syncs the folder is outside the app. One device at a time: export, let the folder sync elsewhere, import on the other side.
 
 ## Hard rules (past bugs)
 - Dates: never `Duration(days: n)` add/subtract for calendar days (DST drift, e.g. Europe/Berlin Mar 29). Use `shiftDays(d, n)` and `DateTime(y, m, d + n)` construction. Same for absence-matrix weeks and `TaskRepository.nextRepeatDate`.

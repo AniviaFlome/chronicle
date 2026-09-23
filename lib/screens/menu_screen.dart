@@ -230,6 +230,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       );
     }
 
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final isToday =
+        _date.year == today.year &&
+        _date.month == today.month &&
+        _date.day == today.day;
+
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.navMenu)),
       body: RefreshIndicator(
@@ -241,44 +248,65 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
-                  tooltip: context.l10n.prevWeek,
+                  tooltip: context.l10n.prevDay,
                   icon: const Icon(Icons.chevron_left),
                   onPressed: () => _shiftDay(-1),
                 ),
-                TextButton(
-                  onPressed: _goToday,
-                  child: Text(
-                    '${isoFromDateTime(_date)} · ${context.l10n.navToday}',
+                // Date only: the old "date · Today" label read as if every
+                // day were today. Tapping the date still jumps back to today.
+                Tooltip(
+                  message: context.l10n.navToday,
+                  child: TextButton(
+                    onPressed: isToday ? null : _goToday,
+                    child: Text(isoFromDateTime(_date)),
                   ),
                 ),
                 IconButton(
-                  tooltip: context.l10n.nextWeek,
+                  tooltip: context.l10n.nextDay,
                   icon: const Icon(Icons.chevron_right),
                   onPressed: () => _shiftDay(1),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    context.l10n.campusLabel,
-                    style: theme.textTheme.labelLarge,
-                  ),
+            if (!isToday)
+              Center(
+                child: TextButton.icon(
+                  onPressed: _goToday,
+                  icon: const Icon(Icons.today_outlined, size: 18),
+                  label: Text(context.l10n.navToday),
                 ),
-                SegmentedButton<String>(
-                  style: const ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            const SizedBox(height: 8),
+            // Campus picker: full-width column so the Beytepe/Sıhhiye
+            // segments get proper touch targets and never squeeze against
+            // the label on narrow Android phones. Scrolls instead of
+            // overflowing when the labels are wider than the screen.
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.l10n.campusLabel,
+                  style: theme.textTheme.labelLarge,
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SegmentedButton<String>(
+                    style: const ButtonStyle(
+                      visualDensity: VisualDensity.standard,
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                    ),
+                    segments: [
+                      for (final entry in provider.locations.entries)
+                        ButtonSegment(
+                          value: entry.key,
+                          label: Text(entry.value),
+                        ),
+                    ],
+                    selected: {_location},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (s) => _setLocation(s.single),
                   ),
-                  segments: [
-                    for (final entry in provider.locations.entries)
-                      ButtonSegment(value: entry.key, label: Text(entry.value)),
-                  ],
-                  selected: {_location},
-                  showSelectedIcon: false,
-                  onSelectionChanged: (s) => _setLocation(s.single),
                 ),
               ],
             ),
@@ -288,8 +316,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 scrollDirection: Axis.horizontal,
                 child: SegmentedButton<String>(
                   style: const ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.standard,
+                    tapTargetSize: MaterialTapTargetSize.padded,
                   ),
                   segments: [
                     for (final m in day.meals)
@@ -462,29 +490,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                                   ),
                                 ),
                               for (final code in dish.allergens)
-                                InkWell(
+                                _AllergenChip(
+                                  code: code,
                                   onTap: () => _showAllergen(code),
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.errorContainer
-                                          .withValues(alpha: 0.5),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      code,
-                                      style: theme.textTheme.labelSmall
-                                          ?.copyWith(
-                                            color: theme.colorScheme
-                                                .onErrorContainer,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                  ),
                                 ),
                             ],
                           ),
@@ -499,47 +507,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                   if (legend.isEmpty) return const SizedBox.shrink();
                   return Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Card(
-                      child: ExpansionTile(
-                        leading: Icon(
-                          Icons.warning_amber_outlined,
-                          color: theme.colorScheme.primary,
-                        ),
-                        title: Text(
-                          context.l10n.allergensTitle,
-                          style: theme.textTheme.titleSmall,
-                        ),
-                        children: [
-                          for (final entry in legend.entries)
-                            ListTile(
-                              dense: true,
-                              leading: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.errorContainer
-                                      .withValues(alpha: 0.5),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  entry.key,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color:
-                                        theme.colorScheme.onErrorContainer,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              title: Text(
-                                entry.value,
-                                style: theme.textTheme.bodySmall,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                    child: _AllergenPanel(legend: legend),
                   );
                 },
               ),
@@ -567,6 +535,170 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             child: Text(context.l10n.close),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Expandable allergen legend panel. The stock [ExpansionTile] header
+/// flashes a full-width rectangular ripple; here the only control is a
+/// circular expander button, so the tap highlight is circular too. Tapping
+/// the header row toggles without any splash.
+class _AllergenPanel extends StatefulWidget {
+  final Map<String, String> legend;
+
+  const _AllergenPanel({required this.legend});
+
+  @override
+  State<_AllergenPanel> createState() => _AllergenPanelState();
+}
+
+class _AllergenPanelState extends State<_AllergenPanel>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+
+  static const _animDuration = Duration(milliseconds: 120);
+
+  void _toggle() => setState(() => _expanded = !_expanded);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _toggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+              child: Row(
+                children: [
+                  const SizedBox(width: 12),
+                  Icon(
+                    Icons.warning_amber_outlined,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      context.l10n.allergensTitle,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                  ),
+                  Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _toggle,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: AnimatedRotation(
+                          turns: _expanded ? 0.5 : 0,
+                          duration: _animDuration,
+                          child: const Icon(Icons.expand_more),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ),
+          // Height-only animation: AnimatedCrossFade squeezed the outgoing
+          // child horizontally, wrapping legend text letter-by-letter.
+          AnimatedSize(
+            duration: _animDuration,
+            child: _expanded
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final entry in widget.legend.entries)
+                        ListTile(
+                          dense: true,
+                          leading: _AllergenBadge(code: entry.key),
+                          title: Text(
+                            entry.value,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tappable allergen code chip. Small single-letter chips read as circular,
+/// so the chip, its background and its tap highlight all use a stadium
+/// (pill) shape: the splash can never paint a rectangle. The background is
+/// painted with an [Ink] widget so the splash clips to the very same shape.
+class _AllergenChip extends StatelessWidget {
+  final String code;
+  final VoidCallback onTap;
+
+  const _AllergenChip({required this.code, required this.onTap});
+
+  static const _shape = StadiumBorder();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.errorContainer.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: _shape,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            child: Text(
+              code,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Static allergen code badge for the legend (same pill, no splash).
+class _AllergenBadge extends StatelessWidget {
+  final String code;
+
+  const _AllergenBadge({required this.code});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        code,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onErrorContainer,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

@@ -349,6 +349,8 @@
   "addEvent": "Add event",
   "prevWeek": "Previous week",
   "nextWeek": "Next week",
+  "prevDay": "Previous day",
+  "nextDay": "Next day",
   "couldNotLoadWeek": "Could not load week: {error}",
   "@couldNotLoadWeek": {
     "placeholders": {
@@ -402,8 +404,6 @@
     }
   },
   "focusTitle": "Focus",
-  "workingOn": "Working on (optional)",
-  "nothingOption": "Nothing",
   "focusWorkLabel": "Work length",
   "focusBreakLabel": "Break length",
   "customMinutesLabel": "Custom minutes",
@@ -529,6 +529,9 @@
   "onlineLinkLabel": "Online link",
   "onlineLinkHint": "Video call or course page URL (optional)",
   "absenceLimitLabel": "Absence limit",
+  "theoryLabel": "Theory",
+  "practicalLabel": "Practical",
+  "sessionKindLabel": "Session",
   "classReminderLabel": "Class reminder (minutes before)",
   "classReminderHint": "Empty = follow default setting",
   "notesFieldLabel": "Notes",
@@ -757,5 +760,36 @@
     "placeholders": {
       "date": {}
     }
-  }
+  },
+  "classFilesSection": "Files",
+  "addFiles": "Add files",
+  "noFilesYet": "No files yet.",
+  "couldNotLoadFiles": "Could not load files: {error}",
+  "@couldNotLoadFiles": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotPickFiles": "Could not add files: {error}",
+  "@couldNotPickFiles": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "couldNotOpenFile": "Could not open file: {error}",
+  "@couldNotOpenFile": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "deleteFileTitle": "Delete file?",
+  "deleteFileBody": "Delete \"{name}\"?",
+  "@deleteFileBody": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "openFileTooltip": "Open file",
+  "deleteFileTooltip": "Delete file",
+  "couldNotAccessFile": "Could not read the selected file. The system file picker refused access — try again."
 }
