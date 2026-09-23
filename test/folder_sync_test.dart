@@ -51,6 +51,47 @@ void main() {
     });
   });
 
+  testWidgets('export bookkeeping does not schedule another export', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final folder = await Directory.systemTemp.createTemp('fs-no-loop');
+      final base = await Directory.systemTemp.createTemp('fs-no-loop-st');
+      final db = AppDatabase(NativeDatabase.memory());
+      try {
+        await SettingsRepository(db).setDataFolder(folder.path);
+        final service = DataFolderService(db, null, base);
+        final controller = FolderSyncController(
+          service: service,
+          exportDebounce: const Duration(milliseconds: 50),
+          pollInterval: const Duration(hours: 1),
+        );
+        try {
+          await controller.start();
+          // Manual export only writes settings bookkeeping on top of
+          // unchanged data; that must not schedule a follow-up export
+          // (otherwise the manifest churns forever and Syncthing peers
+          // never converge on one manifest).
+          await service.exportData();
+          final first = File(
+            '${folder.path}/manifest.json',
+          ).readAsStringSync();
+          await Future.delayed(const Duration(milliseconds: 400));
+          expect(
+            File('${folder.path}/manifest.json').readAsStringSync(),
+            first,
+          );
+        } finally {
+          await controller.dispose();
+        }
+      } finally {
+        await db.close();
+        await folder.delete(recursive: true);
+        await base.delete(recursive: true);
+      }
+    });
+  });
+
   testWidgets('no auto-export when the toggle is off', (tester) async {
     await tester.runAsync(() async {
       final folder = await Directory.systemTemp.createTemp('chronicle-fs-off');

@@ -326,11 +326,24 @@ class DataFolderService {
       if (!await dir.exists()) {
         return const DataFolderResult(error: 'folder-missing');
       }
-      final manifestRaw = await _readJson(dir, manifestFile);
-      if (manifestRaw == null) {
-        // Folder exists but no export landed here yet (or the file is
-        // unreadable, e.g. a revoked Android folder grant).
+      final manifestHandle = File('${dir.path}/$manifestFile');
+      if (!await manifestHandle.exists()) {
+        // Folder exists but no export landed here yet.
         return const DataFolderResult(error: 'manifest-missing');
+      }
+      final Map<String, dynamic>? manifestRaw;
+      try {
+        final decoded = jsonDecode(await manifestHandle.readAsString());
+        manifestRaw = decoded is Map
+            ? Map<String, dynamic>.from(decoded)
+            : null;
+      } catch (e) {
+        debugPrint('Data folder: unreadable $manifestFile: $e');
+        return const DataFolderResult(error: 'manifest-unreadable');
+      }
+      if (manifestRaw == null) {
+        // File exists but isn't a manifest object (e.g. truncated sync).
+        return const DataFolderResult(error: 'manifest-unreadable');
       }
       final manifest = manifestRaw;
       if (manifest['app'] != appTag ||
@@ -420,7 +433,7 @@ class DataFolderService {
         final u = m['uuid'];
         final d = m['deletedAt'];
         if (t is! String || u is! String || d is! int) continue;
-        if (!_knownTables.contains(t) || u.isEmpty) continue;
+        if (!syncedTableNames.contains(t) || u.isEmpty) continue;
         incomingTombs.add((table: t, uuid: u, at: d));
       }
       final localTombs = {
@@ -455,7 +468,11 @@ class DataFolderService {
     );
   }
 
-  static const _knownTables = {
+  /// Actual SQL names of the tables carried in the data folder. The
+  /// auto-sync watcher ([FolderSyncController]) only listens to these, so
+  /// bookkeeping writes (settings export/import markers, menu cache,
+  /// tombstone store) never schedule another export on their own.
+  static const syncedTableNames = {
     'academic_years',
     'classes',
     'schedule_items',

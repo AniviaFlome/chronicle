@@ -2330,6 +2330,12 @@ abstract class AppLocalizations {
   /// **'No Chronicle export in this folder yet. Export from your other device first.'**
   String get importErrorManifestMissing;
 
+  /// No description provided for @importErrorManifestUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'Found manifest.json but couldn\'t read it. Grant Chronicle file access, then re-pick the folder.'**
+  String get importErrorManifestUnreadable;
+
   /// No description provided for @importErrorInvalid.
   ///
   /// In en, this message translates to:

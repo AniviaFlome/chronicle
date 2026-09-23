@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show TableUpdateQuery;
 import 'package:flutter/foundation.dart';
 
 import 'data_folder.dart';
@@ -43,15 +44,28 @@ class FolderSyncController {
 
   /// Starts periodic import and change-triggered export. Safe to call once;
   /// subsequent calls are ignored.
+  ///
+  /// The change watcher only listens to synced data tables
+  /// ([DataFolderService.syncedTableNames]). Watching every table would
+  /// make each export/import schedule another export via its own settings
+  /// bookkeeping writes, so the folder (and its manifest) would churn
+  /// forever and Syncthing peers would never converge.
   Future<void> start() async {
     if (_started) return;
     _started = true;
     await importIfNewer();
     if (_disposed) return;
-    _updatesSub = service.db.tableUpdates().listen(
-      (_) => _markDirty(),
-      onError: (Object e) => debugPrint('Folder sync watch failed: $e'),
-    );
+    _updatesSub = service.db
+        .tableUpdates(
+          TableUpdateQuery.allOf([
+            for (final name in DataFolderService.syncedTableNames)
+              TableUpdateQuery.onTableName(name),
+          ]),
+        )
+        .listen(
+          (_) => _markDirty(),
+          onError: (Object e) => debugPrint('Folder sync watch failed: $e'),
+        );
     _pollTimer = Timer.periodic(pollInterval, (_) => importIfNewer());
   }
 

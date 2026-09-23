@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-09-24
+
+### Fixed
+- Import distinguishes an unreadable `manifest.json` (e.g. missing
+  Android file access) from a folder with no export yet, instead of
+  reporting both as "no export".
+- Android declares external-storage permissions so a Syncthing data
+  folder is readable (broad access still needs the system "All files
+  access" grant for Chronicle).
+- Auto-sync no longer re-exports forever: the change watcher only
+  listens to synced data tables, so export/import bookkeeping writes
+  don't schedule another export. Previously every export rewrote the
+  manifest within seconds, so Syncthing peers never converged on one
+  manifest.
+
 ## [1.2.1] - 2026-09-23
 
 ### Fixed

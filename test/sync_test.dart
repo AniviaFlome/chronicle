@@ -283,6 +283,14 @@ void main() {
     await db.close();
   });
 
+  test('import with corrupt manifest reports manifest-unreadable', () async {
+    final (db, service) = await makeDevice(folder);
+    await File('${folder.path}/manifest.json').writeAsString('{{{');
+    final result = await service.importData();
+    expect(result.error, 'manifest-unreadable');
+    await db.close();
+  });
+
   test('import from a missing folder reports folder-missing', () async {
     final (db, service) = await makeDevice(folder);
     await SettingsRepository(db).setDataFolder('${folder.path}/gone');

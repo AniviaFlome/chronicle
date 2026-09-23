@@ -389,6 +389,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _snack(switch (result.error!) {
           'folder-missing' => l10n.importErrorFolderMissing,
           'manifest-missing' => l10n.importErrorManifestMissing,
+          'manifest-unreadable' => l10n.importErrorManifestUnreadable,
           'not-a-data-folder' => l10n.importErrorInvalid,
           final other => l10n.couldNotImportData(other),
         });

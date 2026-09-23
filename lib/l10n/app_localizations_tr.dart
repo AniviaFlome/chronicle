@@ -1303,6 +1303,10 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bu klasörde henüz Chronicle dışa aktarımı yok. Önce diğer cihazınızdan dışa aktarın.';
 
   @override
+  String get importErrorManifestUnreadable =>
+      'manifest.json bulundu ancak okunamadı. Chronicle\'a dosya erişimi verin ve klasörü yeniden seçin.';
+
+  @override
   String get importErrorInvalid =>
       'Bu klasör bir Chronicle veri klasörü değil.';
 }

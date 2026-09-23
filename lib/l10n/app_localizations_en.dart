@@ -1332,6 +1332,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'No Chronicle export in this folder yet. Export from your other device first.';
 
   @override
+  String get importErrorManifestUnreadable =>
+      'Found manifest.json but couldn\'t read it. Grant Chronicle file access, then re-pick the folder.';
+
+  @override
   String get importErrorInvalid =>
       'This folder is not a Chronicle data folder.';
 }
