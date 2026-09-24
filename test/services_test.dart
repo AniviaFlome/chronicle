@@ -1,4 +1,5 @@
 import 'package:chronicle/services/ical.dart';
+import 'package:chronicle/services/storage_access.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -73,6 +74,14 @@ void main() {
     test('skips malformed blocks', () {
       expect(parseIcs('garbage'), isEmpty);
       expect(parseIcs('BEGIN:VEVENT\nSUMMARY:No date\nEND:VEVENT\n'), isEmpty);
+    });
+  });
+
+  group('storage access', () {
+    test('off Android file access is always granted', () async {
+      // This suite runs on Linux, where scoped storage does not exist.
+      expect(await StorageAccessService().filesAccessGranted(), isTrue);
+      expect(await StorageAccessService().requestFilesAccess(), isTrue);
     });
   });
 }

@@ -795,6 +795,14 @@
   "couldNotAccessFile": "Could not read the selected file. The system file picker refused access — try again.",
   "importErrorFolderMissing": "Data folder not found. Re-pick it in Settings.",
   "importErrorManifestMissing": "No Chronicle export in this folder yet. Export from your other device first.",
-  "importErrorManifestUnreadable": "Found manifest.json but couldn't read it. Grant Chronicle file access, then re-pick the folder.",
+  "importErrorManifestUnreadable": "Found manifest.json but couldn't read it ({error}). Grant All files access in the File access row, then retry.",
+  "@importErrorManifestUnreadable": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "storageAccessTitle": "File access",
+  "storageAccessGranted": "All files access granted",
+  "storageAccessNeeded": "Needs All files access — tap to open system settings",
   "importErrorInvalid": "This folder is not a Chronicle data folder."
 }

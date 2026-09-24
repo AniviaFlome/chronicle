@@ -2333,8 +2333,26 @@ abstract class AppLocalizations {
   /// No description provided for @importErrorManifestUnreadable.
   ///
   /// In en, this message translates to:
-  /// **'Found manifest.json but couldn\'t read it. Grant Chronicle file access, then re-pick the folder.'**
-  String get importErrorManifestUnreadable;
+  /// **'Found manifest.json but couldn\'t read it ({error}). Grant All files access in the File access row, then retry.'**
+  String importErrorManifestUnreadable(Object error);
+
+  /// No description provided for @storageAccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'File access'**
+  String get storageAccessTitle;
+
+  /// No description provided for @storageAccessGranted.
+  ///
+  /// In en, this message translates to:
+  /// **'All files access granted'**
+  String get storageAccessGranted;
+
+  /// No description provided for @storageAccessNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs All files access — tap to open system settings'**
+  String get storageAccessNeeded;
 
   /// No description provided for @importErrorInvalid.
   ///

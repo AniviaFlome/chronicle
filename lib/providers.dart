@@ -11,6 +11,7 @@ import 'services/class_files.dart';
 import 'services/folder_sync.dart';
 import 'services/notifications.dart';
 import 'services/data_folder.dart';
+import 'services/storage_access.dart';
 import 'utils/time_format.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
@@ -475,11 +476,16 @@ class DataFolderStatus {
   final int? lastImportAt;
   final bool autoSync;
 
+  /// Raw file access grant (Android scoped storage). Always true off
+  /// Android; null only if the check itself failed.
+  final bool? storageGranted;
+
   const DataFolderStatus({
     required this.folder,
     required this.lastExportAt,
     required this.lastImportAt,
     required this.autoSync,
+    required this.storageGranted,
   });
 }
 
@@ -487,10 +493,17 @@ final dataFolderStatusProvider = FutureProvider<DataFolderStatus>((
   ref,
 ) async {
   final settings = ref.watch(settingsRepositoryProvider);
+  bool? storageGranted;
+  try {
+    storageGranted = await StorageAccessService().filesAccessGranted();
+  } catch (_) {
+    storageGranted = null;
+  }
   return DataFolderStatus(
     folder: await settings.dataFolder(),
     lastExportAt: await settings.dataLastExportAt(),
     lastImportAt: await settings.dataLastImportAt(),
     autoSync: await settings.autoSync(),
+    storageGranted: storageGranted,
   );
 });

@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-09-24
+
+### Added
+- Settings → Data shows a File access row on Android with one-tap
+  "All files access" grant (the folder picker grant alone does not
+  enable raw file reads on Android 11+).
+
+### Fixed
+- Import reports the underlying read error for an unreadable
+  `manifest.json` (e.g. permission denied vs truncated sync) instead
+  of a bare "couldn't read it".
+
 ## [1.2.2] - 2026-09-24
 
 ### Fixed

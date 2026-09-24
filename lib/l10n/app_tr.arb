@@ -378,6 +378,14 @@
   "autoSyncHint": "Değişiklikleri dışa, güncellemeleri içe otomatik aktar",
   "importErrorFolderMissing": "Veri klasörü bulunamadı. Ayarlar'dan yeniden seçin.",
   "importErrorManifestMissing": "Bu klasörde henüz Chronicle dışa aktarımı yok. Önce diğer cihazınızdan dışa aktarın.",
-  "importErrorManifestUnreadable": "manifest.json bulundu ancak okunamadı. Chronicle'a dosya erişimi verin ve klasörü yeniden seçin.",
+  "importErrorManifestUnreadable": "manifest.json bulundu ancak okunamadı ({error}). Dosya erişimi satırından Tüm dosya erişimini verin, sonra tekrar deneyin.",
+  "@importErrorManifestUnreadable": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "storageAccessTitle": "Dosya erişimi",
+  "storageAccessGranted": "Tüm dosya erişimi verildi",
+  "storageAccessNeeded": "Tüm dosya erişimi gerekli — sistem ayarları için dokunun",
   "importErrorInvalid": "Bu klasör bir Chronicle veri klasörü değil."
 }

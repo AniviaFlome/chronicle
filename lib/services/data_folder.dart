@@ -339,11 +339,13 @@ class DataFolderService {
             : null;
       } catch (e) {
         debugPrint('Data folder: unreadable $manifestFile: $e');
-        return const DataFolderResult(error: 'manifest-unreadable');
+        return DataFolderResult(error: 'manifest-unreadable: $e');
       }
       if (manifestRaw == null) {
         // File exists but isn't a manifest object (e.g. truncated sync).
-        return const DataFolderResult(error: 'manifest-unreadable');
+        return const DataFolderResult(
+          error: 'manifest-unreadable: not-a-json-object',
+        );
       }
       final manifest = manifestRaw;
       if (manifest['app'] != appTag ||

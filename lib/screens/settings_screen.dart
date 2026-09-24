@@ -18,6 +18,7 @@ import '../l10n/l10n.dart';
 import '../theme.dart';
 import '../services/ical.dart';
 import '../services/menu/menu_sources.dart';
+import '../services/storage_access.dart';
 import 'year_widgets.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -27,7 +28,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen>
+    with WidgetsBindingObserver {
   final _defaultLimit = TextEditingController();
   final _defaultLimitFormKey = GlobalKey<FormState>();
   bool _defaultLimitLoaded = false;
@@ -45,6 +47,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadDefaultLimit();
     _loadScheduleDefaults();
     _loadLocale();
@@ -148,7 +151,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-check the All-files-access grant after returning from system
+    // Settings (the grant happens there, after our request returns).
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(dataFolderStatusProvider);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _defaultLimit.dispose();
     super.dispose();
   }
@@ -386,13 +399,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
       final result = await service.importData();
       if (result.error != null) {
-        _snack(switch (result.error!) {
-          'folder-missing' => l10n.importErrorFolderMissing,
-          'manifest-missing' => l10n.importErrorManifestMissing,
-          'manifest-unreadable' => l10n.importErrorManifestUnreadable,
-          'not-a-data-folder' => l10n.importErrorInvalid,
-          final other => l10n.couldNotImportData(other),
-        });
+        final err = result.error!;
+        String detail = '';
+        const marker = 'manifest-unreadable';
+        if (err.startsWith(marker)) {
+          detail = err.substring(marker.length).trim();
+          if (detail.startsWith(':')) detail = detail.substring(1).trim();
+        }
+        _snack(
+          err == 'folder-missing'
+              ? l10n.importErrorFolderMissing
+              : err == 'manifest-missing'
+                  ? l10n.importErrorManifestMissing
+                  : err.startsWith(marker)
+                      ? l10n.importErrorManifestUnreadable(detail)
+                      : err == 'not-a-data-folder'
+                          ? l10n.importErrorInvalid
+                          : l10n.couldNotImportData(err),
+        );
         return;
       }
       await _refreshAfterDataChange(result.rowsUpserted, result.rowsDeleted);
@@ -906,6 +930,7 @@ class _DataFolderTiles extends ConsumerWidget {
     final exported = status.value?.lastExportAt;
     final imported = status.value?.lastImportAt;
     final autoSync = status.value?.autoSync ?? true;
+    final storageGranted = status.value?.storageGranted;
     String subtitle;
     if (folder == null || folder.isEmpty) {
       subtitle = context.l10n.dataFolderUnset;
@@ -952,6 +977,39 @@ class _DataFolderTiles extends ConsumerWidget {
           title: Text(context.l10n.exportDataAction),
           onTap: busy ? null : onExport,
         ),
+        // Raw file access only matters on Android (scoped storage): the
+        // folder picker grant alone does not make dart:io reads work.
+        if (Platform.isAndroid)
+          ListTile(
+            leading: const Icon(Icons.sd_storage_outlined),
+            title: Text(context.l10n.storageAccessTitle),
+            subtitle: Text(
+              storageGranted == true
+                  ? context.l10n.storageAccessGranted
+                  : context.l10n.storageAccessNeeded,
+            ),
+            trailing: storageGranted == true
+                ? const Icon(Icons.check_circle_outline)
+                : const Icon(Icons.warning_amber_outlined),
+            onTap: busy
+                ? null
+                : () async {
+                    final granted = await StorageAccessService()
+                        .requestFilesAccess();
+                    ref.invalidate(dataFolderStatusProvider);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            granted
+                                ? context.l10n.storageAccessGranted
+                                : context.l10n.storageAccessNeeded,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+          ),
         ListTile(
           leading: const Icon(Icons.download_outlined),
           title: Text(context.l10n.importDataAction),

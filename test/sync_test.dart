@@ -287,7 +287,7 @@ void main() {
     final (db, service) = await makeDevice(folder);
     await File('${folder.path}/manifest.json').writeAsString('{{{');
     final result = await service.importData();
-    expect(result.error, 'manifest-unreadable');
+    expect(result.error, startsWith('manifest-unreadable'));
     await db.close();
   });
 

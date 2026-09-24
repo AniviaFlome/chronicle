@@ -1303,8 +1303,19 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bu klasörde henüz Chronicle dışa aktarımı yok. Önce diğer cihazınızdan dışa aktarın.';
 
   @override
-  String get importErrorManifestUnreadable =>
-      'manifest.json bulundu ancak okunamadı. Chronicle\'a dosya erişimi verin ve klasörü yeniden seçin.';
+  String importErrorManifestUnreadable(Object error) {
+    return 'manifest.json bulundu ancak okunamadı ($error). Dosya erişimi satırından Tüm dosya erişimini verin, sonra tekrar deneyin.';
+  }
+
+  @override
+  String get storageAccessTitle => 'Dosya erişimi';
+
+  @override
+  String get storageAccessGranted => 'Tüm dosya erişimi verildi';
+
+  @override
+  String get storageAccessNeeded =>
+      'Tüm dosya erişimi gerekli — sistem ayarları için dokunun';
 
   @override
   String get importErrorInvalid =>

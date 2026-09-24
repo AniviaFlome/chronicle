@@ -1332,8 +1332,19 @@ class AppLocalizationsEn extends AppLocalizations {
       'No Chronicle export in this folder yet. Export from your other device first.';
 
   @override
-  String get importErrorManifestUnreadable =>
-      'Found manifest.json but couldn\'t read it. Grant Chronicle file access, then re-pick the folder.';
+  String importErrorManifestUnreadable(Object error) {
+    return 'Found manifest.json but couldn\'t read it ($error). Grant All files access in the File access row, then retry.';
+  }
+
+  @override
+  String get storageAccessTitle => 'File access';
+
+  @override
+  String get storageAccessGranted => 'All files access granted';
+
+  @override
+  String get storageAccessNeeded =>
+      'Needs All files access — tap to open system settings';
 
   @override
   String get importErrorInvalid =>
