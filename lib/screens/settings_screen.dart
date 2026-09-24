@@ -896,7 +896,7 @@ class _VersionFooter extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
           child: Center(
             child: Text(
-              '${info.appName} ${info.version} (${info.buildNumber})',
+              '${info.appName} ${info.version}',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
               ),
