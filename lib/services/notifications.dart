@@ -52,12 +52,8 @@ int classReminderId({
   return 0x40000000 | hash;
 }
 
-/// System notifications for task reminders.
-///
-/// Android gets real scheduled notifications. The Linux plugin only supports
-/// instant display, so there a due-checker fires reminders while the app
-/// runs (at startup and every minute). Everything degrades silently when
-/// notifications are unavailable.
+/// System notifications for task reminders. Android schedules; Linux fires
+/// due reminders while the app runs. Degrades silently when unavailable.
 class NotificationService {
   NotificationService._();
   static final instance = NotificationService._();
@@ -195,9 +191,6 @@ class NotificationService {
 }
 
 /// Keeps notifications in sync with stored tasks and reminders.
-///
-/// Notification ids are reminder row ids (globally unique). Fired state for
-/// the Linux checker lives in settings as `fired_reminder_<id>` = fire ISO.
 class ReminderScheduler {
   final TaskRepository tasks;
   final SettingsRepository settings;
@@ -209,9 +202,7 @@ class ReminderScheduler {
   static String _firedKey(int reminderId) => 'fired_reminder_$reminderId';
   static const _scheduledClassKey = 'scheduled_class_reminders';
 
-  /// Cancels everything scheduled for the task and re-schedules from the
-  /// current stored state. No-ops (except cancelling) for done tasks and
-  /// tasks without a due date.
+  /// Re-schedules from current stored state.
   Future<void> refreshTask(int taskId) async {
     final rows = await tasks.remindersFor(taskId);
     for (final r in rows) {

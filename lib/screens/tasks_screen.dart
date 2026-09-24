@@ -12,16 +12,6 @@ import 'focus_screen.dart';
 import 'grades_screen.dart';
 import 'task_edit_screen.dart';
 
-String _typeLabel(AppLocalizations l10n, TaskKind kind) => switch (kind) {
-  TaskKind.homework => l10n.typeHomework,
-  TaskKind.essay => l10n.typeEssay,
-  TaskKind.project => l10n.typeProject,
-  TaskKind.reading => l10n.typeReading,
-  TaskKind.revision => l10n.typeRevision,
-  TaskKind.exam => l10n.examLabel,
-  TaskKind.reminder => l10n.typeReminder,
-};
-
 class TasksScreen extends ConsumerStatefulWidget {
   const TasksScreen({super.key});
 
@@ -80,7 +70,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: FilterChip(
-                      label: Text(_typeLabel(context.l10n, kind)),
+                      label: Text(taskTypeLabel(context.l10n, kind)),
                       selected: _filter == kind,
                       onSelected: (_) => setState(
                         () => _filter = _filter == kind ? null : kind,
@@ -286,7 +276,7 @@ class _TaskTile extends ConsumerWidget {
                       const SizedBox(height: 2),
                       Text(
                         [
-                          _typeLabel(context.l10n, task.type),
+                          taskTypeLabel(context.l10n, task.type),
                           if (task.dueDate != null)
                             context.l10n.dueOnTime(
                               task.dueDate!,

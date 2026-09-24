@@ -8,6 +8,7 @@ import '../data/tables.dart';
 import '../providers.dart';
 import '../l10n/l10n.dart';
 import '../utils/time_format.dart';
+import '../utils/ui_feedback.dart';
 
 const _reminderPresetMinutes = <int>[15, 60, 180, 1440, 10080];
 
@@ -19,7 +20,7 @@ String formatReminderOffset(AppLocalizations l10n, int minutes) {
   return l10n.remindMins(minutes);
 }
 
-String _typeLabel(AppLocalizations l10n, TaskKind kind) => switch (kind) {
+String taskTypeLabel(AppLocalizations l10n, TaskKind kind) => switch (kind) {
   TaskKind.homework => l10n.typeHomework,
   TaskKind.essay => l10n.typeEssay,
   TaskKind.project => l10n.typeProject,
@@ -192,7 +193,7 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
-      debugPrint('Save task failed: $e');
+      logLoadFailure('Save task', e);
       if (mounted) {
         setState(() => _error = context.l10n.couldNotSaveTask('$e'));
       }
@@ -234,7 +235,7 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
-      debugPrint('Delete task failed: $e');
+      logLoadFailure('Delete task', e);
       if (mounted) {
         setState(() => _error = 'Could not delete task: $e');
       }
@@ -299,7 +300,7 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
                     for (final k in TaskKind.values)
                       DropdownMenuItem(
                         value: k,
-                        child: Text(_typeLabel(context.l10n, k)),
+                        child: Text(taskTypeLabel(context.l10n, k)),
                       ),
                   ],
                   onChanged: (v) => setState(() => _type = v!),

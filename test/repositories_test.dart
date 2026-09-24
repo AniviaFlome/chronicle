@@ -161,6 +161,36 @@ void main() {
     expect(ex, isEmpty);
   });
 
+  test('deleteAll removes every class with slots and tombstones', () async {
+    for (final name in ['Math', 'Physics']) {
+      final id = await classes.create(
+        ClassesCompanion.insert(name: name, colorValue: 0xFF4F6BED),
+      );
+      await classes.createScheduleItem(
+        ScheduleItemsCompanion.insert(
+          classId: id,
+          dayOfWeek: 1,
+          startMinutes: 540,
+          endMinutes: 600,
+          rotation: RotationKind.weekly,
+        ),
+      );
+    }
+    expect(await classes.deleteAll(), 2);
+    expect(await classes.all(), isEmpty);
+    expect(await (db.select(db.scheduleItems)).get(), isEmpty);
+    final tombs = await db.select(db.syncTombstones).get();
+    expect(
+      tombs.where((t) => t.tableKey == SyncTables.classes),
+      hasLength(2),
+    );
+    expect(
+      tombs.where((t) => t.tableKey == SyncTables.scheduleItems),
+      hasLength(2),
+    );
+    expect(await classes.deleteAll(), 0);
+  });
+
   test('cycle weeks encode/decode roundtrip', () {
     final encoded = encodeCycleWeeks([1, 3]);
     expect(encoded, '[1,3]');

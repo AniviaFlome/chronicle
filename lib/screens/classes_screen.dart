@@ -17,7 +17,23 @@ class ClassesScreen extends ConsumerWidget {
     final activeYear = ref.watch(activeYearIdProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.classesTitle)),
+      appBar: AppBar(
+        title: Text(context.l10n.classesTitle),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: MaterialLocalizations.of(context).showMenuTooltip,
+            onSelected: (v) {
+              if (v == 'delete-all') _confirmDeleteAll(context, ref);
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'delete-all',
+                child: Text(context.l10n.deleteAllClasses),
+              ),
+            ],
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(context),
         icon: const Icon(Icons.add),
@@ -72,6 +88,54 @@ class ClassesScreen extends ConsumerWidget {
       ),
     );
   }
+
+  /// Bulk-deletes every class (with slots and absence records) after
+  /// confirmation. Tasks are kept without a class.
+  Future<void> _confirmDeleteAll(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(classRepositoryProvider);
+    final existing = await repo.all();
+    if (!context.mounted) return;
+    if (existing.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.noClasses)));
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(context.l10n.deleteAllClassesTitle),
+        content: Text(context.l10n.deleteAllClassesBody(existing.length)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(context.l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      final deleted = await repo.deleteAll();
+      if (!context.mounted) return;
+      ref.invalidate(engineProvider);
+      ref.invalidate(classesByIdProvider);
+      await ref.read(reminderSchedulerProvider).refreshClassReminders();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.classesDeleted(deleted))),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.couldNotDeleteClasses('$e'))),
+      );
+    }
+  }
 }
 
 class _ClassCard extends StatelessWidget {
@@ -111,13 +175,6 @@ class _ClassCard extends StatelessWidget {
                     if (classRow.teacher != null &&
                         classRow.teacher!.isNotEmpty)
                       Text(classRow.teacher!, style: theme.textTheme.bodySmall),
-                    if (classRow.maxAbsences != null)
-                      Text(
-                        context.l10n.absenceLimit(classRow.maxAbsences!),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.tertiary,
-                        ),
-                      ),
                   ],
                 ),
               ),

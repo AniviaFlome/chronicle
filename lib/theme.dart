@@ -282,11 +282,7 @@ AppThemeDef lookupAppTheme(String id) {
   return _defaultTheme;
 }
 
-/// Builds the app [ThemeData] for a brightness, theme id and accent color.
-///
-/// Unknown theme ids fall back to Default. The accent only applies to
-/// themes with [AppThemeDef.supportsAccent]; every theme gets a full
-/// surface ramp so cards, dialogs, sheets and navigation match.
+/// Builds the app [ThemeData] for a brightness, theme id and accent.
 ThemeData buildAppTheme({
   required String themeId,
   required int accentValue,
@@ -329,12 +325,19 @@ ThemeData buildAppTheme({
   );
 }
 
-/// Opaque class/event block background: the class color blended toward the
-/// surface, so grid shading underneath never shows through. The blend is
-/// stronger in dark mode to keep text contrast. Always fully opaque.
-/// The class color is first harmonized toward the theme seed (primary) so
-/// saturated palette entries visibly follow the active color scheme
-/// (Default/Catppuccin/Nord/…) and accent choice.
+/// Opaque class block background + accent + readable foreground.
+/// The class color is harmonized toward the theme seed so palette entries
+/// follow the active family/accent. Background stays fully opaque.
+({Color bg, Color accent, Color onBg}) classColors(
+  ColorScheme scheme,
+  Color klass,
+) {
+  final bg = classBlockColor(scheme, klass);
+  return (bg: bg, accent: classAccentColor(scheme, klass), onBg: classOnBlockColor(scheme, bg));
+}
+
+/// Opaque class/event block background: class color blended toward the
+/// surface so grid shading never shows through.
 Color classBlockColor(ColorScheme scheme, Color klass) {
   final harmonized = Color.lerp(klass, scheme.primary, 0.35) ?? klass;
   return Color.lerp(
@@ -344,18 +347,13 @@ Color classBlockColor(ColorScheme scheme, Color klass) {
   )!;
 }
 
-/// Border/accent for a class block: harmonized class color, never raw neon.
-/// Blends strongly toward the scheme primary so class colors visibly change
-/// when the theme family or accent changes.
+/// Border/accent for a class block: harmonized class color.
 Color classAccentColor(ColorScheme scheme, Color klass) =>
     Color.lerp(klass, scheme.primary, 0.35) ?? klass;
 
-/// Readable foreground for [background] (a [classBlockColor] result).
-/// Prefers onSurface when contrast is sufficient, else black/white.
+/// Readable foreground for a [classBlockColor] result.
 Color classOnBlockColor(ColorScheme scheme, Color background) {
   final brightness = ThemeData.estimateBrightnessForColor(background);
   if (brightness == Brightness.dark) return const Color(0xFFFFFFFF);
-  // Light backgrounds: use onSurface for theme consistency; it is near-black
-  // on all light ramps. Fall back to black if scheme is unusual.
   return scheme.onSurface;
 }

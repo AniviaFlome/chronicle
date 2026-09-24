@@ -222,6 +222,16 @@ class ClassRepository {
     return (db.delete(db.classes)..where((c) => c.id.equals(id))).go();
   }
 
+  /// Deletes every class via [delete] (tombstones + cascade each).
+  /// Returns the deleted count.
+  Future<int> deleteAll() async {
+    final rows = await db.select(db.classes).get();
+    for (final row in rows) {
+      await delete(row.id);
+    }
+    return rows.length;
+  }
+
   // --- Schedule items ---
 
   Stream<List<ScheduleItem>> watchScheduleItems(int classId) => (db.select(
@@ -968,9 +978,9 @@ class SettingsRepository {
     }
   }
 
-  /// 'list' or 'grid'. Defaults to 'list'.
+  /// 'list' or 'grid'. Defaults to 'grid'.
   Future<String> absencesView() async =>
-      (await get('absences_view')) == 'grid' ? 'grid' : 'list';
+      (await get('absences_view')) == 'list' ? 'list' : 'grid';
 
   Future<void> setAbsencesView(String value) => set('absences_view', value);
 
@@ -1148,6 +1158,9 @@ class SettingsRepository {
   static const dataFolderKey = 'data_folder_path';
   static const dataLastExportAtKey = 'data_last_export_at';
   static const dataLastImportAtKey = 'data_last_import_at';
+  static const dataLastSeenAtKey = 'data_last_seen_exported_at';
+  static const dataSyncErrorKey = 'data_sync_error';
+  static const dataLastConflictsKey = 'data_last_conflicts';
 
   /// User-chosen folder holding exported data files. Null = unset.
   /// The path is remembered across restarts; if the platform revokes
@@ -1178,6 +1191,38 @@ class SettingsRepository {
 
   Future<void> setDataLastImportAt(int value) =>
       set(dataLastImportAtKey, value.toString());
+
+  /// Manifest `exportedAt` of the folder state we last exported or
+  /// successfully imported. The auto-sync gate compares equality (not
+  /// wall-clock ordering) so clock skew across devices can't permanently
+  /// skip a peer export.
+  Future<int?> dataLastSeenExportedAt() async {
+    final raw = await get(dataLastSeenAtKey);
+    return raw == null ? null : int.tryParse(raw);
+  }
+
+  Future<void> setDataLastSeenExportedAt(int value) =>
+      set(dataLastSeenAtKey, value.toString());
+
+  /// Last auto/manual sync failure, or null when the last run succeeded.
+  /// Surfaced in Settings → Data so silent `debugPrint` failures become
+  /// visible.
+  Future<String?> dataSyncError() => get(dataSyncErrorKey);
+
+  Future<void> setDataSyncError(String? value) async {
+    if (value == null || value.trim().isEmpty) {
+      await remove(dataSyncErrorKey);
+    } else {
+      await set(dataSyncErrorKey, value);
+    }
+  }
+
+  /// Conflicting rows preserved as `conflicts/*.json` by the last import.
+  Future<int> dataLastConflicts() async =>
+      int.tryParse(await get(dataLastConflictsKey) ?? '') ?? 0;
+
+  Future<void> setDataLastConflicts(int value) =>
+      set(dataLastConflictsKey, value.toString());
 
   static const menuLocationKey = 'menu_location';
   /// Dining-hall location id for the menu page. Defaults to '1'.

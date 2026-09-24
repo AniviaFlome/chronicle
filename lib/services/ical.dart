@@ -1,8 +1,5 @@
-/// Minimal dependency-free iCalendar support: export events to .ics and
-/// import VEVENTs (single + simple daily/weekly repeats) back as data.
-///
-/// Dates are floating local times (no TZ conversion), which matches how the
-/// app stores everything.
+/// Minimal iCalendar support: export .ics and import VEVENTs.
+/// Dates are floating local times, matching app storage.
 library;
 
 /// One calendar event for export, or one parsed instance from import.

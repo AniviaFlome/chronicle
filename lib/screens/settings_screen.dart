@@ -16,9 +16,15 @@ import '../data/schedule_repository.dart';
 import '../providers.dart';
 import '../l10n/l10n.dart';
 import '../theme.dart';
+import '../services/bilsis.dart';
+import '../services/bilsis_pdf.dart';
 import '../services/ical.dart';
 import '../services/menu/menu_sources.dart';
 import '../services/storage_access.dart';
+import '../utils/time_format.dart';
+import '../utils/ui_feedback.dart';
+import 'bilsis_import_dialog.dart';
+import 'schedule_slot_dialog.dart';
 import 'year_widgets.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -61,7 +67,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       if (!mounted) return;
       setState(() => _portraitLock = value);
     } catch (e) {
-      debugPrint('Load portrait lock failed: $e');
+      logLoadFailure('Load portrait lock', e);
     }
   }
 
@@ -75,21 +81,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         () => _menuProviderId = menuSources.containsKey(value) ? value : '',
       );
     } catch (e) {
-      debugPrint('Load menu source failed: $e');
+      logLoadFailure('Load menu source', e);
     }
   }
 
   Future<void> _setMenuProvider(String value) async {
     setState(() => _menuProviderId = value);
-    try {
-      await ref.read(settingsRepositoryProvider).setMenuProviderId(value);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSaveSetting('$e'))),
-        );
-      }
-    }
+    await _saveSetting(
+      () => ref.read(settingsRepositoryProvider).setMenuProviderId(value),
+      (m) => context.l10n.couldNotSaveSetting(m),
+    );
   }
 
   Future<void> _togglePortraitLock(bool value) async {
@@ -100,9 +101,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _portraitLock = !value);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.couldNotSaveSetting('$e'))),
-      );
+      showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
     }
   }
 
@@ -112,22 +111,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       if (!mounted) return;
       setState(() => _localeOverride = value);
     } catch (e) {
-      debugPrint('Load locale failed: $e');
+      logLoadFailure('Load locale', e);
     }
   }
 
   Future<void> _setLocale(String value) async {
     setState(() => _localeOverride = value);
-    try {
-      await ref.read(settingsRepositoryProvider).setLocaleOverride(value);
-      ref.invalidate(appLocaleProvider);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSaveSetting('$e'))),
-        );
-      }
-    }
+    await _saveSetting(
+      () => ref.read(settingsRepositoryProvider).setLocaleOverride(value).then((_) {
+        ref.invalidate(appLocaleProvider);
+      }),
+      (m) => context.l10n.couldNotSaveSetting(m),
+    );
   }
 
   Future<void> _loadDefaultLimit() async {
@@ -141,12 +136,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         _defaultLimitLoaded = true;
       });
     } catch (e) {
-      debugPrint('Load settings failed: $e');
+      logLoadFailure('Load settings', e);
       if (!mounted) return;
       setState(() => _defaultLimitLoaded = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.couldNotLoadSettings('$e'))),
-      );
+      showErrorSnack(context, context.l10n.couldNotLoadSettings('$e'));
     }
   }
 
@@ -154,8 +147,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Re-check the All-files-access grant after returning from system
     // Settings (the grant happens there, after our request returns).
+    // Also pick up folder updates that landed while backgrounded.
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(dataFolderStatusProvider);
+      ref.read(folderSyncControllerProvider).importIfNewer().then((ran) {
+        if (ran && mounted) {
+          ref.invalidate(engineProvider);
+          ref.invalidate(classesByIdProvider);
+          ref.invalidate(dataFolderStatusProvider);
+        }
+      });
     }
   }
 
@@ -182,19 +183,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         _scheduleLoaded = true;
       });
     } catch (e) {
-      debugPrint('Load schedule defaults failed: $e');
+      logLoadFailure('Load schedule defaults', e);
       if (!mounted) return;
       setState(() => _scheduleLoaded = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.couldNotLoadSettings('$e'))),
-      );
+      showErrorSnack(context, context.l10n.couldNotLoadSettings('$e'));
     }
   }
 
-  String _hhmm(int minutes) {
-    final h = (minutes ~/ 60).toString().padLeft(2, '0');
-    final m = (minutes % 60).toString().padLeft(2, '0');
-    return '$h:$m';
+  Future<void> _saveSetting(
+    Future<void> Function() run,
+    String Function(String) message,
+  ) async {
+    try {
+      await run();
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnack(context, message('$e'));
+    }
   }
 
   Future<void> _pickDefaultStart() async {
@@ -213,11 +218,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       if (!mounted) return;
       setState(() => _defaultStart = picked.hour * 60 + picked.minute);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSaveSetting('$e'))),
-        );
-      }
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
     }
   }
 
@@ -253,11 +255,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       if (!mounted) return;
       setState(() => _defaultDuration = minutes);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSaveSetting('$e'))),
-        );
-      }
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
     }
   }
 
@@ -266,12 +265,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     try {
       await ref.read(settingsRepositoryProvider).setAutoEndTime(value);
     } catch (e) {
-      if (mounted) {
-        setState(() => _autoEnd = !value);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSaveSetting('$e'))),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _autoEnd = !value);
+      showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
     }
   }
 
@@ -327,11 +323,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       if (!mounted) return;
       setState(() => _defaultReminder = minutes);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSaveSetting('$e'))),
-        );
-      }
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
     }
   }
 
@@ -422,7 +415,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       await _refreshAfterDataChange(result.rowsUpserted, result.rowsDeleted);
       if (!mounted) return;
       _snack(
-        l10n.dataImportDone(result.rowsUpserted, result.rowsDeleted),
+        result.rowsSkipped > 0
+            ? l10n.dataImportDoneSkipped(
+                result.rowsUpserted,
+                result.rowsDeleted,
+                result.rowsSkipped,
+              )
+            : l10n.dataImportDone(result.rowsUpserted, result.rowsDeleted),
       );
     } catch (e) {
       _snack(l10n.couldNotImportData('$e'));
@@ -584,6 +583,83 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
   }
 
+  /// Imports a Bilsis PDF: preview courses, create one class per selection.
+  Future<void> _importBilsis() async {
+    final l10n = context.l10n;
+    if (_busy) return;
+    final bytes = await _pickFile(['pdf']);
+    if (bytes == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final words = await extractBilsisWords(Uint8List.fromList(bytes));
+      final BilsisSchedule schedule;
+      try {
+        schedule = parseBilsisPages(words);
+      } on BilsisParseException catch (e) {
+        _snack(
+          e.message == 'no-header' ||
+                  e.message == 'no-times' ||
+                  e.message == 'no-courses'
+              ? l10n.bilsisFoundNone
+              : l10n.bilsisPickFailed(e.message),
+        );
+        return;
+      }
+      if (!mounted) return;
+      final selected = await showDialog<Set<String>>(
+        context: context,
+        builder: (_) => BilsisPreviewDialog(schedule: schedule),
+      );
+      if (selected == null || selected.isEmpty || !mounted) return;
+      final classRepo = ref.read(classRepositoryProvider);
+      final settings = ref.read(settingsRepositoryProvider);
+      final yearId = await settings.watchActiveYearId().first;
+      final defaultLimit = await settings.defaultMaxAbsences();
+      final existingCount = (await classRepo.all()).length;
+      var imported = 0;
+      for (final course in schedule.courses) {
+        if (!selected.contains('${course.code}|${course.section}')) continue;
+        final room = course.room?.trim().isEmpty ?? true ? null : course.room;
+        final teacher = course.instructor?.trim().isEmpty ?? true
+            ? null
+            : course.instructor;
+        await classRepo.createClassWithSlots(
+          ClassesCompanion.insert(
+            name: '${course.code} ${course.title}',
+            colorValue:
+                classColorPalette[(existingCount + imported) %
+                    classColorPalette.length],
+            teacher: Value(teacher),
+            room: Value(room),
+            yearId: Value(yearId),
+            maxAbsences: Value(defaultLimit),
+          ),
+          [
+            for (final s in course.slots)
+              SlotDraft(
+                dayOfWeek: s.day,
+                startMinutes: s.startMinutes,
+                endMinutes: s.endMinutes,
+                room: room,
+              ).toCompanion(0),
+          ],
+        );
+        imported++;
+      }
+      ref.invalidate(engineProvider);
+      ref.invalidate(classesByIdProvider);
+      await ref.read(reminderSchedulerProvider).refreshClassReminders();
+      if (!mounted) return;
+      _snack(l10n.bilsisImported(imported));
+    } on BilsisParseException catch (e) {
+      _snack(l10n.bilsisPickFailed(e.message));
+    } catch (e) {
+      _snack(l10n.bilsisPickFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _saveDefaultLimit() async {
     if (!_defaultLimitFormKey.currentState!.validate() || _savingDefaultLimit) {
       return;
@@ -595,16 +671,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           .read(settingsRepositoryProvider)
           .setDefaultMaxAbsences(text.isEmpty ? null : int.parse(text));
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.l10n.defaultLimitSaved)));
+        showErrorSnack(context, context.l10n.defaultLimitSaved);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSaveSetting('$e'))),
-        );
-      }
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
     } finally {
       if (mounted) setState(() => _savingDefaultLimit = false);
     }
@@ -736,6 +807,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 subtitle: Text(context.l10n.importCalendarHint),
                 onTap: _busy ? null : _importCalendar,
               ),
+              ListTile(
+                leading: const Icon(Icons.school_outlined),
+                title: Text(context.l10n.bilsisImportTitle),
+                subtitle: Text(context.l10n.bilsisImportHint),
+                onTap: _busy ? null : _importBilsis,
+              ),
               const Divider(height: 16),
               _DataFolderTiles(
                 busy: _busy,
@@ -755,7 +832,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 title: Text(context.l10n.defaultClassStart),
                 subtitle: Text(
                   _scheduleLoaded
-                      ? context.l10n.prefilledStartHint(_hhmm(_defaultStart))
+                      ? context.l10n.prefilledStartHint(hhmm(_defaultStart))
                       : context.l10n.loadingEllipsis,
                 ),
                 enabled: _scheduleLoaded,
@@ -896,7 +973,9 @@ class _VersionFooter extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
           child: Center(
             child: Text(
-              '${info.appName} ${info.version}',
+              // Fixed display name: on Linux the platform app name is the
+              // lowercase binary name ("chronicle").
+              'Chronicle ${info.version}',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
               ),
@@ -930,6 +1009,8 @@ class _DataFolderTiles extends ConsumerWidget {
     final exported = status.value?.lastExportAt;
     final imported = status.value?.lastImportAt;
     final autoSync = status.value?.autoSync ?? true;
+    final syncError = status.value?.syncError;
+    final conflicts = status.value?.conflicts ?? 0;
     final storageGranted = status.value?.storageGranted;
     String subtitle;
     if (folder == null || folder.isEmpty) {
@@ -954,6 +1035,12 @@ class _DataFolderTiles extends ConsumerWidget {
           ),
         );
       }
+      if (conflicts > 0) {
+        lines.add(context.l10n.syncConflicts(conflicts));
+      }
+      if (syncError != null && syncError.isNotEmpty) {
+        lines.add(context.l10n.syncError(syncError));
+      }
       subtitle = lines.join('\n');
     }
     return Column(
@@ -972,13 +1059,9 @@ class _DataFolderTiles extends ConsumerWidget {
                 )
               : null,
         ),
-        ListTile(
-          leading: const Icon(Icons.upload_outlined),
-          title: Text(context.l10n.exportDataAction),
-          onTap: busy ? null : onExport,
-        ),
         // Raw file access only matters on Android (scoped storage): the
         // folder picker grant alone does not make dart:io reads work.
+        // Kept directly under the folder row so Export/Import stay adjacent.
         if (Platform.isAndroid)
           ListTile(
             leading: const Icon(Icons.sd_storage_outlined),
@@ -1010,6 +1093,11 @@ class _DataFolderTiles extends ConsumerWidget {
                     }
                   },
           ),
+        ListTile(
+          leading: const Icon(Icons.upload_outlined),
+          title: Text(context.l10n.exportDataAction),
+          onTap: busy ? null : onExport,
+        ),
         ListTile(
           leading: const Icon(Icons.download_outlined),
           title: Text(context.l10n.importDataAction),
@@ -1248,7 +1336,7 @@ class _DayRangePickerState extends ConsumerState<_DayRangePicker> {
         _loaded = true;
       });
     } catch (e) {
-      debugPrint('Load day range failed: $e');
+      logLoadFailure('Load day range', e);
       if (mounted) setState(() => _loaded = true);
     }
   }
@@ -1274,16 +1362,10 @@ class _DayRangePickerState extends ConsumerState<_DayRangePicker> {
       ref.invalidate(dayRangeProvider);
       ref.invalidate(fixedGridProvider);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSave('$e'))),
-        );
-      }
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSave('$e'));
     }
   }
-
-  String _mmLabel(int m) =>
-      '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}';
 
   Future<void> _pick(bool isStart) async {
     final initial = isStart ? _start : _end;
@@ -1329,7 +1411,7 @@ class _DayRangePickerState extends ConsumerState<_DayRangePicker> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                value >= 1440 ? '24:00' : _mmLabel(value),
+                value >= 1440 ? '24:00' : hhmm(value),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               Icon(
@@ -1400,7 +1482,7 @@ class _GridMarkersPickerState extends ConsumerState<_GridMarkersPicker> {
         _loaded = true;
       });
     } catch (e) {
-      debugPrint('Load grid markers failed: $e');
+      logLoadFailure('Load grid markers', e);
       if (mounted) setState(() => _loaded = true);
     }
   }
@@ -1419,11 +1501,8 @@ class _GridMarkersPickerState extends ConsumerState<_GridMarkersPicker> {
       ref.invalidate(gridMarkersModeProvider);
       ref.invalidate(fixedGridProvider);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSave('$e'))),
-        );
-      }
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSave('$e'));
     }
   }
 
@@ -1431,8 +1510,7 @@ class _GridMarkersPickerState extends ConsumerState<_GridMarkersPicker> {
     final lesson = int.tryParse(_lesson.text.trim());
     final recess = int.tryParse(_recess.text.trim());
     if (lesson == null || lesson <= 0 || recess == null || recess < 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(context.l10n.gridValidation)));
+      showErrorSnack(context, context.l10n.gridValidation);
       return;
     }
     try {
@@ -1441,16 +1519,11 @@ class _GridMarkersPickerState extends ConsumerState<_GridMarkersPicker> {
       await repo.setGridFixedBreak(recess);
       ref.invalidate(fixedGridProvider);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.l10n.gridRhythmSaved)));
+        showErrorSnack(context, context.l10n.gridRhythmSaved);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSave('$e'))),
-        );
-      }
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSave('$e'));
     }
   }
 

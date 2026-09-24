@@ -198,9 +198,5 @@ class ClassOccurrence {
   @override
   String toString() =>
       'ClassOccurrence(class $classId, $date '
-      '${_hhmm(startMinutes)}-${_hhmm(endMinutes)}, room: $room)';
+      '${hhmm(startMinutes)}-${hhmm(endMinutes)}, room: $room)';
 }
-
-String _hhmm(int minutes) =>
-    '${(minutes ~/ 60).toString().padLeft(2, '0')}:'
-    '${(minutes % 60).toString().padLeft(2, '0')}';

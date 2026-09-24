@@ -148,6 +148,27 @@
   "focusedThisWeek": "focused this week",
   "classesTitle": "Classes",
   "addClass": "Add class",
+  "deleteAllClasses": "Delete all classes",
+  "deleteAllClassesTitle": "Delete all classes?",
+  "deleteAllClassesBody": "Delete {count} classes with their schedules and absence records? Tasks are kept without a class.",
+  "@deleteAllClassesBody": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "noClasses": "No classes to delete.",
+  "classesDeleted": "{count} classes deleted",
+  "@classesDeleted": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "couldNotDeleteClasses": "Could not delete classes: {error}",
+  "@couldNotDeleteClasses": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "couldNotLoadClasses": "Could not load classes: {error}",
   "@couldNotLoadClasses": {
     "placeholders": {
@@ -736,6 +757,14 @@
       "deleted": {}
     }
   },
+  "dataImportDoneSkipped": "Merged {upserted} · deleted {deleted} · skipped {skipped} (update the app?)",
+  "@dataImportDoneSkipped": {
+    "placeholders": {
+      "upserted": {},
+      "deleted": {},
+      "skipped": {}
+    }
+  },
   "couldNotExportData": "Could not export data: {error}",
   "@couldNotExportData": {
     "placeholders": {
@@ -762,6 +791,18 @@
   },
   "autoSyncTitle": "Auto-sync",
   "autoSyncHint": "Export changes and import updates automatically",
+  "syncError": "Sync error: {error}",
+  "@syncError": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "syncConflicts": "Conflicts preserved: {count}",
+  "@syncConflicts": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "classFilesSection": "Files",
   "addFiles": "Add files",
   "noFilesYet": "No files yet.",
@@ -804,5 +845,29 @@
   "storageAccessTitle": "File access",
   "storageAccessGranted": "All files access granted",
   "storageAccessNeeded": "Needs All files access — tap to open system settings",
-  "importErrorInvalid": "This folder is not a Chronicle data folder."
+  "importErrorInvalid": "This folder is not a Chronicle data folder.",
+  "bilsisImportTitle": "Import schedule",
+  "bilsisImportHint": "Import supported PDF files",
+  "bilsisPickFailed": "Could not read the PDF: {error}",
+  "@bilsisPickFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "bilsisFoundNone": "No courses found. Use a text Bilsis schedule PDF — scanned copies have no readable text.",
+  "bilsisPreviewTitle": "Import schedule",
+  "bilsisPreviewHint": "Untick courses you already track. Only the course table is read.",
+  "bilsisImportCourses": "{n, plural, =1{Import 1 course} other{Import {n} courses}}",
+  "@bilsisImportCourses": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "bilsisImported": "{n, plural, =1{Imported 1 course} other{Imported {n} courses}}",
+  "@bilsisImported": {
+    "placeholders": {
+      "n": {}
+    }
+  },
+  "bilsisNoSelection": "Select at least one course"
 }

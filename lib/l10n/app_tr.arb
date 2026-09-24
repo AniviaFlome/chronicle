@@ -80,6 +80,27 @@
   "focusedThisWeek": "bu hafta odaklanılan",
   "classesTitle": "Dersler",
   "addClass": "Ders ekle",
+  "deleteAllClasses": "Tüm dersleri sil",
+  "deleteAllClassesTitle": "Tüm dersler silinsin mi?",
+  "deleteAllClassesBody": "{count} ders programları ve devamsızlık kayıtlarıyla silinecek. Görevler derssiz korunur.",
+  "@deleteAllClassesBody": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "noClasses": "Silinecek ders yok.",
+  "classesDeleted": "{count} ders silindi",
+  "@classesDeleted": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "couldNotDeleteClasses": "Dersler silinemedi: {error}",
+  "@couldNotDeleteClasses": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "couldNotLoadClasses": "Dersler yüklenemedi: {error}",
   "showingYear": "Gösterilen yıl",
   "absenceLimit": "Devamsızlık sınırı: {limit}",
@@ -359,6 +380,14 @@
   "importDataAction": "Verileri içe aktar",
   "dataExportDone": "{rows} satır dışa aktarıldı",
   "dataImportDone": "{upserted} birleştirildi · {deleted} silindi",
+  "dataImportDoneSkipped": "{upserted} birleştirildi · {deleted} silindi · {skipped} atlandı (uygulamayı güncelleyin?)",
+  "@dataImportDoneSkipped": {
+    "placeholders": {
+      "upserted": {},
+      "deleted": {},
+      "skipped": {}
+    }
+  },
   "couldNotExportData": "Veriler dışa aktarılamadı: {error}",
   "couldNotImportData": "Veriler içe aktarılamadı: {error}",
   "dataLastExport": "Son dışa aktarma: {date}",
@@ -376,6 +405,18 @@
   "couldNotAccessFile": "Seçilen dosya okunamadı. Sistem dosya seçici erişimi reddetti — tekrar deneyin.",
   "autoSyncTitle": "Otomatik eşitleme",
   "autoSyncHint": "Değişiklikleri dışa, güncellemeleri içe otomatik aktar",
+  "syncError": "Eşitleme hatası: {error}",
+  "@syncError": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "syncConflicts": "Korunan çakışma: {count}",
+  "@syncConflicts": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "importErrorFolderMissing": "Veri klasörü bulunamadı. Ayarlar'dan yeniden seçin.",
   "importErrorManifestMissing": "Bu klasörde henüz Chronicle dışa aktarımı yok. Önce diğer cihazınızdan dışa aktarın.",
   "importErrorManifestUnreadable": "manifest.json bulundu ancak okunamadı ({error}). Dosya erişimi satırından Tüm dosya erişimini verin, sonra tekrar deneyin.",
@@ -387,5 +428,14 @@
   "storageAccessTitle": "Dosya erişimi",
   "storageAccessGranted": "Tüm dosya erişimi verildi",
   "storageAccessNeeded": "Tüm dosya erişimi gerekli — sistem ayarları için dokunun",
-  "importErrorInvalid": "Bu klasör bir Chronicle veri klasörü değil."
+  "importErrorInvalid": "Bu klasör bir Chronicle veri klasörü değil.",
+  "bilsisImportTitle": "Programı içe aktar",
+  "bilsisImportHint": "Desteklenen PDF dosyalarını içe aktar",
+  "bilsisPickFailed": "PDF okunamadı: {error}",
+  "bilsisFoundNone": "PDF'de ders bulunamadı. Metin tabanlı bir Bilsis programı kullanın — taranmış kopyalarda okunabilir metin olmaz.",
+  "bilsisPreviewTitle": "Programı içe aktar",
+  "bilsisPreviewHint": "Zaten takip ettiğiniz derslerin seçimini kaldırın. Yalnızca ders tablosu okunur.",
+  "bilsisImportCourses": "{n} dersi içe aktar",
+  "bilsisImported": "{n} ders içe aktarıldı",
+  "bilsisNoSelection": "En az bir ders seçin"
 }

@@ -8,10 +8,9 @@ import '../providers.dart';
 import '../services/menu/menu_provider.dart';
 import '../services/menu/menu_sources.dart';
 import '../utils/time_format.dart';
+import '../utils/ui_feedback.dart';
 
-/// Dining-hall menu page. v1 shows one provider (Hacettepe): pick a campus
-/// and a day, switch between meals. Network failures fall back to the last
-/// cached response, marked stale. Dish names are shown as published.
+/// Dining-hall menu page. Network failures fall back to cached response.
 class MenuScreen extends ConsumerStatefulWidget {
   /// Override for tests (a fake provider instead of the network).
   final MenuProvider? provider;
@@ -61,7 +60,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         location = saved;
       }
     } catch (e) {
-      debugPrint('Load menu source failed: $e');
+      logLoadFailure('Load menu source', e);
     }
     if (!mounted) return;
     setState(() {
@@ -115,7 +114,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         }
       });
     } catch (e) {
-      debugPrint('Menu fetch failed: $e');
+      logLoadFailure('Menu fetch', e);
       if (!mounted || gen != _loadGen) return;
       setState(() {
         _loading = false;
@@ -160,7 +159,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     try {
       await ref.read(settingsRepositoryProvider).setMenuLocation(value);
     } catch (e) {
-      debugPrint('Save menu location failed: $e');
+      logLoadFailure('Save menu location', e);
     }
     await _load();
   }

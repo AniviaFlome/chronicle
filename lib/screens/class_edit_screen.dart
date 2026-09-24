@@ -9,6 +9,7 @@ import '../l10n/l10n.dart';
 import '../providers.dart';
 import '../theme.dart';
 import '../utils/time_format.dart';
+import '../utils/ui_feedback.dart';
 import 'attachment_panel.dart';
 import 'error_dialog.dart';
 import 'mark_absence_dialog.dart';
@@ -88,7 +89,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
         _yearId ??= activeYear;
       });
     } catch (e) {
-      debugPrint('Prefill defaults failed: $e');
+      logLoadFailure('Prefill defaults', e);
     }
   }
 
@@ -128,7 +129,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
           end = TimeOfDay(hour: m ~/ 60, minute: m % 60);
         }
       } catch (e) {
-        debugPrint('Auto end time failed: $e');
+        logLoadFailure('Auto end time', e);
       }
     }
     setState(() {
@@ -179,23 +180,17 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
     List<SlotDraft> newSlots = const [];
     if (widget.existing == null) {
       if (_days.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.selectWeekday)),
-        );
+        showErrorSnack(context, context.l10n.selectWeekday);
         return;
       }
       if (_startTime == null || _endTime == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.selectTimes)),
-        );
+        showErrorSnack(context, context.l10n.selectTimes);
         return;
       }
       final startM = _startTime!.hour * 60 + _startTime!.minute;
       final endM = _endTime!.hour * 60 + _endTime!.minute;
       if (endM <= startM) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.endAfterStart)),
-        );
+        showErrorSnack(context, context.l10n.endAfterStart);
         return;
       }
       newSlots = [
@@ -245,7 +240,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
-      debugPrint('Save class failed: $e');
+      logLoadFailure('Save class', e);
       if (mounted) {
         await showErrorDialog(context, title: context.l10n.errorSaveClass, error: e);
       }
@@ -288,7 +283,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
-      debugPrint('Delete class failed: $e');
+      logLoadFailure('Delete class', e);
       if (mounted) {
         await showErrorDialog(
           context,
@@ -615,14 +610,14 @@ class _ScheduleSection extends ConsumerWidget {
       if (end <= start) end = (start + 60).clamp(1, 1439);
       if (await repo.autoEndTime()) autoEnd = duration;
     } catch (e) {
-      debugPrint('Load schedule defaults failed: $e');
+      logLoadFailure('Load schedule defaults', e);
     }
     if (!context.mounted) return;
     ({int length, bool letters})? rot;
     try {
       rot = await ref.read(rotationOptionsForClassProvider(classId).future);
     } catch (e) {
-      debugPrint('Rotation options failed, continuing without: $e');
+      logLoadFailure('Rotation options, continuing without', e);
     }
     if (!context.mounted) return;
     if (!context.mounted) return;
@@ -664,7 +659,7 @@ class _ScheduleSection extends ConsumerWidget {
         rotationOptionsForClassProvider(item.classId).future,
       );
     } catch (e) {
-      debugPrint('Rotation options failed, continuing without: $e');
+      logLoadFailure('Rotation options, continuing without', e);
     }
     int? autoEnd;
     try {
@@ -673,7 +668,7 @@ class _ScheduleSection extends ConsumerWidget {
         autoEnd = await repo.defaultDurationMinutes();
       }
     } catch (e) {
-      debugPrint('Load auto end failed: $e');
+      logLoadFailure('Load auto end', e);
     }
     if (!context.mounted) return;
     final draft = await showDialog<SlotDraft>(

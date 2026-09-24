@@ -578,6 +578,42 @@ abstract class AppLocalizations {
   /// **'Add class'**
   String get addClass;
 
+  /// No description provided for @deleteAllClasses.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all classes'**
+  String get deleteAllClasses;
+
+  /// No description provided for @deleteAllClassesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all classes?'**
+  String get deleteAllClassesTitle;
+
+  /// No description provided for @deleteAllClassesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {count} classes with their schedules and absence records? Tasks are kept without a class.'**
+  String deleteAllClassesBody(Object count);
+
+  /// No description provided for @noClasses.
+  ///
+  /// In en, this message translates to:
+  /// **'No classes to delete.'**
+  String get noClasses;
+
+  /// No description provided for @classesDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} classes deleted'**
+  String classesDeleted(Object count);
+
+  /// No description provided for @couldNotDeleteClasses.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete classes: {error}'**
+  String couldNotDeleteClasses(Object error);
+
   /// No description provided for @couldNotLoadClasses.
   ///
   /// In en, this message translates to:
@@ -2216,6 +2252,12 @@ abstract class AppLocalizations {
   /// **'Merged {upserted} · deleted {deleted}'**
   String dataImportDone(Object upserted, Object deleted);
 
+  /// No description provided for @dataImportDoneSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Merged {upserted} · deleted {deleted} · skipped {skipped} (update the app?)'**
+  String dataImportDoneSkipped(Object upserted, Object deleted, Object skipped);
+
   /// No description provided for @couldNotExportData.
   ///
   /// In en, this message translates to:
@@ -2251,6 +2293,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Export changes and import updates automatically'**
   String get autoSyncHint;
+
+  /// No description provided for @syncError.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync error: {error}'**
+  String syncError(Object error);
+
+  /// No description provided for @syncConflicts.
+  ///
+  /// In en, this message translates to:
+  /// **'Conflicts preserved: {count}'**
+  String syncConflicts(Object count);
 
   /// No description provided for @classFilesSection.
   ///
@@ -2359,6 +2413,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This folder is not a Chronicle data folder.'**
   String get importErrorInvalid;
+
+  /// No description provided for @bilsisImportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import schedule'**
+  String get bilsisImportTitle;
+
+  /// No description provided for @bilsisImportHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Import supported PDF files'**
+  String get bilsisImportHint;
+
+  /// No description provided for @bilsisPickFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the PDF: {error}'**
+  String bilsisPickFailed(Object error);
+
+  /// No description provided for @bilsisFoundNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No courses found. Use a text Bilsis schedule PDF — scanned copies have no readable text.'**
+  String get bilsisFoundNone;
+
+  /// No description provided for @bilsisPreviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import schedule'**
+  String get bilsisPreviewTitle;
+
+  /// No description provided for @bilsisPreviewHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Untick courses you already track. Only the course table is read.'**
+  String get bilsisPreviewHint;
+
+  /// No description provided for @bilsisImportCourses.
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, =1{Import 1 course} other{Import {n} courses}}'**
+  String bilsisImportCourses(num n);
+
+  /// No description provided for @bilsisImported.
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, =1{Imported 1 course} other{Imported {n} courses}}'**
+  String bilsisImported(num n);
+
+  /// No description provided for @bilsisNoSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one course'**
+  String get bilsisNoSelection;
 }
 
 class _AppLocalizationsDelegate

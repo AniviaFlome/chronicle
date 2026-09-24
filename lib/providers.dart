@@ -66,13 +66,9 @@ final settingsRepositoryProvider = Provider(
   (ref) => SettingsRepository(ref.watch(appDatabaseProvider)),
 );
 
-/// View prefs preloaded in main() before runApp, so the calendar and
-/// absences screens render the saved view on the very first frame instead
-/// of flashing the default and switching once the async load completes.
-/// Seeds preloaded in main() before runApp. Overridden with the saved
-/// values via overrideWithValue; defaults keep tests hermetic.
+/// View seeds preloaded in main() and overridden with saved values.
 final calendarViewSeedProvider = Provider<String>((ref) => 'list');
-final absencesViewSeedProvider = Provider<String>((ref) => 'list');
+final absencesViewSeedProvider = Provider<String>((ref) => 'grid');
 
 class CalendarViewNotifier extends Notifier<String> {
   @override
@@ -88,12 +84,7 @@ class AbsencesViewNotifier extends Notifier<String> {
   void set(String view) => state = view;
 }
 
-/// View prefs preloaded in main() before runApp, so the calendar and
-/// absences screens render the saved view on the very first frame instead
-/// of flashing the default and switching once an async load completes.
-/// Notifiers (not frozen snapshots) so view writers keep the in-memory
-/// value in sync with settings: revisiting a screen must show the
-/// last-picked view, not the app-start snapshot.
+/// Notifiers keep the in-memory view in sync with settings.
 final initialCalendarViewProvider =
     NotifierProvider<CalendarViewNotifier, String>(CalendarViewNotifier.new);
 final initialAbsencesViewProvider =
@@ -475,6 +466,8 @@ class DataFolderStatus {
   final int? lastExportAt;
   final int? lastImportAt;
   final bool autoSync;
+  final String? syncError;
+  final int conflicts;
 
   /// Raw file access grant (Android scoped storage). Always true off
   /// Android; null only if the check itself failed.
@@ -486,6 +479,8 @@ class DataFolderStatus {
     required this.lastImportAt,
     required this.autoSync,
     required this.storageGranted,
+    this.syncError,
+    this.conflicts = 0,
   });
 }
 
@@ -505,5 +500,7 @@ final dataFolderStatusProvider = FutureProvider<DataFolderStatus>((
     lastImportAt: await settings.dataLastImportAt(),
     autoSync: await settings.autoSync(),
     storageGranted: storageGranted,
+    syncError: await settings.dataSyncError(),
+    conflicts: await settings.dataLastConflicts(),
   );
 });

@@ -2,13 +2,8 @@
 String isoFromDateTime(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-/// Shifts a date by whole calendar days, preserving the wall-clock time.
-///
-/// Unlike [Duration] addition, this is immune to DST transitions: adding
-/// exact 24h blocks shifts wall-clock time by an hour across transitions
-/// (e.g. Mar 29 / Oct 25 2026 in Europe/Berlin), which silently broke
-/// DateTime-equality bucketing (absence matrix weeks vanished), skipped
-/// range ends (Oct 28 occurrences dropped), and hung day-count loops.
+/// Shifts a date by whole calendar days, preserving wall-clock time.
+/// Never use [Duration] addition here: exact 24h blocks drift across DST.
 DateTime shiftDays(DateTime d, int days) => DateTime(
   d.year,
   d.month,
@@ -44,9 +39,7 @@ int? parseHHmm(String s) {
   return h * 60 + m;
 }
 
-/// Fixed lesson/break grid: boundaries plus the break gaps between lessons.
-/// e.g. start 14:00, lesson 60, break 10, count 2 →
-/// boundaries [14:00, 15:00, 15:10, 16:10], breaks [(15:00, 15:10)].
+/// Fixed lesson/break grid: boundaries plus break gaps.
 /// Invalid configs (lesson <= 0, count <= 0) yield empty lists.
 ({List<int> boundaries, List<({int start, int end})> breaks})
 generateFixedGrid({

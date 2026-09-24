@@ -274,6 +274,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addClass => 'Add class';
 
   @override
+  String get deleteAllClasses => 'Delete all classes';
+
+  @override
+  String get deleteAllClassesTitle => 'Delete all classes?';
+
+  @override
+  String deleteAllClassesBody(Object count) {
+    return 'Delete $count classes with their schedules and absence records? Tasks are kept without a class.';
+  }
+
+  @override
+  String get noClasses => 'No classes to delete.';
+
+  @override
+  String classesDeleted(Object count) {
+    return '$count classes deleted';
+  }
+
+  @override
+  String couldNotDeleteClasses(Object error) {
+    return 'Could not delete classes: $error';
+  }
+
+  @override
   String couldNotLoadClasses(Object error) {
     return 'Could not load classes: $error';
   }
@@ -1256,6 +1280,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String dataImportDoneSkipped(
+    Object upserted,
+    Object deleted,
+    Object skipped,
+  ) {
+    return 'Merged $upserted · deleted $deleted · skipped $skipped (update the app?)';
+  }
+
+  @override
   String couldNotExportData(Object error) {
     return 'Could not export data: $error';
   }
@@ -1280,6 +1313,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get autoSyncHint => 'Export changes and import updates automatically';
+
+  @override
+  String syncError(Object error) {
+    return 'Sync error: $error';
+  }
+
+  @override
+  String syncConflicts(Object count) {
+    return 'Conflicts preserved: $count';
+  }
 
   @override
   String get classFilesSection => 'Files';
@@ -1349,4 +1392,51 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get importErrorInvalid =>
       'This folder is not a Chronicle data folder.';
+
+  @override
+  String get bilsisImportTitle => 'Import schedule';
+
+  @override
+  String get bilsisImportHint => 'Import supported PDF files';
+
+  @override
+  String bilsisPickFailed(Object error) {
+    return 'Could not read the PDF: $error';
+  }
+
+  @override
+  String get bilsisFoundNone =>
+      'No courses found. Use a text Bilsis schedule PDF — scanned copies have no readable text.';
+
+  @override
+  String get bilsisPreviewTitle => 'Import schedule';
+
+  @override
+  String get bilsisPreviewHint =>
+      'Untick courses you already track. Only the course table is read.';
+
+  @override
+  String bilsisImportCourses(num n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: 'Import $n courses',
+      one: 'Import 1 course',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String bilsisImported(num n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: 'Imported $n courses',
+      one: 'Imported 1 course',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get bilsisNoSelection => 'Select at least one course';
 }

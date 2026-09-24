@@ -274,6 +274,30 @@ class AppLocalizationsTr extends AppLocalizations {
   String get addClass => 'Ders ekle';
 
   @override
+  String get deleteAllClasses => 'Tüm dersleri sil';
+
+  @override
+  String get deleteAllClassesTitle => 'Tüm dersler silinsin mi?';
+
+  @override
+  String deleteAllClassesBody(Object count) {
+    return '$count ders programları ve devamsızlık kayıtlarıyla silinecek. Görevler derssiz korunur.';
+  }
+
+  @override
+  String get noClasses => 'Silinecek ders yok.';
+
+  @override
+  String classesDeleted(Object count) {
+    return '$count ders silindi';
+  }
+
+  @override
+  String couldNotDeleteClasses(Object error) {
+    return 'Dersler silinemedi: $error';
+  }
+
+  @override
   String couldNotLoadClasses(Object error) {
     return 'Dersler yüklenemedi: $error';
   }
@@ -1226,6 +1250,15 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String dataImportDoneSkipped(
+    Object upserted,
+    Object deleted,
+    Object skipped,
+  ) {
+    return '$upserted birleştirildi · $deleted silindi · $skipped atlandı (uygulamayı güncelleyin?)';
+  }
+
+  @override
   String couldNotExportData(Object error) {
     return 'Veriler dışa aktarılamadı: $error';
   }
@@ -1251,6 +1284,16 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get autoSyncHint =>
       'Değişiklikleri dışa, güncellemeleri içe otomatik aktar';
+
+  @override
+  String syncError(Object error) {
+    return 'Eşitleme hatası: $error';
+  }
+
+  @override
+  String syncConflicts(Object count) {
+    return 'Korunan çakışma: $count';
+  }
 
   @override
   String get classFilesSection => 'Dosyalar';
@@ -1320,4 +1363,39 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get importErrorInvalid =>
       'Bu klasör bir Chronicle veri klasörü değil.';
+
+  @override
+  String get bilsisImportTitle => 'Programı içe aktar';
+
+  @override
+  String get bilsisImportHint => 'Desteklenen PDF dosyalarını içe aktar';
+
+  @override
+  String bilsisPickFailed(Object error) {
+    return 'PDF okunamadı: $error';
+  }
+
+  @override
+  String get bilsisFoundNone =>
+      'PDF\'de ders bulunamadı. Metin tabanlı bir Bilsis programı kullanın — taranmış kopyalarda okunabilir metin olmaz.';
+
+  @override
+  String get bilsisPreviewTitle => 'Programı içe aktar';
+
+  @override
+  String get bilsisPreviewHint =>
+      'Zaten takip ettiğiniz derslerin seçimini kaldırın. Yalnızca ders tablosu okunur.';
+
+  @override
+  String bilsisImportCourses(num n) {
+    return '$n dersi içe aktar';
+  }
+
+  @override
+  String bilsisImported(num n) {
+    return '$n ders içe aktarıldı';
+  }
+
+  @override
+  String get bilsisNoSelection => 'En az bir ders seçin';
 }

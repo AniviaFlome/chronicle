@@ -2,13 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
-/// Raw-filesystem access to a user-picked Syncthing folder on Android.
-///
-/// The system folder picker only grants SAF URI access, but the data
-/// folder sync uses plain `dart:io` file paths. On Android 11+ (API 30)
-/// those need the "All files access" grant, which the user enables in
-/// system Settings (the permission is declared in AndroidManifest.xml).
-/// The native side lives in MainActivity (`chronicle/storage` channel).
+/// Raw-filesystem access to a user-picked folder on Android (All-files
+/// access via system Settings; native side in MainActivity).
 class StorageAccessService {
   /// Channel override for tests.
   final MethodChannel channel;

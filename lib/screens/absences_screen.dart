@@ -8,7 +8,9 @@ import '../providers.dart';
 import '../theme.dart';
 import '../l10n/l10n.dart';
 import '../utils/time_format.dart';
+import '../utils/ui_feedback.dart';
 import 'mark_absence_dialog.dart';
+import 'view_switch.dart';
 
 enum _ExcusedFilter { all, excused, unexcused }
 
@@ -23,7 +25,7 @@ class AbsencesScreen extends ConsumerStatefulWidget {
 class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
   _ExcusedFilter _filter = _ExcusedFilter.all;
   int? _classId;
-  String _view = 'list';
+  String _view = 'grid';
 
   @override
   void initState() {
@@ -39,41 +41,22 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
     try {
       await ref.read(settingsRepositoryProvider).setAbsencesView(view);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSave('$e'))),
-        );
-      }
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSave('$e'));
     }
   }
 
   Widget _viewSwitch(BuildContext context) {
-    return SegmentedButton<String>(
-      style: const ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      segments: [
-        ButtonSegment(
-          value: 'list',
-          icon: const Icon(Icons.view_agenda_outlined, size: 20),
-          tooltip: context.l10n.listViewTooltip,
-        ),
-        ButtonSegment(
-          value: 'grid',
-          icon: const Icon(Icons.calendar_view_week_outlined, size: 20),
-          tooltip: context.l10n.gridViewTooltip,
-        ),
-      ],
-      selected: {_view},
-      showSelectedIcon: false,
-      onSelectionChanged: (s) => _setView(s.single),
+    return ViewSwitch(
+      value: _view,
+      onChanged: _setView,
+      listTooltip: context.l10n.listViewTooltip,
+      gridTooltip: context.l10n.gridViewTooltip,
     );
   }
 
   /// View switch, or null when it lives in the AppBar instead.
-  /// Uses [defaultTargetPlatform] (not `Platform.isAndroid`) so widget
-  /// tests can override the platform.
+  /// Uses [defaultTargetPlatform] so widget tests can override the platform.
   Widget? _viewSwitchOrNull(BuildContext context) =>
       defaultTargetPlatform == TargetPlatform.android
       ? null
@@ -509,12 +492,26 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
 
   void _maybeJumpToCurrent() {
     if (!_hScroll.hasClients) return;
-    if (_lastWeeks == null || _lastCurrentIndex < 0) return;
+    final weeks = _lastWeeks;
+    final index = _lastCurrentIndex;
+    // Prevent repeated jumps.
+    _lastCurrentIndex = -1;
+    if (weeks == null || index < 0) return;
     // Only auto-jump for long year grids where current is off-screen.
-    if (_lastWeeks!.length <= 8 || _lastCurrentIndex <= 2) return;
+    if (weeks.length <= 8 || index <= 2) return;
     const cellWidth = 44.0;
+    const nameWidth = 120.0;
+    final pos = _hScroll.position;
+    // Skip when the current week is already visible: no slide on entry.
+    if (nameWidth + index * cellWidth <
+        pos.pixels + pos.viewportDimension - cellWidth) {
+      return;
+    }
+    // Clamp: near the last weeks the raw target overshoots maxScrollExtent
+    // and lands off-screen (throws in debug).
     final target =
-        (_lastCurrentIndex * cellWidth - 160).clamp(0.0, double.infinity);
+        (index * cellWidth - (pos.viewportDimension - nameWidth - cellWidth * 2))
+            .clamp(0.0, pos.maxScrollExtent);
     // Post-frame jump once per weeks change.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_hScroll.hasClients) return;
@@ -522,8 +519,6 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
         _hScroll.jumpTo(target);
       }
     });
-    // Prevent repeated jumps.
-    _lastCurrentIndex = -1;
   }
 
   @override

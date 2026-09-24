@@ -8,6 +8,7 @@ import '../data/database.dart';
 import '../domain/grades.dart';
 import '../l10n/l10n.dart';
 import '../providers.dart';
+import '../utils/ui_feedback.dart';
 
 enum _Phase { idle, work, rest }
 
@@ -69,7 +70,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
         if (applied) _remaining = _workSecondsState;
       });
     } catch (e) {
-      debugPrint('Load focus durations failed: $e');
+      logLoadFailure('Load focus durations', e);
     }
   }
 
@@ -166,7 +167,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
             ),
           );
     } catch (e) {
-      debugPrint('Record focus session failed: $e');
+      logLoadFailure('Record focus session', e);
     }
   }
 

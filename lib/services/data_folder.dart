@@ -9,21 +9,9 @@ import '../data/database.dart';
 import '../data/repositories.dart';
 import 'class_files.dart';
 
-/// Local data-folder export/import. The app only reads/writes plain JSON
-/// files in a user-chosen folder; whatever syncs that folder externally
-/// (or nothing at all) is outside the app — no network code, no accounts,
-/// no background watchers.
-///
-/// Layout (one JSON file per table):
-/// `manifest.json`, `<table>.json` for each synced table, `tombstones.json`,
-/// plus `files/<uuid>[.ext]` content blobs for class/year attachments
-/// (referenced by `class_files.json` / `year_files.json`).
-/// Export overwrites the files atomically (temp + rename) and prunes
-/// unreferenced blobs. Import merges newer rows by `updatedAt` keyed on
-/// stable `uuid`s and applies tombstones, then leaves the files alone —
-/// export again to publish merged state.
-/// Safe workflow is one device at a time: export, let the folder sync
-/// elsewhere, import on the other side.
+/// Local data-folder export/import as plain JSON in a user-chosen folder.
+/// No network code: external sync is outside the app. One device at a time:
+/// export, let the folder sync elsewhere, import on the other side.
 class DataFolderService {
   final AppDatabase db;
   final SettingsRepository settings;
@@ -165,7 +153,12 @@ class DataFolderService {
 
   /// Writes every table plus tombstones and a manifest into the folder.
   /// Returns counts; never throws for a missing folder (see [dataDir]).
-  Future<DataFolderResult> exportData() async {
+  ///
+  /// When [pruneBlobs] is false (auto-sync path) unreferenced blobs are
+  /// left alone: pruning without a prior merge would delete a peer's
+  /// just-uploaded attachment that this device hasn't imported yet.
+  /// Manual Export prunes to reclaim space.
+  Future<DataFolderResult> exportData({bool pruneBlobs = true}) async {
     final dir = await dataDir();
     if (dir == null) {
       return const DataFolderResult(error: 'no-folder');
@@ -254,7 +247,9 @@ class DataFolderService {
             (uuid: r.uuid, fileName: r.fileName, storedPath: r.storedPath),
         ]),
       );
-      await _pruneBlobs(dir, referencedBlobs);
+      if (pruneBlobs) {
+        await _pruneBlobs(dir, referencedBlobs);
+      }
       await writeJson(tombstonesFile, [
         for (final t in tombstones)
           {
@@ -263,18 +258,26 @@ class DataFolderService {
             'deletedAt': t.deletedAt,
           },
       ]);
+      final exportedAt = DateTime.now().millisecondsSinceEpoch;
       await writeJson(manifestFile, {
         'app': appTag,
         'formatVersion': formatVersion,
-        'exportedAt': DateTime.now().millisecondsSinceEpoch,
+        'exportedAt': exportedAt,
       });
       await settings.setDataLastExportAt(
         DateTime.now().millisecondsSinceEpoch,
       );
+      // Mark our own manifest seen so auto-import never re-imports it.
+      await settings.setDataLastSeenExportedAt(exportedAt);
+      await settings.setDataSyncError(null);
       return DataFolderResult(filesWritten: files, rowsExported: rows);
     } catch (e) {
       debugPrint('Data folder export failed: $e');
-      return DataFolderResult(error: '$e');
+      final result = DataFolderResult(error: '$e');
+      try {
+        await settings.setDataSyncError('$e');
+      } catch (_) {}
+      return result;
     }
   }
 
@@ -358,19 +361,97 @@ class DataFolderService {
         if (list != null) tables[entry.key] = list;
       }
       final tombs = await _readJsonList(dir, tombstonesFile) ?? const [];
-      final merged = await _mergeData(dir, tables, tombs);
+      final lastImportBefore = await settings.dataLastImportAt() ?? 0;
+      final merged = await _mergeData(dir, tables, tombs, lastImportBefore);
       await settings.setDataLastImportAt(
         DateTime.now().millisecondsSinceEpoch,
       );
+      final seenAt = manifest['exportedAt'];
+      if (seenAt is int) {
+        await settings.setDataLastSeenExportedAt(seenAt);
+      }
+      await settings.setDataLastConflicts(merged.conflictsPreserved);
+      await settings.setDataSyncError(null);
       return DataFolderResult(
         filesRead: tables.length + 1,
         rowsUpserted: merged.rowsUpserted,
         rowsDeleted: merged.rowsDeleted,
         tombstonesAdopted: merged.tombstonesAdopted,
+        conflictsPreserved: merged.conflictsPreserved,
+        rowsSkipped: merged.rowsSkipped,
       );
     } catch (e) {
       debugPrint('Data folder import failed: $e');
-      return DataFolderResult(error: '$e');
+      final result = DataFolderResult(error: '$e');
+      try {
+        await settings.setDataSyncError('$e');
+      } catch (_) {}
+      return result;
+    }
+  }
+
+  /// Subdirectory holding preserved conflict snapshots
+  /// (`conflict_<table>_<uuid>_<at>.json` with `{local, incoming}`).
+  static const conflictsDir = 'conflicts';
+
+  /// True when any synced file (manifest, tables, tombstones, blobs) was
+  /// modified after [sinceMs]. Compares local filesystem mtimes, so peer
+  /// wall-clock skew can't hide late-arriving Syncthing files.
+  Future<bool> folderHasNewerFiles(Directory dir, int sinceMs) async {
+    Future<bool> newer(String path) async {
+      try {
+        final stat = await FileStat.stat(path);
+        if (stat.type == FileSystemEntityType.notFound) return false;
+        return stat.modified.millisecondsSinceEpoch > sinceMs;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    if (await newer('${dir.path}/$manifestFile')) return true;
+    for (final name in tableFiles.values) {
+      if (await newer('${dir.path}/$name')) return true;
+    }
+    if (await newer('${dir.path}/$tombstonesFile')) return true;
+    final blobsDir = Directory('${dir.path}/$filesDir');
+    try {
+      if (await blobsDir.exists()) {
+        await for (final e in blobsDir.list()) {
+          if (e is File) {
+            try {
+              final stat = await e.stat();
+              if (stat.modified.millisecondsSinceEpoch > sinceMs) return true;
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Preserves the losing local row when both sides edited the same uuid
+  /// since the last import. Writes both versions to `conflicts/` so no
+  /// side is silently lost (Obsidian-style conflict files). Returns 1 when
+  /// a file was written, else 0. Never throws.
+  Future<int> _preserveConflict(
+    Directory dir,
+    String table,
+    String uuid,
+    Map<String, dynamic> local,
+    Map<String, dynamic> incoming,
+  ) async {
+    try {
+      final out = Directory('${dir.path}/$conflictsDir');
+      if (!await out.exists()) await out.create(recursive: true);
+      final at = DateTime.now().millisecondsSinceEpoch;
+      final safeUuid = uuid.replaceAll(RegExp('[^a-zA-Z0-9-]'), '_');
+      final file = File('${out.path}/conflict_${table}_${safeUuid}_$at.json');
+      await file.writeAsString(
+        jsonEncode({'table': table, 'uuid': uuid, 'local': local, 'incoming': incoming}),
+      );
+      return 1;
+    } catch (_) {
+      return 0;
     }
   }
 
@@ -419,12 +500,15 @@ class DataFolderService {
     Directory dir,
     Map<String, List<Map<String, dynamic>>> tables,
     List<Map<String, dynamic>> rawTombs,
+    int lastImportBefore,
   ) async {
     List<Map<String, dynamic>> listOf(String key) => tables[key] ?? const [];
 
     var upserted = 0;
     var deleted = 0;
     var adopted = 0;
+    var conflicts = 0;
+    var skipped = 0;
 
     await db.transaction(() async {
       // 1. Adopt tombstones (union, keep newest), so deletes propagate the
@@ -460,13 +544,18 @@ class DataFolderService {
       }
 
       // 3. Upsert rows parents-first, skipping tombstoned or stale rows.
-      upserted += await _mergeRows(dir, listOf, localTombs);
+      final merged = await _mergeRows(dir, listOf, localTombs, lastImportBefore);
+      upserted += merged.count;
+      conflicts += merged.conflicts;
+      skipped += merged.skipped;
     });
 
     return DataFolderResult(
       rowsUpserted: upserted,
       rowsDeleted: deleted,
       tombstonesAdopted: adopted,
+      conflictsPreserved: conflicts,
+      rowsSkipped: skipped,
     );
   }
 
@@ -666,16 +755,48 @@ class DataFolderService {
   /// built from the imported files (full state) plus local rows.
   /// Attachment bytes come from `<dir>/files/` and are copied into local
   /// app storage; incoming absolute paths are never trusted.
-  Future<int> _mergeRows(
+  Future<({int count, int conflicts, int skipped})> _mergeRows(
     Directory dir,
     List<Map<String, dynamic>> Function(String key) listOf,
     Map<(String, String), int> tombstones,
+    int lastImportBefore,
   ) async {
     var count = 0;
+    var conflicts = 0;
+    var skipped = 0;
+
+    /// Parses one row leniently: a single unparsable map (newer-version
+    /// field, corrupt entry) is skipped and counted instead of aborting
+    /// the whole import transaction.
+    T? parseRow<T>(Map<String, dynamic> m, T Function(Map<String, dynamic>) parse) {
+      try {
+        return parse(m);
+      } catch (e) {
+        debugPrint('Sync: skipping unparsable row: $e');
+        skipped++;
+        return null;
+      }
+    }
 
     bool tombstoned(String table, String uuid, int updatedAt) {
       final at = tombstones[(table, uuid)];
       return at != null && at >= updatedAt;
+    }
+
+    /// Preserves the local version when both sides edited the same row
+    /// since the last import. [localUpdatedAt] is the stored stamp,
+    /// [loadLocal] returns its full JSON only on suspected conflict.
+    Future<void> maybeConflict(
+      String table,
+      String uuid,
+      int localUpdatedAt,
+      Map<String, dynamic> incoming,
+      Future<Map<String, dynamic>?> Function() loadLocal,
+    ) async {
+      if (localUpdatedAt <= lastImportBefore) return;
+      final local = await loadLocal();
+      if (local == null) return;
+      conflicts += await _preserveConflict(dir, table, uuid, local, incoming);
     }
 
     // Local uuid → (id, updatedAt) per table.
@@ -715,7 +836,8 @@ class DataFolderService {
 
     // Years (no FKs).
     for (final m in listOf('academicYears')) {
-      final row = AcademicYear.fromJson(m);
+      final row = parseRow(m, AcademicYear.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty ||
           tombstoned('academic_years', row.uuid, row.updatedAt)) {
         continue;
@@ -728,6 +850,14 @@ class DataFolderService {
         yearMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
+        await maybeConflict('academic_years', row.uuid, local.updatedAt, m, () async {
+          final existing = await (db.select(db.academicYears)
+                ..where((t) => t.uuid.equals(row.uuid)))
+              .getSingleOrNull();
+          return existing == null
+              ? null
+              : Map<String, dynamic>.from(existing.toJson());
+        });
         await db.update(db.academicYears).replace(row.copyWith(id: local.id));
         yearMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
@@ -740,7 +870,8 @@ class DataFolderService {
 
     // Classes (year FK).
     for (final m in fileClasses) {
-      final row = ClassesData.fromJson(m);
+      final row = parseRow(m, ClassesData.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty ||
           tombstoned('classes', row.uuid, row.updatedAt)) {
         continue;
@@ -762,6 +893,14 @@ class DataFolderService {
         classMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
+        await maybeConflict('classes', row.uuid, local.updatedAt, m, () async {
+          final existing = await (db.select(db.classes)
+                ..where((t) => t.uuid.equals(row.uuid)))
+              .getSingleOrNull();
+          return existing == null
+              ? null
+              : Map<String, dynamic>.from(existing.toJson());
+        });
         await db
             .update(db.classes)
             .replace(
@@ -778,7 +917,8 @@ class DataFolderService {
     // Tasks, pass 1 (no linkedExamId; fixed up below).
     final wonTasks = <String>{};
     for (final m in fileTasks) {
-      final row = Task.fromJson(m);
+      final row = parseRow(m, Task.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty || tombstoned('tasks', row.uuid, row.updatedAt)) {
         continue;
       }
@@ -801,6 +941,14 @@ class DataFolderService {
         wonTasks.add(row.uuid);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
+        await maybeConflict('tasks', row.uuid, local.updatedAt, m, () async {
+          final existing = await (db.select(db.tasks)
+                ..where((t) => t.uuid.equals(row.uuid)))
+              .getSingleOrNull();
+          return existing == null
+              ? null
+              : Map<String, dynamic>.from(existing.toJson());
+        });
         await db
             .update(db.tasks)
             .replace(
@@ -837,7 +985,8 @@ class DataFolderService {
 
     // Schedule items (class FK).
     for (final m in listOf('scheduleItems')) {
-      final row = ScheduleItem.fromJson(m);
+      final row = parseRow(m, ScheduleItem.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty ||
           tombstoned('schedule_items', row.uuid, row.updatedAt)) {
         continue;
@@ -857,6 +1006,20 @@ class DataFolderService {
         itemMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
+        await maybeConflict(
+          'schedule_items',
+          row.uuid,
+          local.updatedAt,
+          m,
+          () async {
+            final existing = await (db.select(db.scheduleItems)
+                  ..where((t) => t.uuid.equals(row.uuid)))
+                .getSingleOrNull();
+            return existing == null
+                ? null
+                : Map<String, dynamic>.from(existing.toJson());
+          },
+        );
         await db
             .update(db.scheduleItems)
             .replace(row.copyWith(id: local.id, classId: classId));
@@ -869,7 +1032,8 @@ class DataFolderService {
 
     // Exceptions (slot FK).
     for (final m in listOf('scheduleExceptions')) {
-      final row = ScheduleException.fromJson(m);
+      final row = parseRow(m, ScheduleException.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty ||
           tombstoned('schedule_exceptions', row.uuid, row.updatedAt)) {
         continue;
@@ -892,6 +1056,13 @@ class DataFolderService {
             );
         count++;
       } else if (row.updatedAt > existing.updatedAt) {
+        await maybeConflict(
+          'schedule_exceptions',
+          row.uuid,
+          existing.updatedAt,
+          m,
+          () async => Map<String, dynamic>.from(existing.toJson()),
+        );
         await db
             .update(db.scheduleExceptions)
             .replace(
@@ -903,7 +1074,8 @@ class DataFolderService {
 
     // Holidays (no FKs).
     for (final m in listOf('holidays')) {
-      final row = Holiday.fromJson(m);
+      final row = parseRow(m, Holiday.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty ||
           tombstoned('holidays', row.uuid, row.updatedAt)) {
         continue;
@@ -918,6 +1090,8 @@ class DataFolderService {
             .insert(row.toCompanion(true).copyWith(id: const Value.absent()));
         count++;
       } else if (row.updatedAt > existing.updatedAt) {
+        await maybeConflict('holidays', row.uuid, existing.updatedAt, m,
+            () async => Map<String, dynamic>.from(existing.toJson()));
         await db.update(db.holidays).replace(row.copyWith(id: existing.id));
         count++;
       }
@@ -925,7 +1099,8 @@ class DataFolderService {
 
     // Absences (class FK).
     for (final m in listOf('absences')) {
-      final row = Absence.fromJson(m);
+      final row = parseRow(m, Absence.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty ||
           tombstoned('absences', row.uuid, row.updatedAt)) {
         continue;
@@ -947,6 +1122,8 @@ class DataFolderService {
             );
         count++;
       } else if (row.updatedAt > existing.updatedAt) {
+        await maybeConflict('absences', row.uuid, existing.updatedAt, m,
+            () async => Map<String, dynamic>.from(existing.toJson()));
         await db
             .update(db.absences)
             .replace(row.copyWith(id: existing.id, classId: classId));
@@ -956,7 +1133,8 @@ class DataFolderService {
 
     // Subtasks / reminders / grades (task FKs).
     for (final m in listOf('subtasks')) {
-      final row = Subtask.fromJson(m);
+      final row = parseRow(m, Subtask.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty ||
           tombstoned('subtasks', row.uuid, row.updatedAt)) {
         continue;
@@ -978,6 +1156,8 @@ class DataFolderService {
             );
         count++;
       } else if (row.updatedAt > existing.updatedAt) {
+        await maybeConflict('subtasks', row.uuid, existing.updatedAt, m,
+            () async => Map<String, dynamic>.from(existing.toJson()));
         await db
             .update(db.subtasks)
             .replace(row.copyWith(id: existing.id, taskId: taskId));
@@ -985,7 +1165,8 @@ class DataFolderService {
       }
     }
     for (final m in listOf('taskReminders')) {
-      final row = TaskReminder.fromJson(m);
+      final row = parseRow(m, TaskReminder.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty ||
           tombstoned('task_reminders', row.uuid, row.updatedAt)) {
         continue;
@@ -1007,6 +1188,8 @@ class DataFolderService {
             );
         count++;
       } else if (row.updatedAt > existing.updatedAt) {
+        await maybeConflict('task_reminders', row.uuid, existing.updatedAt, m,
+            () async => Map<String, dynamic>.from(existing.toJson()));
         await db
             .update(db.taskReminders)
             .replace(row.copyWith(id: existing.id, taskId: taskId));
@@ -1014,7 +1197,8 @@ class DataFolderService {
       }
     }
     for (final m in listOf('grades')) {
-      final row = Grade.fromJson(m);
+      final row = parseRow(m, Grade.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty || tombstoned('grades', row.uuid, row.updatedAt)) {
         continue;
       }
@@ -1035,6 +1219,8 @@ class DataFolderService {
             );
         count++;
       } else if (row.updatedAt > existing.updatedAt) {
+        await maybeConflict('grades', row.uuid, existing.updatedAt, m,
+            () async => Map<String, dynamic>.from(existing.toJson()));
         await db
             .update(db.grades)
             .replace(row.copyWith(id: existing.id, examTaskId: examId));
@@ -1044,7 +1230,8 @@ class DataFolderService {
 
     // Pomodoro sessions (nullable task FK).
     for (final m in listOf('pomodoroSessions')) {
-      final row = PomodoroSession.fromJson(m);
+      final row = parseRow(m, PomodoroSession.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty ||
           tombstoned('pomodoro_sessions', row.uuid, row.updatedAt)) {
         continue;
@@ -1068,6 +1255,13 @@ class DataFolderService {
             );
         count++;
       } else if (row.updatedAt > existing.updatedAt) {
+        await maybeConflict(
+          'pomodoro_sessions',
+          row.uuid,
+          existing.updatedAt,
+          m,
+          () async => Map<String, dynamic>.from(existing.toJson()),
+        );
         await db
             .update(db.pomodoroSessions)
             .replace(
@@ -1082,7 +1276,8 @@ class DataFolderService {
 
     // Xtra events (no FKs).
     for (final m in listOf('xtraEvents')) {
-      final row = XtraEvent.fromJson(m);
+      final row = parseRow(m, XtraEvent.fromJson);
+      if (row == null) continue;
       if (row.uuid.isEmpty ||
           tombstoned('xtra_events', row.uuid, row.updatedAt)) {
         continue;
@@ -1097,19 +1292,22 @@ class DataFolderService {
             .insert(row.toCompanion(true).copyWith(id: const Value.absent()));
         count++;
       } else if (row.updatedAt > existing.updatedAt) {
+        await maybeConflict('xtra_events', row.uuid, existing.updatedAt, m,
+            () async => Map<String, dynamic>.from(existing.toJson()));
         await db.update(db.xtraEvents).replace(row.copyWith(id: existing.id));
         count++;
       }
     }
 
     // Class files (class FK remapped by uuid; bytes copied locally).
-    count += await _mergeFileRows(
+    final classFilesMerged = await _mergeFileRows(
       dir: dir,
       fileMaps: listOf('classFiles'),
       parentFiles: fileClasses,
       parentMap: classMap,
       tombTable: 'class_files',
       isTombstoned: tombstoned,
+      lastImportBefore: lastImportBefore,
       fetchExisting: (uuid) => (db.select(
         db.classFiles,
       )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
@@ -1136,13 +1334,14 @@ class DataFolderService {
     );
 
     // Year files (year FK remapped by uuid; bytes copied locally).
-    count += await _mergeFileRows(
+    final yearFilesMerged = await _mergeFileRows(
       dir: dir,
       fileMaps: listOf('yearFiles'),
       parentFiles: fileYears,
       parentMap: yearMap,
       tombTable: 'year_files',
       isTombstoned: tombstoned,
+      lastImportBefore: lastImportBefore,
       fetchExisting: (uuid) => (db.select(
         db.yearFiles,
       )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
@@ -1167,15 +1366,18 @@ class DataFolderService {
       parentIdOf: (row) => row.yearId as int,
       scope: 'year_files',
     );
+    count += classFilesMerged.count + yearFilesMerged.count;
+    conflicts += classFilesMerged.conflicts + yearFilesMerged.conflicts;
+    skipped += classFilesMerged.skipped + yearFilesMerged.skipped;
 
-    return count;
+    return (count: count, conflicts: conflicts, skipped: skipped);
   }
 
   /// Merges one attachment table. Parents are remapped file-id → local-id
   /// via uuid; bytes are copied from the folder's `files/` dir into local
   /// app storage (the incoming absolute path is never trusted). Rows whose
   /// blob is missing from the folder are skipped.
-  Future<int> _mergeFileRows({
+  Future<({int count, int conflicts, int skipped})> _mergeFileRows({
     required Directory dir,
     required List<Map<String, dynamic>> fileMaps,
     required List<Map<String, dynamic>> parentFiles,
@@ -1183,6 +1385,7 @@ class DataFolderService {
     required String tombTable,
     required bool Function(String table, String uuid, int updatedAt)
     isTombstoned,
+    required int lastImportBefore,
     required Future<dynamic> Function(String uuid) fetchExisting,
     required Future<void> Function(dynamic row, int parentId, String storedPath)
     insert,
@@ -1210,9 +1413,14 @@ class DataFolderService {
     }
 
     var count = 0;
+    var conflicts = 0;
+    var skipped = 0;
     for (final m in fileMaps) {
       final dynamic row = _fileRowFromJson(tombTable, m);
-      if (row == null) continue;
+      if (row == null) {
+        skipped++;
+        continue;
+      }
       final String uuid = row.uuid as String;
       final int updatedAt = row.updatedAt as int;
       if (uuid.isEmpty || isTombstoned(tombTable, uuid, updatedAt)) continue;
@@ -1231,6 +1439,21 @@ class DataFolderService {
         await insert(row, parentId, localPath);
         count++;
       } else if (updatedAt > (existing.updatedAt as int)) {
+        final int localUpdatedAt = existing.updatedAt as int;
+        if (localUpdatedAt > lastImportBefore) {
+          try {
+            final localJson = Map<String, dynamic>.from(
+              (existing.toJson() as Map),
+            );
+            conflicts += await _preserveConflict(
+              dir,
+              tombTable,
+              uuid,
+              localJson,
+              m,
+            );
+          } catch (_) {}
+        }
         final oldPath = existing.storedPath as String;
         await update(row, existing, parentId, localPath);
         if (oldPath != localPath) {
@@ -1242,7 +1465,7 @@ class DataFolderService {
         count++;
       }
     }
-    return count;
+    return (count: count, conflicts: conflicts, skipped: skipped);
   }
 
   /// Parses one attachment metadata map for [tombTable], or null when the
@@ -1299,6 +1522,8 @@ class DataFolderResult {
   final int rowsUpserted;
   final int rowsDeleted;
   final int tombstonesAdopted;
+  final int conflictsPreserved;
+  final int rowsSkipped;
   final String? error;
 
   const DataFolderResult({
@@ -1308,6 +1533,8 @@ class DataFolderResult {
     this.rowsUpserted = 0,
     this.rowsDeleted = 0,
     this.tombstonesAdopted = 0,
+    this.conflictsPreserved = 0,
+    this.rowsSkipped = 0,
     this.error,
   });
 }

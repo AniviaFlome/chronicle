@@ -9,11 +9,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/database.dart';
 
-/// Local file storage for per-class and per-year attachments (syllabus
-/// PDFs, slides, images). Files are copied into the app support directory
-/// under `class_files/<id>/` or `year_files/<id>/` and tracked in the
-/// `ClassFiles`/`YearFiles` tables, which sync through the data folder
-/// (metadata JSON plus content blobs under `files/`).
+/// Local storage for class/year attachments. Files live under
+/// `class_files/<id>/` or `year_files/<id>/` and sync via the data folder.
 class ClassFilesService {
   final AppDatabase db;
 
@@ -22,10 +19,7 @@ class ClassFilesService {
 
   ClassFilesService(this.db, {this.storageRoot});
 
-  /// Classifies a [pickAndSave] failure for user messaging. The system file
-  /// picker surfaces its own failures (e.g. a broken content provider that
-  /// refuses to open the picked file) as [PlatformException]; those get a
-  /// specific message instead of leaking plugin internals.
+  /// Classifies a [pickAndSave] failure for user messaging.
   static String pickErrorKind(Object error) =>
       error is PlatformException ? 'unreadable' : 'other';
 
@@ -38,9 +32,7 @@ class ClassFilesService {
   }
 
   /// Copies picked files into [dir], calling [onFile] per stored file.
-  /// Stored paths are saved relative (`scope/id/name`) so rows survive
-  /// reinstalls and user changes; use [resolveStoredPath] to absolutize.
-  /// Returns the number of files added.
+  /// Stored paths stay relative so rows survive reinstalls.
   Future<int> _importPicked({
     required String scope,
     required int id,

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:chronicle/data/database.dart';
@@ -273,6 +274,28 @@ void main() {
     expect(await dbB.select(dbB.scheduleItems).get(), isEmpty);
     expect(await dbB.select(dbB.absences).get(), isEmpty);
     expect(result.rowsDeleted, greaterThanOrEqualTo(1));
+  });
+
+  test('import skips unparsable rows instead of aborting', () async {
+    final (db, service) = await makeDevice(folder);
+    await ClassRepository(db).create(
+      ClassesCompanion.insert(name: 'Good', colorValue: 0xFF4F6BED),
+    );
+    await service.exportData();
+    // Corrupt one row so typed fromJson throws (e.g. newer-version field).
+    final file = File('${folder.path}/classes.json');
+    final list = List.of(jsonDecode(await file.readAsString()) as List);
+    list.add({'id': 9999});
+    await file.writeAsString(jsonEncode(list));
+
+    final (dbB, serviceB) = await makeDevice(folder);
+    final result = await serviceB.importData();
+    expect(result.error, isNull);
+    expect(result.rowsSkipped, greaterThanOrEqualTo(1));
+    final names = [for (final c in await ClassRepository(dbB).all()) c.name];
+    expect(names, contains('Good'));
+    await db.close();
+    await dbB.close();
   });
 
   test('import from empty folder reports manifest-missing', () async {

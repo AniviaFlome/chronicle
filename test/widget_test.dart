@@ -948,7 +948,10 @@ void main() {
     });
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          absencesViewSeedProvider.overrideWithValue('list'),
+        ],
         child: const MaterialApp(home: AbsencesScreen()),
       ),
     );
@@ -1587,7 +1590,10 @@ void main() {
     });
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          absencesViewSeedProvider.overrideWithValue('list'),
+        ],
         child: const MaterialApp(home: ClassesScreen()),
       ),
     );
@@ -1596,7 +1602,10 @@ void main() {
     expect(find.text('Loose'), findsOneWidget);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          absencesViewSeedProvider.overrideWithValue('list'),
+        ],
         child: const MaterialApp(home: AbsencesScreen()),
       ),
     );
@@ -2033,7 +2042,10 @@ void main() {
     final db = AppDatabase(NativeDatabase.memory());
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          absencesViewSeedProvider.overrideWithValue('list'),
+        ],
         child: MaterialApp(
           locale: const Locale('tr'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -2202,7 +2214,10 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          absencesViewSeedProvider.overrideWithValue('list'),
+        ],
         child: const MaterialApp(home: AbsencesScreen()),
       ),
     );
@@ -2284,24 +2299,26 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('No absences recorded.'), findsOneWidget);
-    await tester.tap(find.byTooltip('Weeks grid view'));
+    // Grid is the default: week columns instead of the empty-list message.
+    expect(find.text('No absences recorded.'), findsNothing);
+    expect(find.text('W1'), findsOneWidget);
+    await tester.tap(find.byTooltip('List view'));
     await tester.pumpAndSettle();
     await pumpForAsync(tester);
     expect(
       await tester.runAsync(
         () => SettingsRepository(db).absencesView(),
       ),
-      'grid',
+      'list',
     );
     await tester.tap(find.byKey(const ValueKey('swapper_toggle')));
     await tester.pumpAndSettle();
     expect(find.text('swapper_away'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('swapper_toggle')));
     await tester.pumpAndSettle();
-    // Grid view shows week columns instead of the empty-list message.
-    expect(find.text('No absences recorded.'), findsNothing);
-    expect(find.text('W1'), findsOneWidget);
+    // List view shows the empty message instead of week columns.
+    expect(find.text('No absences recorded.'), findsOneWidget);
+    expect(find.text('W1'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());
@@ -2321,6 +2338,59 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Time grid view'));
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Calendar list scrolls vertically through busy days', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.runAsync(() async {
+      final repo = ClassRepository(db);
+      // Eight Monday meetings: the day column is far taller than the
+      // viewport and must scroll instead of overflowing.
+      for (var i = 0; i < 8; i++) {
+        await repo.createClassWithSlots(
+          ClassesCompanion.insert(
+            name: 'Class $i',
+            colorValue: 0xFF4F6BED,
+          ),
+          [
+            ScheduleItemsCompanion.insert(
+              classId: 0,
+              dayOfWeek: 1,
+              startMinutes: 480 + i * 60,
+              endMinutes: 530 + i * 60,
+              rotation: RotationKind.weekly,
+            ),
+          ],
+        );
+      }
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: CalendarScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final vertical = find.byWidgetPredicate(
+      (w) => w is Scrollable && w.axis == Axis.vertical,
+    );
+    await tester.scrollUntilVisible(
+      find.text('Class 7'),
+      300,
+      scrollable: vertical,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Class 7'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();

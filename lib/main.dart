@@ -9,6 +9,7 @@ import 'data/database.dart';
 import 'data/repositories.dart';
 import 'providers.dart';
 import 'services/notifications.dart';
+import 'utils/ui_feedback.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,13 +66,13 @@ class StartupRunnerState extends ConsumerState<StartupRunner> {
       await scheduler.refreshClassReminders();
       await scheduler.nudgeOverdue();
     } catch (e) {
-      debugPrint('Startup reminder sync failed: $e');
+      logLoadFailure('Startup reminder sync', e);
     }
     if (!mounted) return;
     try {
       await ref.read(folderSyncControllerProvider).start();
     } catch (e) {
-      debugPrint('Startup folder sync failed: $e');
+      logLoadFailure('Startup folder sync', e);
     }
   }
 

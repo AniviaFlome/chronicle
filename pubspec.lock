@@ -57,6 +57,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.1"
+  bidi:
+    dependency: transitive
+    description:
+      name: bidi
+      sha256: "77f475165e94b261745cf1032c751e2032b8ed92ccb2bf5716036db79320637d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.13"
   boolean_selector:
     dependency: transitive
     description:
@@ -773,6 +781,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.0"
+  pdf_cos:
+    dependency: transitive
+    description:
+      name: pdf_cos
+      sha256: c18c908bd80e359ff3ea63d6565630e614c530b6c9ae45627d22ad3aa284f8d1
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.5.0"
+  pdf_document:
+    dependency: "direct main"
+    description:
+      name: pdf_document
+      sha256: "7b00ffe98d148016c4e3bdbdc432d014bce4f5fe783b43b9e05b36bbf0e34e3d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.5.0"
+  pdf_graphics:
+    dependency: "direct main"
+    description:
+      name: pdf_graphics
+      sha256: "0d09b52d1fae18021a25c6e3c4374bfca341be0c3e7b3cbb34dcca8a4cfa317e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.5.0"
   petitparser:
     dependency: transitive
     description:

@@ -12,8 +12,10 @@ import '../providers.dart';
 import '../theme.dart';
 import '../l10n/l10n.dart';
 import '../utils/time_format.dart';
+import '../utils/ui_feedback.dart';
 import 'occurrence_sheet.dart';
 import 'occurrence_tile.dart';
+import 'view_switch.dart';
 import 'xtra_dialog.dart';
 
 const _dayColumnWidth = 170.0;
@@ -37,6 +39,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   String _view = 'list';
   final _listCtrl = ScrollController();
   final _gridCtrl = ScrollController();
+  final _listVertCtrl = ScrollController();
+  final _gridVertCtrl = ScrollController();
 
   @override
   void initState() {
@@ -52,6 +56,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   void dispose() {
     _listCtrl.dispose();
     _gridCtrl.dispose();
+    _listVertCtrl.dispose();
+    _gridVertCtrl.dispose();
     super.dispose();
   }
 
@@ -69,11 +75,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     try {
       await ref.read(settingsRepositoryProvider).setCalendarView(view);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotSave('$e'))),
-        );
-      }
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSave('$e'));
     }
   }
 
@@ -150,29 +153,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       setState(() => _focused = shiftDays(_focused, 7)),
                 ),
                 const Spacer(),
-                SegmentedButton<String>(
-                  style: const ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  segments: [
-                    ButtonSegment(
-                      value: 'list',
-                      icon: const Icon(Icons.view_agenda_outlined, size: 20),
-                      tooltip: context.l10n.listViewTooltip,
-                    ),
-                    ButtonSegment(
-                      value: 'grid',
-                      icon: const Icon(
-                        Icons.calendar_view_week_outlined,
-                        size: 20,
-                      ),
-                      tooltip: context.l10n.timeGridTooltip,
-                    ),
-                  ],
-                  selected: {_view},
-                  showSelectedIcon: false,
-                  onSelectionChanged: (s) => _setView(s.single),
+                ViewSwitch(
+                  value: _view,
+                  onChanged: _setView,
+                  listTooltip: context.l10n.listViewTooltip,
+                  gridTooltip: context.l10n.timeGridTooltip,
                 ),
               ],
             ),
@@ -200,6 +185,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       view: _view,
                       listCtrl: _listCtrl,
                       gridCtrl: _gridCtrl,
+                      listVertCtrl: _listVertCtrl,
+                      gridVertCtrl: _gridVertCtrl,
                       listDayWidth: listDayWidth,
                       gridDayWidth: gridDayWidth,
                       autoScrollToday: compactDays,
@@ -348,8 +335,9 @@ class _AllDayChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bg = classBlockColor(theme.colorScheme, Color(event.colorValue));
-    final fg = classOnBlockColor(theme.colorScheme, bg);
+    final colors = classColors(theme.colorScheme, Color(event.colorValue));
+    final bg = colors.bg;
+    final fg = colors.onBg;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -357,12 +345,7 @@ class _AllDayChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: bg,
-          border: Border.all(
-            color: classAccentColor(
-              theme.colorScheme,
-              Color(event.colorValue),
-            ).withValues(alpha: 0.6),
-          ),
+          border: Border.all(color: colors.accent.withValues(alpha: 0.6)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
@@ -424,10 +407,7 @@ class _DayHeader extends StatelessWidget {
   }
 }
 
-/// Timetable grid: hour gutter plus one column per day, blocks positioned
-/// by start time and sized by duration. Minute-precise: supports day starts
-/// like 6:40. Draws a proper calendar base (faint hourly lines) plus
-/// stronger period/marker lines and labeled break bands.
+/// Timetable grid: hour gutter plus one column per day.
 class _WeekGrid extends ConsumerWidget {
   final DateTime start;
   final Map<DateTime, List<engine.ClassOccurrence>> byDay;
@@ -438,6 +418,7 @@ class _WeekGrid extends ConsumerWidget {
   final Map<DateTime, List<XtraEvent>> xtraByDay;
   final double? viewportHeight;
   final ScrollController? controller;
+  final ScrollController? vertController;
   final double dayWidth;
 
   const _WeekGrid({
@@ -450,14 +431,14 @@ class _WeekGrid extends ConsumerWidget {
     required this.xtraByDay,
     required this.viewportHeight,
     this.controller,
+    this.vertController,
     this.dayWidth = _gridDayWidth,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final all = byDay.values.expand((l) => l).toList();
-    // Base range from settings in minutes (defaults 360-1320); classes or
-    // fixed-grid boundaries outside it extend the range so nothing is cut off.
+    // Settings range in minutes; classes outside it extend the range.
     final range =
         ref.watch(dayRangeProvider).value ?? (start: 360, end: 1320);
     final mode = ref.watch(gridMarkersModeProvider).value ?? 'class-times';
@@ -526,8 +507,10 @@ class _WeekGrid extends ConsumerWidget {
     hourly.sort();
 
     return Scrollbar(
+      controller: vertController,
       thumbVisibility: true,
       child: SingleChildScrollView(
+        controller: vertController,
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
         physics: const ClampingScrollPhysics(),
       child: Row(
@@ -1028,15 +1011,12 @@ class _XtraGridBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     // blockHeight is the exact Positioned height; minus the 6px vertical
-    // padding gives the room for text. Explicit line heights keep the math
-    // deterministic: title 14.4px/line, subtitle 13.2px.
+    // padding gives the room for text.
     final available = blockHeight - 6;
-    final bg = classBlockColor(theme.colorScheme, Color(event.colorValue));
-    final accent = classAccentColor(
-      theme.colorScheme,
-      Color(event.colorValue),
-    );
-    final fg = classOnBlockColor(theme.colorScheme, bg);
+    final colors = classColors(theme.colorScheme, Color(event.colorValue));
+    final bg = colors.bg;
+    final accent = colors.accent;
+    final fg = colors.onBg;
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -1096,13 +1076,13 @@ class _GridBlock extends StatelessWidget {
     final raw = classRow == null
         ? theme.colorScheme.primary
         : Color(classRow!.colorValue);
-    final bg = classBlockColor(theme.colorScheme, raw);
-    final accent = classAccentColor(theme.colorScheme, raw);
-    final fg = classOnBlockColor(theme.colorScheme, bg);
+    final colors = classColors(theme.colorScheme, raw);
+    final bg = colors.bg;
+    final accent = colors.accent;
+    final fg = colors.onBg;
     final room = occurrence.room ?? classRow?.room;
     // blockHeight is the exact Positioned height; minus the 6px vertical
-    // padding gives the room for text. Explicit line heights keep the math
-    // deterministic: title 14.4px/line, subtitle 13.2px.
+    // padding gives the room for text.
     final available = blockHeight - 6;
 
     return InkWell(
@@ -1168,6 +1148,8 @@ class _WeekBody extends StatefulWidget {
   final String view;
   final ScrollController? listCtrl;
   final ScrollController? gridCtrl;
+  final ScrollController? listVertCtrl;
+  final ScrollController? gridVertCtrl;
   final double listDayWidth;
   final double gridDayWidth;
   final bool autoScrollToday;
@@ -1184,6 +1166,8 @@ class _WeekBody extends StatefulWidget {
     required this.view,
     this.listCtrl,
     this.gridCtrl,
+    this.listVertCtrl,
+    this.gridVertCtrl,
     this.listDayWidth = _dayColumnWidth,
     this.gridDayWidth = _gridDayWidth,
     this.autoScrollToday = false,
@@ -1266,6 +1250,7 @@ class _WeekBodyState extends State<_WeekBody> {
                 ? constraints.maxHeight
                 : null,
             controller: widget.gridCtrl,
+            vertController: widget.gridVertCtrl,
             dayWidth: dayWidth,
           );
         },
@@ -1280,33 +1265,44 @@ class _WeekBodyState extends State<_WeekBody> {
           110,
         );
         maybeJump(dayWidth + 8, 0);
+        // Two-dimensional scroll: the inner strip scrolls horizontally
+        // across days, the outer view vertically through tall columns.
+        // Without the outer scroll, busy days overflow the viewport with
+        // a yellow/black strip instead of scrolling.
         return Scrollbar(
-          controller: widget.listCtrl,
+          controller: widget.listVertCtrl,
           thumbVisibility: true,
           child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            controller: widget.listCtrl,
-            physics: const ClampingScrollPhysics(),
-            dragStartBehavior: DragStartBehavior.down,
+            controller: widget.listVertCtrl,
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var i = 0; i < 7; i++)
-                  _DayColumn(
-                    date: shiftDays(widget.start, i),
-                    isToday: shiftDays(widget.start, i) == todayMidnight,
-                    occurrences:
-                        byDay[shiftDays(widget.start, i)] ?? const [],
-                    classesById: byId,
-                    absenceKeys: widget.absenceKeys,
-                    rotationLabel: widget.rotationLabel(
-                      shiftDays(widget.start, i),
-                    ),
-                    xtra: xtraByDay[shiftDays(widget.start, i)] ?? const [],
-                    dayWidth: dayWidth,
-                  ),
-              ],
+            child: Scrollbar(
+              controller: widget.listCtrl,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                controller: widget.listCtrl,
+                physics: const ClampingScrollPhysics(),
+                dragStartBehavior: DragStartBehavior.down,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < 7; i++)
+                      _DayColumn(
+                        date: shiftDays(widget.start, i),
+                        isToday: shiftDays(widget.start, i) == todayMidnight,
+                        occurrences:
+                            byDay[shiftDays(widget.start, i)] ?? const [],
+                        classesById: byId,
+                        absenceKeys: widget.absenceKeys,
+                        rotationLabel: widget.rotationLabel(
+                          shiftDays(widget.start, i),
+                        ),
+                        xtra: xtraByDay[shiftDays(widget.start, i)] ?? const [],
+                        dayWidth: dayWidth,
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         );
@@ -1317,9 +1313,7 @@ class _WeekBodyState extends State<_WeekBody> {
 
 int _snap5(int minutes) => (minutes / 5).round() * 5;
 
-/// A grid block positioned by time. Long-press opens the adjust sheet
-/// (proven deliverable in widget tests, unlike raw drag gestures inside
-/// nested scrollables); tap behavior comes from the child itself.
+/// A grid block positioned by time. Long-press opens the adjust sheet.
 class _AdjustableBlock extends StatelessWidget {
   final String title;
   final int startMinutes;
