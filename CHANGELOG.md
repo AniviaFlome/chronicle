@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-24
+
+### Fixed
+- Absences list view shows the excused-state chips and class picker on
+  top again (above the quota cards), matching the weeks-grid view.
+
 ## [1.3.0] - 2026-09-24
 
 ### Added

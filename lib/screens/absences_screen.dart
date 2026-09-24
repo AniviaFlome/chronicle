@@ -133,6 +133,17 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
               return ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
+                  _FilterRow(
+                    filter: _filter,
+                    onFilter: (f) => setState(() => _filter = f),
+                    classId: classList.any((c) => c.id == _classId)
+                        ? _classId
+                        : null,
+                    classes: classList,
+                    onClass: (v) => setState(() => _classId = v),
+                    trailing: _viewSwitchOrNull(context),
+                  ),
+                  const SizedBox(height: 16),
                   if (withQuota.isNotEmpty) ...[
                     Text(
                       context.l10n.quotasTitle,
@@ -153,17 +164,6 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                       ),
                     const SizedBox(height: 8),
                   ],
-                  _FilterRow(
-                    filter: _filter,
-                    onFilter: (f) => setState(() => _filter = f),
-                    classId: classList.any((c) => c.id == _classId)
-                        ? _classId
-                        : null,
-                    classes: classList,
-                    onClass: (v) => setState(() => _classId = v),
-                    trailing: _viewSwitchOrNull(context),
-                  ),
-                  const SizedBox(height: 16),
                   if (visible.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24),
