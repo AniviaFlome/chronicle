@@ -66,7 +66,9 @@ String todayShortName() => const [
 ][DateTime.now().weekday - 1];
 
 void main() {
-  testWidgets('Mark-absent dialog returns the picked kind', (tester) async {
+  testWidgets('Mark-absent dialog returns reason and excused flag', (
+    tester,
+  ) async {
     AbsenceDraft? result;
     await tester.pumpWidget(
       MaterialApp(
@@ -89,14 +91,18 @@ void main() {
     );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    expect(find.text('Theory'), findsOneWidget);
-    expect(find.text('Practical'), findsOneWidget);
-    await tester.tap(find.text('Practical'));
-    await tester.pumpAndSettle();
+    // No session-kind selector: quotas are total-based.
+    expect(find.text('Theory'), findsNothing);
+    expect(find.text('Practical'), findsNothing);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Reason (optional)'),
+      'Sick',
+    );
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(result, isNotNull);
-    expect(result!.kind, AbsenceKind.practical);
+    expect(result!.reason, 'Sick');
+    expect(result!.kind, AbsenceKind.theory);
     expect(result!.excused, isFalse);
   });
 
@@ -905,7 +911,7 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
-  testWidgets('Absences page lists records with quotas and filters', (
+  testWidgets('Absences list shows per-class quotas without history', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(800, 1600);
@@ -957,8 +963,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('1 / 2 unexcused'), findsOneWidget);
-    expect(find.textContaining('Sick'), findsOneWidget);
-    expect(find.textContaining('Dentist'), findsOneWidget);
+    // History tiles are gone from the list view: quotas carry the signal.
+    expect(find.textContaining('Sick'), findsNothing);
+    expect(find.textContaining('Dentist'), findsNothing);
+    // Filters still render and stay interactive.
     await tester.tap(
       find.descendant(
         of: find.byType(FilterChip),
@@ -966,8 +974,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('Sick'), findsNothing);
-    expect(find.textContaining('Dentist'), findsOneWidget);
+    expect(find.text('1 / 2 unexcused'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());
@@ -1571,7 +1578,11 @@ void main() {
         ),
       );
       final looseId = await repo.create(
-        ClassesCompanion.insert(name: 'Loose', colorValue: 0xFFFF7043),
+        ClassesCompanion.insert(
+          name: 'Loose',
+          colorValue: 0xFFFF7043,
+          maxAbsences: const Value(3),
+        ),
       );
       final now = DateTime.now();
       final iso =
@@ -1610,7 +1621,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // Year-less quota card stays visible under a year filter (no history
+    // tiles in list view anymore).
     expect(find.textContaining('Loose'), findsWidgets);
+    expect(find.text('1 / 3 unexcused'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());
@@ -1815,7 +1829,9 @@ void main() {
       if (pref == 'grid') {
         expect(find.text('W1'), findsOneWidget);
       } else {
-        expect(find.text('No absences recorded.'), findsOneWidget);
+        // List view has no history section and no empty-state message.
+        expect(find.text('No absences recorded.'), findsNothing);
+        expect(find.text('W1'), findsNothing);
       }
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
@@ -2056,7 +2072,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Devamsızlık'), findsOneWidget);
-    expect(find.text('Kayıtlı devamsızlık yok.'), findsOneWidget);
+    expect(find.text('Kayıtlı devamsızlık yok.'), findsNothing);
     expect(find.text('Absences'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
@@ -2316,8 +2332,8 @@ void main() {
     expect(find.text('swapper_away'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('swapper_toggle')));
     await tester.pumpAndSettle();
-    // List view shows the empty message instead of week columns.
-    expect(find.text('No absences recorded.'), findsOneWidget);
+    // List view shows quotas without history or week columns.
+    expect(find.text('No absences recorded.'), findsNothing);
     expect(find.text('W1'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();

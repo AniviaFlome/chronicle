@@ -200,12 +200,22 @@ List<_Line> _toLines(List<BilsisWord> words) {
   for (final band in bands) {
     band.sort((a, b) => a.left.compareTo(b.left));
     var current = <BilsisWord>[band.first];
+    var currentHasCode =
+        _codeOf(band.first.text.replaceAll(RegExp(r'\s+'), '')) != null;
     for (final w in band.skip(1)) {
-      if (w.left - current.last.right > xGap) {
+      final wIsCode =
+          _codeOf(w.text.replaceAll(RegExp(r'\s+'), '')) != null;
+      // Two course codes sharing one baseline belong to overlapping
+      // (conflicting) classes in the same grid cell: force a split even
+      // when their gap is too narrow to look like a column gap.
+      if (w.left - current.last.right > xGap ||
+          (wIsCode && currentHasCode)) {
         lines.add(_makeLine(current));
         current = [w];
+        currentHasCode = wIsCode;
       } else {
         current.add(w);
+        if (wIsCode) currentHasCode = true;
       }
     }
     lines.add(_makeLine(current));
@@ -385,15 +395,67 @@ BilsisSchedule parseBilsisPages(List<List<BilsisWord>> pages) {
     }
     for (final entry in byCol.entries) {
       final day = entry.key;
-      final col = entry.value;
-      // Split into cells at code lines.
-      var current = <String>[];
-      var currentTop = 0.0;
-      void flush() {
-        if (current.isEmpty) return;
-        var row = slotFor(currentTop);
+      final col = entry.value.toList()
+        ..sort((a, b) {
+          final d = b.cy.compareTo(a.cy);
+          return d != 0 ? d : a.cx.compareTo(b.cx);
+        });
+      // Code-anchored cells: each code line starts its own cell and every
+      // other line joins the nearest code at or above it (vertical distance
+      // first, horizontal distance to break ties). The old linear
+      // top-to-bottom split merged side-by-side lines of overlapping
+      // classes sharing one grid cell into a single garbled course and
+      // dropped the first code entirely.
+      final anchors = <_Line>[];
+      final isAnchor = List<bool>.filled(col.length, false);
+      for (var i = 0; i < col.length; i++) {
+        final compact = col[i].text.replaceAll(RegExp(r'\s+'), '');
+        if (_codeOf(compact) != null) {
+          anchors.add(col[i]);
+          isAnchor[i] = true;
+        }
+      }
+      if (anchors.isEmpty) continue;
+      final buckets = [for (final a in anchors) <_Line>[a]];
+      for (var i = 0; i < col.length; i++) {
+        if (isAnchor[i]) continue;
+        final l = col[i];
+        var best = -1;
+        var bestScore = double.infinity;
+        for (var a = 0; a < anchors.length; a++) {
+          final dy = anchors[a].cy - l.cy;
+          if (dy < -4) continue;
+          final dx = (anchors[a].cx - l.cx).abs();
+          final score = dy * 1000 + dx;
+          if (score < bestScore) {
+            bestScore = score;
+            best = a;
+          }
+        }
+        if (best == -1) {
+          // Above every code (stray/header jitter): nearest overall.
+          for (var a = 0; a < anchors.length; a++) {
+            final score =
+                (l.cy - anchors[a].cy) * 1000 +
+                (anchors[a].cx - l.cx).abs();
+            if (score < bestScore) {
+              bestScore = score;
+              best = a;
+            }
+          }
+        }
+        buckets[best].add(l);
+      }
+      for (var i = 0; i < anchors.length; i++) {
+        final bucket = buckets[i].toList()
+          ..sort((a, b) {
+            final d = b.cy.compareTo(a.cy);
+            return d != 0 ? d : a.cx.compareTo(b.cx);
+          });
+        final top = anchors[i].cy;
+        var row = slotFor(top);
         // Overflow fragment below the last label: next chronological slot.
-        if (currentTop < rows.last.cy - 8) {
+        if (top < rows.last.cy - 8) {
           final next = nextStartAfter(rows.last.start);
           if (next != null) row = rowByStart[next]!;
         }
@@ -402,19 +464,10 @@ BilsisSchedule parseBilsisPages(List<List<BilsisWord>> pages) {
             day: day,
             start: row.start,
             end: row.end,
-            lines: List.of(current),
+            lines: [for (final l in bucket) l.text],
           ),
         );
-        current = <String>[];
       }
-
-      for (final l in col) {
-        final compact = l.text.replaceAll(RegExp(r'\s+'), '');
-        if (_codeOf(compact) != null) flush();
-        if (current.isEmpty) currentTop = l.cy;
-        current.add(l.text);
-      }
-      flush();
     }
   }
 

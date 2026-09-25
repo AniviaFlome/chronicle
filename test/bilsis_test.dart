@@ -154,6 +154,39 @@ void main() {
       ]);
     });
 
+    test('imports overlapping classes sharing one grid cell', () {
+      // Two conflicting courses printed side-by-side in the Monday 08:40
+      // cell: same baselines, split into left/right lines within the one
+      // day column. Both must be imported with their own details.
+      final words = page([
+        ...headers(),
+        line('08:40-09:30', 65, 463),
+        line('GKS104(3)', 140, 480),
+        line('EFL203(1)', 215, 480),
+        line('BILIM ETIGI', 140, 468),
+        line('INGILIZ EDEB', 215, 468),
+        line('C-K2-09[102]', 140, 457),
+        line('C-K3-06[52]', 215, 457),
+      ]);
+      final schedule = parseBilsisPages([words]);
+      expect(
+        schedule.courses.map((c) => c.code),
+        ['EFL203', 'GKS104'],
+      );
+      for (final c in schedule.courses) {
+        expect(
+          c.slots.map((s) => (s.day, s.startMinutes, s.endMinutes)),
+          [(1, 520, 570)],
+        );
+      }
+      final gks = schedule.courses.firstWhere((c) => c.code == 'GKS104');
+      expect(gks.title, 'BILIM ETIGI');
+      expect(gks.room, 'C-K2-09[102]');
+      final efl = schedule.courses.firstWhere((c) => c.code == 'EFL203');
+      expect(efl.title, 'INGILIZ EDEB');
+      expect(efl.room, 'C-K3-06[52]');
+    });
+
     test('throws on missing headers, times and courses', () {
       expect(
         () => parseBilsisPages([

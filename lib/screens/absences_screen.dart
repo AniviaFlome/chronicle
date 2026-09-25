@@ -164,21 +164,6 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                       ),
                     const SizedBox(height: 8),
                   ],
-                  if (visible.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Center(
-                        child: Text(
-                          context.l10n.noAbsencesRecorded,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.outline,
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    for (final a in visible)
-                      _AbsenceTile(absence: a, classRow: byId[a.classId]),
                 ],
               );
             },

@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-25
+
+### Changed
+- Absences list view shows only the per-class quota cards; the
+  per-record history list (and its "No absences recorded" empty text)
+  is gone — use the weeks grid or the class editor to manage records.
+- The mark-absence dialog no longer asks for a theory/practical
+  session kind; quotas are total-based, so new records default to it.
+
+### Fixed
+- Bilsis import no longer drops one of two overlapping classes sharing a
+  grid cell: side-by-side lines are matched to their own course code, so
+  both courses are imported with their own slots and details.
+
 ## [1.3.1] - 2026-09-24
 
 ### Fixed

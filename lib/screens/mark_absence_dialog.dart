@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../data/tables.dart';
 import '../l10n/l10n.dart';
 
-/// Result of [showMarkAbsenceDialog]: optional reason, excused flag and
-/// theory/practical kind.
+/// Result of [showMarkAbsenceDialog]: optional reason and excused flag.
+/// Absences are always recorded with the default [AbsenceKind.theory] kind.
 class AbsenceDraft {
   final String reason;
   final bool excused;
@@ -21,20 +21,18 @@ String absenceKindLabel(AppLocalizations l10n, AbsenceKind kind) =>
 String absenceKindInline(AppLocalizations l10n, AbsenceKind kind) =>
     absenceKindLabel(l10n, kind).toLowerCase();
 
-/// Dialog to mark an absence: reason, excused flag and session kind.
+/// Dialog to mark an absence: reason and excused flag.
 /// Returns null when cancelled.
 Future<AbsenceDraft?> showMarkAbsenceDialog(
   BuildContext context, {
   required String title,
   bool initialExcused = false,
-  AbsenceKind initialKind = AbsenceKind.theory,
 }) {
   return showDialog<AbsenceDraft>(
     context: context,
     builder: (_) => _MarkAbsenceDialog(
       title: title,
       initialExcused: initialExcused,
-      initialKind: initialKind,
     ),
   );
 }
@@ -42,12 +40,10 @@ Future<AbsenceDraft?> showMarkAbsenceDialog(
 class _MarkAbsenceDialog extends StatefulWidget {
   final String title;
   final bool initialExcused;
-  final AbsenceKind initialKind;
 
   const _MarkAbsenceDialog({
     required this.title,
     required this.initialExcused,
-    required this.initialKind,
   });
 
   @override
@@ -57,13 +53,11 @@ class _MarkAbsenceDialog extends StatefulWidget {
 class _MarkAbsenceDialogState extends State<_MarkAbsenceDialog> {
   final _reason = TextEditingController();
   late bool _excused;
-  late AbsenceKind _kind;
 
   @override
   void initState() {
     super.initState();
     _excused = widget.initialExcused;
-    _kind = widget.initialKind;
   }
 
   @override
@@ -81,24 +75,6 @@ class _MarkAbsenceDialogState extends State<_MarkAbsenceDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.sessionKindLabel, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 4),
-          SegmentedButton<AbsenceKind>(
-            segments: [
-              ButtonSegment(
-                value: AbsenceKind.theory,
-                label: Text(l10n.theoryLabel),
-              ),
-              ButtonSegment(
-                value: AbsenceKind.practical,
-                label: Text(l10n.practicalLabel),
-              ),
-            ],
-            selected: {_kind},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) => setState(() => _kind = s.single),
-          ),
-          const SizedBox(height: 8),
           TextFormField(
             controller: _reason,
             decoration: InputDecoration(labelText: l10n.reasonOptional),
@@ -119,7 +95,7 @@ class _MarkAbsenceDialogState extends State<_MarkAbsenceDialog> {
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(
-            AbsenceDraft(_reason.text.trim(), _excused, _kind),
+            AbsenceDraft(_reason.text.trim(), _excused, AbsenceKind.theory),
           ),
           child: Text(l10n.save),
         ),
