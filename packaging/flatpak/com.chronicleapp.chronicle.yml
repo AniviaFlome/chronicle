@@ -31,5 +31,8 @@ modules:
       - install -Dm644 stage/com.chronicleapp.chronicle.desktop /app/share/applications/com.chronicleapp.chronicle.desktop
       - install -Dm644 stage/com.chronicleapp.chronicle.png /app/share/icons/hicolor/192x192/apps/com.chronicleapp.chronicle.png
     sources:
+      # dest: dir sources merge their *contents* into the module build
+      # dir, so without this the stage/... paths below don't exist.
       - type: dir
         path: stage
+        dest: stage
