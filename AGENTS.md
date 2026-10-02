@@ -14,9 +14,9 @@ Flutter student planner. NixOS-first repo; `flutter`/`dart` only exist inside `n
 
 ## Verify
 - `nix develop --command bash -c "flutter analyze --no-pub"`
-- `nix develop --command bash -c "flutter test --no-pub"` (unit + widget, all of `test/`)
-- Integration: one invocation per file — `for f in integration_test/*_test.dart; do flutter test "$f" --no-pub || exit 1; done` (single run can't host multiple full-app boots).
+- `nix develop --command bash -c "flutter test --no-pub"` (all of `test/`, incl. `e2e_*` full-app suites)
 - Single test: `--plain-name 'Exact test name'` — one flag only; multiple AND-match to zero.
+- Keep full-app suites as plain `flutter_test` widget tests under `test/` (never an `integration_test/` dir: the flutter tool treats that path as on-device tests and tries to build + launch the Linux app, which needs GTK and a display that CI verify jobs don't have).
 - Ignore drift "multiple databases" warnings in tests (each test makes its own `NativeDatabase.memory()`).
 
 ## Codegen — do not edit generated files
@@ -37,5 +37,5 @@ Flutter student planner. NixOS-first repo; `flutter`/`dart` only exist inside `n
 - Day range is minutes (`day_start_minutes`/`day_end_minutes`, `dayRangeProvider`). Legacy `day_start_hour` keys remain as fallback; setters write both.
 - Absence matrix weeks respect `weekStartDayProvider`; W1 = week containing `year.startDate`.
 - Every insert stamps `uuid: newUuid()` + `updatedAt: syncNow()`; every update bumps `updatedAt`; every delete `recordTombstone`s the row plus cascade children *before* deleting (FK cascades won't tombstone). New tables need both columns + migration entries or sync silently duplicates rows.
-- Tests: pump async-init screens with `pumpForAsync(tester)` helper (`test/widget_test.dart`); set `tester.view.physicalSize` for form/phone screens.
+- Tests: pump async-init screens with `pumpForAsync(tester)` helper (`test/widget_test.dart`); set `tester.view.physicalSize` for form/phone screens. `testWidgets` runs in FakeAsync: wrap ALL real async I/O (drift queries, `Directory`/`File` ops, folder export/import) in `tester.runAsync` — outside it they hang until the 10-min timeout (plain `test()` is unaffected).
 - Linux window (`linux/runner/my_application.cc`): keep resizable + 800×600 minimum.

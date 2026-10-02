@@ -13,9 +13,15 @@ void main() {
   testWidgets('export then import moves a class to a fresh database', (
     tester,
   ) async {
-    final folder = await Directory.systemTemp.createTemp('e2e-sync-folder');
-    final base1 = await Directory.systemTemp.createTemp('e2e-sync-st1');
-    final base2 = await Directory.systemTemp.createTemp('e2e-sync-st2');
+    final folder = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('e2e-sync-folder'),
+    ))!;
+    final base1 = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('e2e-sync-st1'),
+    ))!;
+    final base2 = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('e2e-sync-st2'),
+    ))!;
     final db1 = AppDatabase(NativeDatabase.memory());
     final db2 = AppDatabase(NativeDatabase.memory());
     try {
@@ -46,9 +52,9 @@ void main() {
     } finally {
       await tester.runAsync(() => db1.close());
       await tester.runAsync(() => db2.close());
-      await folder.delete(recursive: true);
-      await base1.delete(recursive: true);
-      await base2.delete(recursive: true);
+      await tester.runAsync(() => folder.delete(recursive: true));
+      await tester.runAsync(() => base1.delete(recursive: true));
+      await tester.runAsync(() => base2.delete(recursive: true));
     }
   });
 }

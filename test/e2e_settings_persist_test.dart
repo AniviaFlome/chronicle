@@ -12,7 +12,9 @@ import 'e2e_harness.dart';
 /// UI must still be active after an app restart against the same file.
 void main() {
   testWidgets('settings survive a database reopen', (tester) async {
-    final tmp = await Directory.systemTemp.createTemp('e2e-settings');
+    final tmp = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('e2e-settings'),
+    ))!;
     try {
       final file = File('${tmp.path}/chronicle.db');
       final db = AppDatabase(NativeDatabase(file));
@@ -34,12 +36,14 @@ void main() {
       expect(await tester.runAsync(() => settings2.localeOverride()), 'tr');
       await tester.runAsync(() => db2.close());
     } finally {
-      await tmp.delete(recursive: true);
+      await tester.runAsync(() => tmp.delete(recursive: true));
     }
   });
 
   testWidgets('calendar view survives an app restart', (tester) async {
-    final tmp = await Directory.systemTemp.createTemp('e2e-restart');
+    final tmp = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('e2e-restart'),
+    ))!;
     final db = AppDatabase(NativeDatabase(File('${tmp.path}/c.db')));
     try {
       await tester.runAsync(
@@ -73,7 +77,7 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
       await tester.runAsync(() => db.close());
-      await tmp.delete(recursive: true);
+      await tester.runAsync(() => tmp.delete(recursive: true));
     }
   });
 }

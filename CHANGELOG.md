@@ -16,8 +16,8 @@
 - Classes accept a generic "Notes" line (class code, section,
   anything) in the full editor and quick-edit; it shows on the
   class cards and in the occurrence details.
-- Full-app e2e suite in integration_test/ (runs in CI after the unit
-  and widget tests): class surfacing on dashboard/calendar/classes,
+- Full-app e2e suite (`test/e2e_*_test.dart`, plain widget tests run in CI
+  with the rest of `flutter test`): class surfacing on dashboard/calendar/classes,
   sheet mark-absent flow, absence quota tracking, exam-to-grades
   flow, menu cache fallback, settings and calendar-view restart
   persistence, and folder export/import round-trip.
