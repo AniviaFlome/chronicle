@@ -128,6 +128,16 @@ class _OccurrenceSheet extends ConsumerWidget {
                     onTap: () => _openLink(context, classRow!.onlineLink!),
                   ),
                 ],
+                // Generic custom text (class code, section, anything): the
+                // Classes.notes field, no dedicated inputs.
+                if (classRow?.notes != null &&
+                    classRow?.notes?.isNotEmpty == true) ...[
+                  const SizedBox(height: 4),
+                  _DetailRow(
+                    icon: Icons.sticky_note_2_outlined,
+                    text: classRow?.notes ?? '',
+                  ),
+                ],
                 const SizedBox(height: 16),
                 absence.when(
                   loading: () =>

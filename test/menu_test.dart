@@ -7,7 +7,9 @@ import 'package:chronicle/l10n/l10n.dart';
 import 'package:chronicle/providers.dart';
 import 'package:chronicle/screens/menu_screen.dart';
 import 'package:chronicle/services/menu/hacettepe_provider.dart';
+import 'package:chronicle/services/menu/itu_provider.dart';
 import 'package:chronicle/services/menu/menu_provider.dart';
+import 'package:chronicle/services/menu/menu_sources.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,6 +35,101 @@ const _fixture = '''
 </section>
 ''';
 
+/// Mirrors the real ITU `yemek-menu.aspx` partial: `#pnlYemekMenu` table,
+/// category in the first cell, dish nutrition/allergen links in the second.
+const _ituOgleFixture = '''
+<div id="pnlYemekMenu">
+<table class="table table-bordered"><tbody>
+<tr><td><a>Çorba</a></td>
+<td><div><div style="width: 90%; float: left;">
+<a href="https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/besin-degerleri.aspx?yemek=294">TUTMAÇ ÇORBASI</a>
+</div><div style="width: 10%; float: right;">
+<a href="https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/alerjen-detay.aspx?yemek=294"></a>
+</div></div></td></tr>
+<tr><td><a>Ana Yemek</a></td>
+<td><div><div style="width: 90%; float: left;">
+<a href="https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/besin-degerleri.aspx?yemek=694">ORMAN KEBABI</a>
+</div><div style="width: 10%; float: right;">
+<a href="https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/alerjen-detay.aspx?yemek=694"></a>
+</div></div></td></tr>
+<tr><td><a>Yan Yemek</a></td>
+<td><div><div style="width: 90%; float: left;">
+<a href="https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/besin-degerleri.aspx?yemek=4114">İÇ PİLAV</a>
+</div><div style="width: 10%; float: right;">
+<a></a>
+</div></div></td></tr>
+</tbody></table>
+</div>
+''';
+
+const _ituAksamFixture = '''
+<div id="pnlYemekMenu">
+<table class="table table-bordered"><tbody>
+<tr><td><a>Çorba</a></td>
+<td><div><div style="width: 90%; float: left;">
+<a href="https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/besin-degerleri.aspx?yemek=301">TEL ŞEHRİYELİ HAVUÇ ÇORBASI</a>
+</div><div style="width: 10%; float: right;"><a></a></div></div></td></tr>
+<tr><td><a>Tatlı-Salata-Meyve-İçecek Çeşitleri</a></td>
+<td><div><div style="width: 90%; float: left;">
+<a href="https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/besin-degerleri.aspx?yemek=4550">MOZAİK PASTA</a>
+</div><div style="width: 10%; float: right;"><a></a></div></div></td></tr>
+</tbody></table>
+</div>
+''';
+
+/// Single dish with an allergen link, for enrichment tests.
+const _ituOgleEnrichFixture = '''
+<div id="pnlYemekMenu">
+<table class="table table-bordered"><tbody>
+<tr><td><a>Çorba</a></td>
+<td><div><div style="width: 90%; float: left;">
+<a href="https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/besin-degerleri.aspx?yemek=294">TUTMAÇ ÇORBASI</a>
+</div><div style="width: 10%; float: right;">
+<a href="https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/alerjen-detay.aspx?yemek=294"></a>
+</div></div></td></tr>
+</tbody></table>
+</div>
+''';
+
+/// Dish without an allergen link: no allergens even with enrichment.
+const _ituNoAllergenFixture = '''
+<div id="pnlYemekMenu">
+<table class="table table-bordered"><tbody>
+<tr><td><a>Yan Yemek</a></td>
+<td><div><div style="width: 90%; float: left;">
+<a href="https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/besin-degerleri.aspx?yemek=4114">İÇ PİLAV</a>
+</div><div style="width: 10%; float: right;"><a></a></div></div></td></tr>
+</tbody></table>
+</div>
+''';
+
+/// Unpublished meal: title but no menu table.
+const _ituEmptyMealFixture = '''
+<h2><span id="lbBaslik">30 Eylül Akşam Yemeği</span></h2>
+<div id="pnlYemekMenu"></div>
+''';
+
+/// Mirrors the real `besin-degerleri.aspx` page: dish name in `#lblYemekAdi`,
+/// nutrients as single-cell rows with the value in a right-aligned span.
+const _ituNutritionFixture = '''
+<span id="lblYemekAdi">TUTMAÇ ÇORBASI</span>
+<table class="table table-bordered"><tbody>
+<tr><td>Enerji (kcal) <span class="pull-right">114,2027</span></td></tr>
+<tr><td>Kolesterol (mg) <span class="pull-right">2,42</span></td></tr>
+</tbody></table>
+''';
+
+/// Mirrors the real `alerjen-detay.aspx` page: full-text descriptions in
+/// `.allergen-detail__content-inner li`, with duplicates.
+const _ituAllergenFixture = '''
+<div class="allergen-detail__content-inner"><ul>
+<li>Yumurta ve yumurta ürünleri</li>
+<li>Gluten içeren tahıllar ve bunların ürünleri</li>
+<li>Süt ve süt ürünleri (laktoz dahil)</li>
+<li>Yumurta ve yumurta ürünleri</li>
+</ul></div>
+''';
+
 class _FakeMenuProvider implements MenuProvider {
   MenuDay? day;
   bool fail = false;
@@ -51,6 +148,12 @@ class _FakeMenuProvider implements MenuProvider {
     if (fail || day == null) throw const MenuFetchException('offline');
     return day!;
   }
+
+  @override
+  bool isCacheValid(MenuDay day) => true;
+
+  @override
+  void close() {}
 }
 
 /// Two-campus fake mirroring the real Hacettepe locations, for testing the
@@ -75,6 +178,12 @@ class _TwoLocationFakeMenuProvider implements MenuProvider {
     if (day == null) throw const MenuFetchException('offline');
     return day!;
   }
+
+  @override
+  bool isCacheValid(MenuDay day) => true;
+
+  @override
+  void close() {}
 }
 
 MenuDay _fakeDay() => MenuDay(
@@ -123,6 +232,12 @@ class _GatedFakeMenuProvider implements MenuProvider {
     gates[iso] = gate;
     return gate.future;
   }
+
+  @override
+  bool isCacheValid(MenuDay day) => true;
+
+  @override
+  void close() {}
 
   MenuDay dayFor(String iso) => MenuDay(
     date: DateTime.parse(iso),
@@ -212,6 +327,334 @@ void main() {
       await expectLater(
         provider.fetchDay(DateTime(2026, 9, 21), '1'),
         throwsA(isA<MenuFetchException>()),
+      );
+    });
+
+    test('weekends override lunch and vegan hours', () {
+      // The site publishes weekday hours on Saturdays; the halls serve
+      // 12:00 - 13:30 for lunch and vegan.
+      final siteHours = _fixture.replaceAll('12:00 - 13:30', '11:30 - 14:00');
+      final html =
+          '$siteHours<section id="vegan" class="tab-content"><div class="daily-view">'
+          '<div class="menu-summary-info">'
+          '<div class="summary-item time-item"><span><small>Servis Saati</small>'
+          '<strong>11:30 - 14:00</strong></span></div>'
+          '</div></div></section>';
+      final day = HacettepeMenuProvider().parseDay(
+        html,
+        DateTime(2026, 10, 3), // Saturday
+        '1',
+      );
+      expect(
+        day.meals.singleWhere((m) => m.kind == 'ogle').serviceHours,
+        '12:00 - 13:30',
+      );
+      expect(
+        day.meals.singleWhere((m) => m.kind == 'vegan').serviceHours,
+        '12:00 - 13:30',
+      );
+      expect(
+        day.meals.singleWhere((m) => m.kind == 'sabah').serviceHours,
+        isEmpty,
+      );
+    });
+
+    test('weekdays keep the published hours', () {
+      final day = HacettepeMenuProvider().parseDay(
+        _fixture.replaceAll('12:00 - 13:30', '11:30 - 14:00'),
+        DateTime(2026, 9, 21), // Monday
+        '1',
+      );
+      expect(
+        day.meals.singleWhere((m) => m.kind == 'ogle').serviceHours,
+        '11:30 - 14:00',
+      );
+    });
+
+    MenuDay hacettepeDay(DateTime date, String hours) => MenuDay(
+      date: date,
+      locationId: '1',
+      locationName: 'Beytepe',
+      meals: [
+        ServedMeal(
+          kind: 'ogle',
+          serviceHours: hours,
+          dishes: const [MenuDish(name: 'Mantı', category: 'ANAYEMEK')],
+        ),
+      ],
+    );
+
+    test('isCacheValid rejects weekend rows with weekday hours', () {
+      final provider = HacettepeMenuProvider();
+      expect(
+        provider.isCacheValid(
+          hacettepeDay(DateTime(2026, 10, 3), '11:30 - 14:00'),
+        ),
+        isFalse,
+      );
+      expect(
+        provider.isCacheValid(
+          hacettepeDay(DateTime(2026, 10, 3), '12:00 - 13:30'),
+        ),
+        isTrue,
+      );
+      expect(
+        provider.isCacheValid(
+          hacettepeDay(DateTime(2026, 9, 21), '11:30 - 14:00'),
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('itu parser', () {
+    test('dateParam uses DD-MM-YYYY', () {
+      expect(ItuMenuProvider.dateParam(DateTime(2026, 9, 5)), '05-09-2026');
+    });
+
+    test('registry name is localized (Itu / İtü)', () {
+      expect(ItuMenuProvider().displayName, 'Itu');
+      expect(menuSources['itu']?.name(AppLocalizationsEn()), 'Itu');
+      expect(menuSources['itu']?.name(AppLocalizationsTr()), 'İtü');
+    });
+
+    test('title-cases ALL-CAPS Turkish dish names', () {
+      expect(
+        ItuMenuProvider.titleCaseTr('TUTMAÇ ÇORBASI'),
+        'Tutmaç Çorbası',
+      );
+      expect(ItuMenuProvider.titleCaseTr('ORMAN KEBABI'), 'Orman Kebabı');
+      // Dotted capital İ → i, dotless I → ı.
+      expect(ItuMenuProvider.titleCaseTr('İÇ PİLAV'), 'İç Pilav');
+      expect(
+        ItuMenuProvider.titleCaseTr('TEL ŞEHRİYELİ HAVUÇ ÇORBASI'),
+        'Tel Şehriyeli Havuç Çorbası',
+      );
+      expect(
+        ItuMenuProvider.titleCaseTr('KIYMALI BİBER DOLMASI'),
+        'Kıymalı Biber Dolması',
+      );
+      // Hyphenated categories keep every part readable.
+      expect(
+        ItuMenuProvider.titleCaseTr('TATLI-SALATA-MEYVE-İÇECEK'),
+        'Tatlı-Salata-Meyve-İçecek',
+      );
+      // Already mixed case passes through unchanged.
+      expect(ItuMenuProvider.titleCaseTr('Ana Yemek'), 'Ana Yemek');
+    });
+
+    test('parses lunch and dinner rows with categories', () async {
+      final day = await ItuMenuProvider().parseDay(
+        _ituOgleFixture,
+        _ituAksamFixture,
+        DateTime(2026, 9, 30),
+        'genel',
+      );
+      expect(day.locationName, 'Genel');
+      expect(day.meals.map((m) => m.kind), ['ogle', 'aksam']);
+      final lunch = day.meals.first;
+      expect(
+        lunch.dishes.map((d) => d.name),
+        ['Tutmaç Çorbası', 'Orman Kebabı', 'İç Pilav'],
+      );
+      expect(
+        lunch.dishes.map((d) => d.category),
+        ['Çorba', 'Ana Yemek', 'Yan Yemek'],
+      );
+      expect(lunch.serviceHours, '11:30 - 14:00');
+      expect(day.meals[1].serviceHours, '17:00 - 19:30');
+      // No detail fetcher: kcal unknown, allergens unlisted.
+      expect(lunch.dishes.every((d) => d.kcal == null), isTrue);
+      expect(lunch.dishes.every((d) => d.allergens.isEmpty), isTrue);
+      expect(lunch.totalKcal, isNull);
+    });
+
+    test('enriches kcal and allergens from detail pages', () async {
+      Future<String?> details(Uri uri) async {
+        if (uri.path.contains('besin-degerleri')) return _ituNutritionFixture;
+        if (uri.path.contains('alerjen-detay')) return _ituAllergenFixture;
+        return null;
+      }
+
+      final day = await ItuMenuProvider().parseDay(
+        _ituOgleEnrichFixture,
+        _ituEmptyMealFixture,
+        DateTime(2026, 9, 30),
+        'genel',
+        fetchDetail: details,
+      );
+      final lunch = day.meals.firstWhere((m) => m.kind == 'ogle');
+      // 114,2027 rounds to 114; total sums the enriched dishes.
+      expect(lunch.dishes.single.kcal, 114);
+      expect(lunch.totalKcal, 114);
+      // Yumurta twice dedupes to one Y; legend keeps the full text.
+      expect(lunch.dishes.single.allergens, ['Y', 'G', 'S']);
+      expect(day.allergenLegend['Y'], 'Yumurta ve yumurta ürünleri');
+      expect(
+        day.allergenLegend['G'],
+        'Gluten içeren tahıllar ve bunların ürünleri',
+      );
+      // Dinner page has no table: kept as an empty meal, lunch survives.
+      final dinner = day.meals.firstWhere((m) => m.kind == 'aksam');
+      expect(dinner.dishes, isEmpty);
+      expect(dinner.serviceHours, '17:00 - 19:30');
+    });
+
+    test('missing allergen link means no allergens', () async {
+      Future<String?> details(Uri uri) async => _ituNutritionFixture;
+      final day = await ItuMenuProvider().parseDay(
+        _ituNoAllergenFixture,
+        _ituEmptyMealFixture,
+        DateTime(2026, 9, 30),
+        'genel',
+        fetchDetail: details,
+      );
+      final lunch = day.meals.firstWhere((m) => m.kind == 'ogle');
+      expect(lunch.dishes.single.allergens, isEmpty);
+      expect(lunch.dishes.single.kcal, 114);
+    });
+
+    test('unknown allergen text maps to X', () {
+      final legend = <String, String>{};
+      expect(
+        ItuMenuProvider.allergenCode('Gizli baharat karışımı', legend),
+        'X',
+      );
+      expect(legend, {'X': 'Gizli baharat karışımı'});
+    });
+
+    test('parses Turkish decimal comma kcal', () {
+      expect(
+        ItuMenuProvider.parseKcal(
+          _ituNutritionFixture.replaceFirst('114,2027', '125,6687'),
+        ),
+        126,
+      );
+      expect(ItuMenuProvider.parseKcal('<html></html>'), isNull);
+    });
+
+    test('dedupes allergen descriptions', () {
+      expect(ItuMenuProvider.parseAllergenDescriptions(_ituAllergenFixture), [
+        'Yumurta ve yumurta ürünleri',
+        'Gluten içeren tahıllar ve bunların ürünleri',
+        'Süt ve süt ürünleri (laktoz dahil)',
+      ]);
+    });
+
+    test('both pages without tables throw instead of emptying', () {
+      expect(
+        ItuMenuProvider().parseDay(
+          '<html><body>redesign</body></html>',
+          '<html><body>redesign</body></html>',
+          DateTime(2026, 9, 30),
+          'genel',
+        ),
+        throwsA(isA<MenuFetchException>()),
+      );
+    });
+
+    test('fetchDay hits both tips with the dated value', () async {
+      final seen = <Uri>[];
+      final provider = ItuMenuProvider(
+        MockClient((request) async {
+          seen.add(request.url);
+          return http.Response.bytes(
+            utf8.encode(_ituOgleFixture),
+            200,
+            headers: {'content-type': 'text/html; charset=utf-8'},
+          );
+        }),
+      );
+      final day = await provider.fetchDay(DateTime(2026, 9, 30), 'genel');
+      expect(day.meals, hasLength(2));
+      final menuHits = [
+        for (final u in seen)
+          if (u.path.endsWith('yemek-menu.aspx')) u,
+      ];
+      expect(menuHits, hasLength(2));
+      expect(menuHits.first.host, 'bilgiekrani.itu.edu.tr');
+      expect(
+        menuHits.map((u) => u.queryParameters['tip']),
+        containsAll(['itu-ogle-yemegi-genel', 'itu-aksam-yemegi-genel']),
+      );
+      expect(menuHits.first.queryParameters['value'], '30-09-2026');
+    });
+
+    test('fetchDay falls back to the second host', () async {
+      final seen = <String>[];
+      final provider = ItuMenuProvider(
+        MockClient((request) async {
+          seen.add(request.url.host);
+          if (request.url.host == 'bilgiekrani.itu.edu.tr') {
+            return http.Response('boom', 500);
+          }
+          return http.Response.bytes(
+            utf8.encode(_ituOgleFixture),
+            200,
+            headers: {'content-type': 'text/html; charset=utf-8'},
+          );
+        }),
+      );
+      final day = await provider.fetchDay(DateTime(2026, 9, 30), 'genel');
+      expect(seen, contains('bidb.itu.edu.tr'));
+      expect(day.meals, hasLength(2));
+    });
+
+    test('non-200 on both hosts throws', () async {
+      final provider = ItuMenuProvider(
+        MockClient((_) async => http.Response('nope', 500)),
+      );
+      await expectLater(
+        provider.fetchDay(DateTime(2026, 9, 30), 'genel'),
+        throwsA(isA<MenuFetchException>()),
+      );
+    });
+
+    test('itu source is registered', () {
+      expect(menuSources, contains('itu'));
+    });
+
+    MenuDay ituDay(List<String> names) => MenuDay(
+      date: DateTime(2026, 9, 30),
+      locationId: 'genel',
+      locationName: 'Genel',
+      meals: [
+        ServedMeal(
+          kind: 'ogle',
+          serviceHours: '11:30 - 14:00',
+          dishes: [
+            for (final n in names) MenuDish(name: n, category: 'Çorba'),
+          ],
+        ),
+      ],
+    );
+
+    test('isCacheValid rejects pre-normalization ALL-CAPS rows', () {
+      final provider = ItuMenuProvider();
+      expect(
+        provider.isCacheValid(ituDay(['TUTMAÇ ÇORBASI', 'Tutmaç Çorbası'])),
+        isFalse,
+      );
+    });
+
+    test('isCacheValid accepts normalized and uncased names', () {
+      final provider = ItuMenuProvider();
+      expect(
+        provider.isCacheValid(ituDay(['Tutmaç Çorbası', 'Orman Kebabı'])),
+        isTrue,
+      );
+      // Cased content required: numbers/symbols alone are not "caps".
+      expect(provider.isCacheValid(ituDay(['123', '---'])), isTrue);
+      expect(provider.isCacheValid(ituDay(const [])), isTrue);
+    });
+
+    test('hacettepe cache stays valid by default', () {
+      final provider = HacettepeMenuProvider();
+      expect(
+        provider.isCacheValid(
+          ituDay(['TUTMAÇ ÇORBASI']),
+        ),
+        isTrue,
       );
     });
   });

@@ -1,0 +1,35 @@
+# Flatpak packaging for Chronicle. Built in CI (release.yml) from the
+# flutter Linux bundle: the stage/ dir is assembled there (bundle tree +
+# desktop file + icon) and is NOT committed.
+app-id: com.chronicleapp.chronicle
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+command: chronicle
+finish-args:
+  # GTK windowing + GPU.
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # flutter_local_notifications shows Linux reminders via libnotify.
+  - --talk-name=org.freedesktop.Notifications
+  # No --filesystem=host: the app DB lives in XDG app-data (sandboxed
+  # automatically) and user-picked sync folders go through the file-chooser
+  # portal, which grants access per pick.
+modules:
+  - name: chronicle
+    buildsystem: simple
+    build-commands:
+      # Bundle tree preserved verbatim under /app/bin: the binary finds
+      # lib/ through its own $ORIGIN/lib RUNPATH and data/ as a sibling
+      # of the executable, so no launcher script is needed.
+      - mkdir -p /app/bin
+      - cp stage/chronicle /app/bin/chronicle
+      - cp -r stage/lib /app/bin/lib
+      - cp -r stage/data /app/bin/data
+      - install -Dm644 stage/com.chronicleapp.chronicle.desktop /app/share/applications/com.chronicleapp.chronicle.desktop
+      - install -Dm644 stage/com.chronicleapp.chronicle.png /app/share/icons/hicolor/192x192/apps/com.chronicleapp.chronicle.png
+    sources:
+      - type: dir
+        path: stage

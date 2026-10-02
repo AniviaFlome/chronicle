@@ -42,16 +42,4 @@ void main() {
       expect(daysUntil('junk', today), 0);
     });
   });
-
-  group('currentStreak', () {
-    DateTime d(int day) => DateTime(2026, 9, day);
-
-    test('counts back consecutive days', () {
-      expect(currentStreak({d(15), d(16), d(17)}, d(17)), 3);
-      expect(currentStreak({d(17)}, d(17)), 1);
-      expect(currentStreak({d(16)}, d(17)), 1);
-      expect(currentStreak({d(15)}, d(17)), 0);
-      expect(currentStreak({}, d(17)), 0);
-    });
-  });
 }

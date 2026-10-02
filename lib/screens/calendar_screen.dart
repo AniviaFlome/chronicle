@@ -15,6 +15,7 @@ import '../utils/time_format.dart';
 import '../utils/ui_feedback.dart';
 import 'occurrence_sheet.dart';
 import 'occurrence_tile.dart';
+import 'class_quick_edit.dart';
 import 'view_switch.dart';
 import 'xtra_dialog.dart';
 
@@ -163,36 +164,82 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ),
           ),
           Expanded(
-            child: occurrences.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) =>
-                Center(child: Text(context.l10n.couldNotLoadWeek('$e'))),
-              data: (list) {
-                return xtra.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (e, _) =>
-                      Center(child: Text(context.l10n.couldNotLoadEvents('$e'))),
-                  data: (xtraList) {
-                    return _WeekBody(
-                      start: start,
-                      end: end,
-                      list: list,
-                      xtraList: xtraList,
-                      classes: classes,
-                      absenceKeys: absenceKeys,
-                      rotationLabel: rotationLabel,
-                      view: _view,
-                      listCtrl: _listCtrl,
-                      gridCtrl: _gridCtrl,
-                      listVertCtrl: _listVertCtrl,
-                      gridVertCtrl: _gridVertCtrl,
-                      listDayWidth: listDayWidth,
-                      gridDayWidth: gridDayWidth,
-                      autoScrollToday: compactDays,
-                      todayMidnight: todayMidnight,
-                    );
-                  },
+            child: Builder(
+              builder: (context) {
+                // Single gate: the week renders only when every source it
+                // paints has data. While anything is still resolving, a
+                // skeleton with real headers and shimmer bars holds the
+                // layout, then everything appears at the same time — no
+                // staggered pop-in (xtra chips, class colors, absence
+                // badges, rotation labels all arrive together).
+                final year = ref.watch(activeYearProvider);
+                final holidays = ref.watch(holidaysStreamProvider);
+                final absences = ref.watch(allAbsencesStreamProvider);
+                // Grid geometry inputs: the grid falls back to defaults
+                // while these resolve, visibly repositioning every block.
+                // Gating on them keeps first paint final.
+                final dayRange = ref.watch(dayRangeProvider);
+                final markersMode = ref.watch(gridMarkersModeProvider);
+                final fixed = ref.watch(fixedGridProvider);
+                final weekError =
+                    occurrences.error ??
+                    classes.error ??
+                    year.error ??
+                    holidays.error ??
+                    absences.error ??
+                    dayRange.error ??
+                    markersMode.error ??
+                    fixed.error;
+                if (weekError != null) {
+                  return Center(
+                    child: Text(context.l10n.couldNotLoadWeek('$weekError')),
+                  );
+                }
+                final eventsError = xtra.error;
+                if (eventsError != null) {
+                  return Center(
+                    child: Text(
+                      context.l10n.couldNotLoadEvents('$eventsError'),
+                    ),
+                  );
+                }
+                final ready =
+                    occurrences.hasValue &&
+                    xtra.hasValue &&
+                    classes.hasValue &&
+                    year.hasValue &&
+                    holidays.hasValue &&
+                    absences.hasValue &&
+                    dayRange.hasValue &&
+                    markersMode.hasValue &&
+                    fixed.hasValue;
+                if (!ready) {
+                  return _WeekSkeleton(
+                    start: start,
+                    view: _view,
+                    listDayWidth: listDayWidth,
+                    gridDayWidth: gridDayWidth,
+                    todayMidnight: todayMidnight,
+                    rotationLabel: rotationLabel,
+                  );
+                }
+                return _WeekBody(
+                  start: start,
+                  end: end,
+                  list: occurrences.value ?? const <engine.ClassOccurrence>[],
+                  xtraList: xtra.value ?? const <XtraEvent>[],
+                  classes: classes,
+                  absenceKeys: absenceKeys,
+                  rotationLabel: rotationLabel,
+                  view: _view,
+                  listCtrl: _listCtrl,
+                  gridCtrl: _gridCtrl,
+                  listVertCtrl: _listVertCtrl,
+                  gridVertCtrl: _gridVertCtrl,
+                  listDayWidth: listDayWidth,
+                  gridDayWidth: gridDayWidth,
+                  autoScrollToday: compactDays,
+                  todayMidnight: todayMidnight,
                 );
               },
             ),
@@ -407,8 +454,9 @@ class _DayHeader extends StatelessWidget {
   }
 }
 
-/// Timetable grid: hour gutter plus one column per day.
-class _WeekGrid extends ConsumerWidget {
+/// Classic calendar time grid: single left gutter, sticky header row,
+// and hourly lines only.
+class _WeekGrid extends ConsumerStatefulWidget {
   final DateTime start;
   final Map<DateTime, List<engine.ClassOccurrence>> byDay;
   final Map<int, ClassesData> classesById;
@@ -436,8 +484,69 @@ class _WeekGrid extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final all = byDay.values.expand((l) => l).toList();
+  ConsumerState<_WeekGrid> createState() => _WeekGridState();
+}
+
+class _WeekGridState extends ConsumerState<_WeekGrid> {
+  late final ScrollController _headerCtrl = ScrollController();
+  bool _syncing = false;
+
+  ScrollController? get _bodyCtrl => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _bodyCtrl?.addListener(_syncBodyToHeader);
+    _headerCtrl.addListener(_syncHeaderToBody);
+  }
+
+  @override
+  void dispose() {
+    _bodyCtrl?.removeListener(_syncBodyToHeader);
+    _headerCtrl.dispose();
+    super.dispose();
+  }
+
+  void _syncBodyToHeader() {
+    if (_syncing) return;
+    final body = _bodyCtrl;
+    if (body == null || !body.hasClients || !_headerCtrl.hasClients) return;
+    _syncing = true;
+    try {
+      _headerCtrl.jumpTo(
+        body.offset.clamp(0.0, _headerCtrl.position.maxScrollExtent),
+      );
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  void _syncHeaderToBody() {
+    if (_syncing) return;
+    final body = _bodyCtrl;
+    if (body == null || !body.hasClients || !_headerCtrl.hasClients) return;
+    _syncing = true;
+    try {
+      body.jumpTo(
+        _headerCtrl.offset.clamp(0.0, body.position.maxScrollExtent),
+      );
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final start = widget.start;
+    final byDay = widget.byDay;
+    final classesById = widget.classesById;
+    final absenceKeys = widget.absenceKeys;
+    final today = widget.today;
+    final rotationLabel = widget.rotationLabel;
+    final xtraByDay = widget.xtraByDay;
+    final viewportHeight = widget.viewportHeight;
+    final vertController = widget.vertController;
+    final dayWidth = widget.dayWidth;
     // Settings range in minutes; classes outside it extend the range.
     final range =
         ref.watch(dayRangeProvider).value ?? (start: 360, end: 1320);
@@ -446,15 +555,26 @@ class _WeekGrid extends ConsumerWidget {
         ref.watch(fixedGridProvider).value ??
         (boundaries: const <int>[], breaks: const <({int start, int end})>[]);
     final showFixed = mode == 'fixed' && fixed.boundaries.isNotEmpty;
+    // Single pass over occurrences for the visible-range extension; avoids
+    // materializing the flattened list plus two extra map/reduce passes.
     var rangeStart = range.start;
     var rangeEnd = range.end;
-    if (all.isNotEmpty) {
-      final minStart = all
-          .map((o) => o.startMinutes)
-          .reduce((a, b) => a < b ? a : b);
-      final maxEnd = all
-          .map((o) => o.endMinutes)
-          .reduce((a, b) => a > b ? a : b);
+    var hasOccurrences = false;
+    var minStart = 0;
+    var maxEnd = 0;
+    for (final dayList in byDay.values) {
+      for (final o in dayList) {
+        if (!hasOccurrences) {
+          hasOccurrences = true;
+          minStart = o.startMinutes;
+          maxEnd = o.endMinutes;
+        } else {
+          if (o.startMinutes < minStart) minStart = o.startMinutes;
+          if (o.endMinutes > maxEnd) maxEnd = o.endMinutes;
+        }
+      }
+    }
+    if (hasOccurrences) {
       rangeStart = min(range.start, minStart - 30).clamp(0, 1439);
       rangeEnd = max(
         range.end,
@@ -488,121 +608,191 @@ class _WeekGrid extends ConsumerWidget {
     }
     final pxPerMin = hourHeight / 60;
     final totalHeight = (rangeEnd - rangeStart) * pxPerMin;
-    final markers = _markers(
-      all,
-      rangeStart,
-      rangeEnd,
-      showFixed ? fixed.boundaries : const [],
-    );
     final breaks = showFixed ? fixed.breaks : const <({int start, int end})>[];
-    // Faint hourly base for a proper calendar feel, always drawn.
+    // Classic calendar background: hourly lines only. Built ascending, so
+    // the off-hour edges slot in at the ends without a sort.
     final hourly = <int>[];
     for (var h = 0; h <= 24; h++) {
       final m = h * 60;
       if (m >= rangeStart && m <= rangeEnd) hourly.add(m);
     }
     // Ensure custom start/end edges are drawn even when off-hour.
-    if (!hourly.contains(rangeStart)) hourly.add(rangeStart);
-    if (!hourly.contains(rangeEnd)) hourly.add(rangeEnd);
-    hourly.sort();
+    if (hourly.isEmpty || hourly.first != rangeStart) {
+      hourly.insert(0, rangeStart);
+    }
+    if (hourly.last != rangeEnd) hourly.add(rangeEnd);
 
-    return Scrollbar(
-      controller: vertController,
-      thumbVisibility: true,
-      child: SingleChildScrollView(
-        controller: vertController,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-        physics: const ClampingScrollPhysics(),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _HourGutter(
-            rangeStart: rangeStart,
-            totalHeight: totalHeight,
-            hourHeight: hourHeight,
-            markers: markers,
+    final days = [for (var i = 0; i < 7; i++) shiftDays(start, i)];
+
+    Widget headerCell(DateTime day) {
+      final allDay = [
+        for (final x in xtraByDay[day] ?? const <XtraEvent>[])
+          if (x.startMinutes == null) x,
+      ];
+      return Container(
+        width: dayWidth,
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _GridHeaderCell(
+              date: day,
+              isToday: day == today,
+              rotationLabel: rotationLabel(day),
+            ),
+            for (final x in allDay)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: _AllDayChip(
+                  event: x,
+                  onTap: () => showXtraDialog(context, ref, existing: x),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Sticky header row: gutter spacer plus day headers sharing the
+        // body's horizontal scroll via linked controllers.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(width: _gutterWidth),
+              const SizedBox(width: 4),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  controller: _headerCtrl,
+                  physics: const ClampingScrollPhysics(),
+                  dragStartBehavior: DragStartBehavior.down,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [for (final day in days) headerCell(day)],
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Scrollbar(
-              controller: controller,
-              thumbVisibility: true,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                controller: controller,
-                physics: const ClampingScrollPhysics(),
-                dragStartBehavior: DragStartBehavior.down,
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Scrollbar(
+            controller: vertController,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: vertController,
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              physics: const ClampingScrollPhysics(),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (var i = 0; i < 7; i++)
-                    _GridDayColumn(
-                      date: shiftDays(start, i),
-                      isToday: shiftDays(start, i) == today,
-                      occurrences: byDay[shiftDays(start, i)] ?? const [],
-                      classesById: classesById,
-                      absenceKeys: absenceKeys,
-                      rangeStart: rangeStart,
-                      rangeEnd: rangeEnd,
-                      totalHeight: totalHeight,
-                      hourHeight: hourHeight,
-                      showNowLine: shiftDays(start, i) == today,
-                      rotationLabel: rotationLabel(shiftDays(start, i)),
-                      markers: markers,
-                      hourly: hourly,
-                      breaks: breaks,
-                      xtra: xtraByDay[shiftDays(start, i)] ?? const [],
-                      dayWidth: dayWidth,
+                  _HourGutter(
+                    rangeStart: rangeStart,
+                    totalHeight: totalHeight,
+                    hourHeight: hourHeight,
+                    hourly: hourly,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Scrollbar(
+                      controller: _bodyCtrl,
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        controller: _bodyCtrl,
+                        physics: const ClampingScrollPhysics(),
+                        dragStartBehavior: DragStartBehavior.down,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final day in days)
+                              _GridDayColumn(
+                                occurrences: byDay[day] ?? const [],
+                                classesById: classesById,
+                                absenceKeys: absenceKeys,
+                                rangeStart: rangeStart,
+                                rangeEnd: rangeEnd,
+                                totalHeight: totalHeight,
+                                hourHeight: hourHeight,
+                                showNowLine: day == today,
+                                hourly: hourly,
+                                breaks: breaks,
+                                xtra:
+                                    xtraByDay[day] ?? const <XtraEvent>[],
+                                dayWidth: dayWidth,
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
+                  ),
                 ],
-              ),
               ),
             ),
           ),
-          const SizedBox(width: 4),
-          _HourGutter(
-            rangeStart: rangeStart,
-            totalHeight: totalHeight,
-            hourHeight: hourHeight,
-            markers: markers,
-            mirror: true,
-          ),
-        ],
-      ),
-      ),
+        ),
+      ],
     );
   }
+}
 
-  /// Minute markers for gutter labels and gridlines: class times, or the
-  /// fixed lesson/break boundaries when those are configured and selected.
-  /// Falls back to hourly lines.
-  List<int> _markers(
-    List<engine.ClassOccurrence> all,
-    int rangeStart,
-    int rangeEnd,
-    List<int> fixedBoundaries,
-  ) {
-    List<int> markers;
-    if (fixedBoundaries.isNotEmpty) {
-      markers = fixedBoundaries;
-    } else {
-      markers = {
-        for (final o in all) ...[o.startMinutes, o.endMinutes],
-      }.toList()..sort();
-    }
-    if (markers.isEmpty) {
-      final firstHour = (rangeStart / 60).ceil();
-      final lastHour = (rangeEnd / 60).floor();
-      markers = [for (var h = firstHour; h <= lastHour; h++) h * 60];
-      // Keep custom edges labeled when off-hour.
-      if (!markers.contains(rangeStart)) markers.add(rangeStart);
-      if (!markers.contains(rangeEnd)) markers.add(rangeEnd);
-      markers.sort();
-    }
-    return [
-      for (final m in markers)
-        if (m >= rangeStart && m <= rangeEnd) m,
-    ];
+/// Compact classic day header: weekday over a date number that fills in
+/// for today. Used by the sticky grid header row only.
+class _GridHeaderCell extends StatelessWidget {
+  final DateTime date;
+  final bool isToday;
+  final String? rotationLabel;
+
+  const _GridHeaderCell({
+    required this.date,
+    required this.isToday,
+    this.rotationLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final labelColor = isToday
+        ? theme.colorScheme.onPrimary
+        : theme.colorScheme.outline;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          shortWeekdayName(date.weekday, context.l10n.localeName),
+          style: theme.textTheme.labelMedium?.copyWith(color: labelColor),
+        ),
+        const SizedBox(height: 2),
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: isToday ? theme.colorScheme.primary : Colors.transparent,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '${date.day}',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: isToday ? theme.colorScheme.onPrimary : null,
+              fontWeight: isToday ? FontWeight.w700 : null,
+            ),
+          ),
+        ),
+        if (rotationLabel != null)
+          Text(
+            rotationLabel!,
+            style: theme.textTheme.labelSmall?.copyWith(color: labelColor),
+          ),
+      ],
+    );
   }
 }
 
@@ -610,37 +800,33 @@ class _HourGutter extends StatelessWidget {
   final int rangeStart;
   final double totalHeight;
   final double hourHeight;
-  final List<int> markers;
-  final bool mirror;
+  final List<int> hourly;
 
   const _HourGutter({
     required this.rangeStart,
     required this.totalHeight,
     required this.hourHeight,
-    required this.markers,
-    this.mirror = false,
+    required this.hourly,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Offset for the day header height so labels align with grid lines.
-    const headerOffset = 78.0;
     return SizedBox(
       width: _gutterWidth,
-      height: totalHeight + headerOffset,
+      height: totalHeight,
       child: Stack(
         children: [
-          for (final m in markers)
+          for (final h in hourly)
             Positioned(
-              top: headerOffset + (m - rangeStart) * hourHeight / 60 - 8,
-              left: mirror ? 4 : 0,
-              right: mirror ? 0 : 4,
+              top: (h - rangeStart) * hourHeight / 60 - 8,
+              left: 0,
+              right: 4,
               child: Text(
-                hhmm(m),
+                hhmm(h),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textAlign: mirror ? TextAlign.left : TextAlign.right,
+                textAlign: TextAlign.right,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
@@ -653,8 +839,6 @@ class _HourGutter extends StatelessWidget {
 }
 
 class _GridDayColumn extends ConsumerWidget {
-  final DateTime date;
-  final bool isToday;
   final List<engine.ClassOccurrence> occurrences;
   final Map<int, ClassesData> classesById;
   final Set<String> absenceKeys;
@@ -663,16 +847,12 @@ class _GridDayColumn extends ConsumerWidget {
   final double totalHeight;
   final double hourHeight;
   final bool showNowLine;
-  final String? rotationLabel;
   final List<XtraEvent> xtra;
-  final List<int> markers;
   final List<int> hourly;
   final List<({int start, int end})> breaks;
   final double dayWidth;
 
   const _GridDayColumn({
-    required this.date,
-    required this.isToday,
     required this.occurrences,
     required this.classesById,
     required this.absenceKeys,
@@ -681,9 +861,7 @@ class _GridDayColumn extends ConsumerWidget {
     required this.totalHeight,
     required this.hourHeight,
     required this.showNowLine,
-    required this.rotationLabel,
     required this.xtra,
-    required this.markers,
     required this.hourly,
     required this.breaks,
     this.dayWidth = _gridDayWidth,
@@ -755,10 +933,6 @@ class _GridDayColumn extends ConsumerWidget {
       for (final x in xtra)
         if (x.startMinutes != null) x,
     ];
-    final allDay = [
-      for (final x in xtra)
-        if (x.startMinutes == null) x,
-    ];
     final ranges = [
       for (final occ in occurrences) (occ.startMinutes, occ.endMinutes),
       for (final x in timedXtra)
@@ -813,6 +987,7 @@ class _GridDayColumn extends ConsumerWidget {
       required int endMinutes,
       required Widget child,
       required Future<void> Function(int, int) onCommit,
+      ClassesData? quickEditRow,
     }) {
       final (lane, laneCount) = lanes[index];
       return _AdjustableBlock(
@@ -825,6 +1000,7 @@ class _GridDayColumn extends ConsumerWidget {
         laneLeft: 2 + lane * (dayWidth - 8) / laneCount,
         laneWidth: (dayWidth - 8) / laneCount - 2,
         onCommit: onCommit,
+        quickEditRow: quickEditRow,
         child: child,
       );
     }
@@ -832,24 +1008,7 @@ class _GridDayColumn extends ConsumerWidget {
     return Container(
       width: dayWidth,
       margin: const EdgeInsets.symmetric(horizontal: 3),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _DayHeader(
-            date: date,
-            isToday: isToday,
-            rotationLabel: rotationLabel,
-          ),
-          const SizedBox(height: 8),
-          for (final x in allDay)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: _AllDayChip(
-                event: x,
-                onTap: () => showXtraDialog(context, ref, existing: x),
-              ),
-            ),
-          Container(
+      child: Container(
             height: totalHeight,
             decoration: BoxDecoration(
               color: theme.colorScheme.surface.withValues(alpha: 0.4),
@@ -861,7 +1020,7 @@ class _GridDayColumn extends ConsumerWidget {
             clipBehavior: Clip.antiAlias,
             child: Stack(
               children: [
-                // Faint hourly base — proper calendar background.
+                // Classic hourly lines only.
                 for (final h in hourly)
                   Positioned(
                     top: (h - rangeStart) * _pxPerMin,
@@ -869,20 +1028,7 @@ class _GridDayColumn extends ConsumerWidget {
                     right: 0,
                     child: Container(
                       height: 1,
-                      color: theme.dividerColor.withValues(
-                        alpha: h % 60 == 0 ? 0.35 : 0.18,
-                      ),
-                    ),
-                  ),
-                // Stronger period/marker lines.
-                for (final m in markers)
-                  Positioned(
-                    top: (m - rangeStart) * _pxPerMin,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 1,
-                      color: theme.colorScheme.outline.withValues(alpha: 0.45),
+                      color: theme.dividerColor.withValues(alpha: 0.35),
                     ),
                   ),
                 ..._breakBoxes(theme),
@@ -891,23 +1037,9 @@ class _GridDayColumn extends ConsumerWidget {
                     top: (nowMinutes - rangeStart) * _pxPerMin,
                     left: 0,
                     right: 0,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.error,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        Expanded(
-                          child: Container(
-                            height: 2,
-                            color: theme.colorScheme.error,
-                          ),
-                        ),
-                      ],
+                    child: Container(
+                      height: 2,
+                      color: theme.colorScheme.error,
                     ),
                   ),
                 for (var i = 0; i < occurrences.length; i++)
@@ -917,6 +1049,7 @@ class _GridDayColumn extends ConsumerWidget {
                     startMinutes: occurrences[i].startMinutes,
                     endMinutes: occurrences[i].endMinutes,
                     onCommit: (s, e) => commitClassTime(occurrences[i], s, e),
+                    quickEditRow: classesById[occurrences[i].classId],
                     child: _GridBlock(
                       occurrence: occurrences[i],
                       classRow: classesById[occurrences[i].classId],
@@ -952,8 +1085,6 @@ class _GridDayColumn extends ConsumerWidget {
               ],
             ),
           ),
-        ],
-      ),
     );
   }
 
@@ -1017,39 +1148,76 @@ class _XtraGridBlock extends StatelessWidget {
     final bg = colors.bg;
     final accent = colors.accent;
     final fg = colors.onBg;
+    final timeText = hhmm(event.startMinutes ?? 0);
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
         decoration: BoxDecoration(
           color: bg,
-          border: Border(left: BorderSide(color: accent, width: 3)),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              event.title,
-              maxLines: available < 32 ? 1 : 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                height: 1.2,
-                color: fg,
-              ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: accent.withValues(alpha: 0.55),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
-            if (available >= 44)
-              Text(
-                hhmm(event.startMinutes ?? 0),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: fg.withValues(alpha: 0.75),
-                  height: 1.2,
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 5, color: accent),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 4,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      event.title,
+                      maxLines: available < 32 ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        height: 1.2,
+                        color: fg,
+                      ),
+                    ),
+                    if (available >= 44) ...[
+                      const SizedBox(height: 3),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          timeText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            height: 1.2,
+                            color: fg,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -1073,9 +1241,10 @@ class _GridBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final classRow = this.classRow;
     final raw = classRow == null
         ? theme.colorScheme.primary
-        : Color(classRow!.colorValue);
+        : Color(classRow.colorValue);
     final colors = classColors(theme.colorScheme, raw);
     final bg = colors.bg;
     final accent = colors.accent;
@@ -1085,50 +1254,408 @@ class _GridBlock extends StatelessWidget {
     // padding gives the room for text.
     final available = blockHeight - 6;
 
+    final spine = absent ? theme.colorScheme.error : accent;
+    final timeText =
+        '${hhmm(occurrence.startMinutes)}–${hhmm(occurrence.endMinutes)}';
     return InkWell(
       onTap: () => showOccurrenceSheet(context, occurrence),
+      borderRadius: BorderRadius.circular(10),
+      // NOTE: no onLongPress here — this block renders inside
+      // _AdjustableBlock, whose long-press owns the adjust-time sheet
+      // (gesture arena: an inner handler would steal it). Grid users
+      // reach quick-edit from that sheet's details button.
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
         decoration: BoxDecoration(
           color: bg,
-          border: Border(
-            left: BorderSide(
-              color: absent ? theme.colorScheme.error : accent,
-              width: 3,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
-          ),
-          borderRadius: BorderRadius.circular(4),
+          ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              absent
-                  ? '${classRow?.name ?? context.l10n.classFallback} · ${context.l10n.absentBadge}'
-                  : (classRow?.name ?? context.l10n.classFallback),
-              maxLines: available < 32 ? 1 : 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                height: 1.2,
-                color: fg,
-              ),
-            ),
-            if (available >= 44)
-              Text(
-                '${hhmm(occurrence.startMinutes)}–${hhmm(occurrence.endMinutes)}'
-                '${room != null && room.isNotEmpty ? ' · $room' : ''}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: fg.withValues(alpha: 0.75),
-                  height: 1.2,
+            Container(width: 5, color: spine),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 4,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      classRow?.name ?? context.l10n.classFallback,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        height: 1.2,
+                        color: fg,
+                      ),
+                    ),
+                    if (available >= 44) ...[
+                      const SizedBox(height: 3),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: (absent
+                                  ? theme.colorScheme.error
+                                  : accent)
+                              .withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          // Absent marker leads the line so it survives
+                          // the ellipsis on narrow blocks.
+                          absent
+                              ? '${context.l10n.absentBadge} · $timeText'
+                              : timeText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            height: 1.2,
+                            color: absent
+                                ? theme.colorScheme.error
+                                : fg,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (room != null &&
+                        room.isNotEmpty &&
+                        available >= 64) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 11,
+                            color: fg.withValues(alpha: 0.7),
+                          ),
+                          const SizedBox(width: 2),
+                          Flexible(
+                            child: Text(
+                              room,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: fg.withValues(alpha: 0.7),
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
               ),
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Pulsing placeholder bar for the calendar loading skeleton: a quiet
+/// opacity loop, no package dependency. Staggered via [phase] so adjacent
+/// bars don't breathe in sync.
+class _PulseBar extends StatefulWidget {
+  final double height;
+  final double phase;
+
+  const _PulseBar({required this.height, this.phase = 0});
+
+  @override
+  State<_PulseBar> createState() => _PulseBarState();
+}
+
+class _PulseBarState extends State<_PulseBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.repeat(reverse: true);
+    _ctrl.value = widget.phase % 1.0;
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.35, end: 1).animate(
+        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+      ),
+      child: Container(
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+}
+
+/// Loading skeleton for the calendar week: real headers (dates are known
+/// synchronously) plus shimmer bars where tiles and blocks will land.
+/// Same column widths and chrome as [_WeekBody], so the reveal swaps
+/// content in with no layout shift — everything appears at the same time.
+class _WeekSkeleton extends StatelessWidget {
+  final DateTime start;
+  final String view;
+  final double listDayWidth;
+  final double gridDayWidth;
+  final DateTime todayMidnight;
+  final String? Function(DateTime) rotationLabel;
+
+  const _WeekSkeleton({
+    required this.start,
+    required this.view,
+    required this.listDayWidth,
+    required this.gridDayWidth,
+    required this.todayMidnight,
+    required this.rotationLabel,
+  });
+
+  double _fit(double available, double preferred, double min) =>
+      ((available / 7).clamp(min, preferred)).toDouble();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final listW = _fit(
+          constraints.maxWidth - 24 - 56,
+          listDayWidth,
+          110,
+        );
+        final gridW = _fit(
+          constraints.maxWidth - 24 - 52 - 4 - 42,
+          gridDayWidth,
+          100,
+        );
+        final days = [for (var i = 0; i < 7; i++) shiftDays(start, i)];
+        return IgnorePointer(
+          child: IndexedStack(
+            index: view == 'grid' ? 1 : 0,
+            children: [
+              SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var i = 0; i < 7; i++)
+                        Container(
+                          width: listW,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _DayHeader(
+                                date: days[i],
+                                isToday: days[i] == todayMidnight,
+                                rotationLabel: rotationLabel(days[i]),
+                              ),
+                              const SizedBox(height: 8),
+                              _PulseBar(
+                                height: 52 + (i % 3) * 8.0,
+                                phase: (i * 0.23) % 1.0,
+                              ),
+                              const SizedBox(height: 6),
+                              _PulseBar(
+                                height: 64 - (i % 2) * 10.0,
+                                phase: ((i + 2) * 0.23) % 1.0,
+                              ),
+                              const SizedBox(height: 6),
+                              _PulseBar(
+                                height: 44 + (i % 4) * 6.0,
+                                phase: ((i + 4) * 0.23) % 1.0,
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(width: _gutterWidth),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            physics: const NeverScrollableScrollPhysics(),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (final day in days)
+                                  Container(
+                                    width: gridW,
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 3,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _GridHeaderCell(
+                                          date: day,
+                                          isToday: day == todayMidnight,
+                                          rotationLabel: rotationLabel(day),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                      child: SizedBox(
+                        // Default-range height (16h × 64px); the real grid
+                        // replaces it with the exact range on reveal.
+                        height: 1024,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              width: _gutterWidth,
+                              child: _SkeletonTicks(),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                physics: const NeverScrollableScrollPhysics(),
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    for (var i = 0; i < 7; i++)
+                                      Container(
+                                        width: gridW,
+                                        margin: const EdgeInsets.symmetric(
+                                          horizontal: 3,
+                                        ),
+                                        child: _SkeletonLane(
+                                          index: i,
+                                          ticks: const _SkeletonTicks(),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Faint hour-rhythm lines for the skeleton grid body: same count as a
+/// default 6:00–22:00 day, no range knowledge required.
+class _SkeletonTicks extends StatelessWidget {
+  const _SkeletonTicks();
+
+  @override
+  Widget build(BuildContext context) {
+    final line = BorderSide(
+      color: Theme.of(
+        context,
+      ).colorScheme.outlineVariant.withValues(alpha: 0.4),
+      width: 0.5,
+    );
+    return Column(
+      children: [
+        for (var k = 0; k < 17; k++)
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(bottom: line),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// One skeleton grid lane: tick lines behind two shimmer blocks at
+/// staggered fractions so the week reads as loading, not empty.
+class _SkeletonLane extends StatelessWidget {
+  final int index;
+  final Widget ticks;
+
+  const _SkeletonLane({required this.index, required this.ticks});
+
+  @override
+  Widget build(BuildContext context) {
+    final i = index;
+    return Stack(
+      children: [
+        ticks,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Spacer(flex: 2 + (i % 3)),
+            _PulseBar(height: 60, phase: (i * 0.31) % 1.0),
+            Spacer(flex: 3 - (i % 2)),
+            _PulseBar(height: 84, phase: ((i + 3) * 0.31) % 1.0),
+            const Spacer(flex: 6),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -1179,7 +1706,11 @@ class _WeekBody extends StatefulWidget {
 }
 
 class _WeekBodyState extends State<_WeekBody> {
-  String? _jumpedFor;
+  /// Weeks already jumped/revealed per view, keyed as `view_isoStart`.
+  /// Both views stay mounted (IndexedStack), so scroll offsets survive
+  /// view switches and each week jumps at most once per view.
+  final Set<String> _jumpedKeys = {};
+  final Set<String> _readyKeys = {};
 
   /// Day width that fits all 7 columns into [available] when possible,
   /// shrinking from [preferred] down to [min] before scrolling is needed.
@@ -1189,10 +1720,12 @@ class _WeekBodyState extends State<_WeekBody> {
   @override
   Widget build(BuildContext context) {
     final byId = widget.classes.value ?? const <int, ClassesData>{};
+    // Cache the 7 days once; the strip below previously recomputed
+    // shiftDays(widget.start, i) ~30x per build for keys, lookups and props.
+    final days = [for (var i = 0; i < 7; i++) shiftDays(widget.start, i)];
     final byDay = <DateTime, List<engine.ClassOccurrence>>{};
     final xtraByDay = <DateTime, List<XtraEvent>>{};
-    for (var i = 0; i < 7; i++) {
-      final day = shiftDays(widget.start, i);
+    for (final day in days) {
       byDay[day] = [];
       xtraByDay[day] = [];
     }
@@ -1210,66 +1743,82 @@ class _WeekBodyState extends State<_WeekBody> {
         widget.todayMidnight ??
         DateTime(today.year, today.month, today.day);
 
-    void maybeJump(double listStride, double gridStride) {
+    void maybeJump(String view, double listStride, double gridStride) {
       if (!widget.autoScrollToday) return;
-      final key = '${widget.view}_${isoFromDateTime(widget.start)}';
-      if (_jumpedFor == key) return;
-      _jumpedFor = key;
+      // Only the week containing today needs a jump; other weeks stay
+      // put instead of flashing to a clamped edge.
+      final rawIdx = daysBetween(widget.start, todayMidnight);
+      if (rawIdx < 0 || rawIdx >= 7) return;
+      final key = '${view}_${isoFromDateTime(widget.start)}';
+      if (_readyKeys.contains(key)) return;
+      if (_jumpedKeys.contains(key)) return;
+      _jumpedKeys.add(key);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        final ctrl = widget.view == 'grid' ? widget.gridCtrl : widget.listCtrl;
+        final ctrl = view == 'grid' ? widget.gridCtrl : widget.listCtrl;
         if (ctrl == null || !ctrl.hasClients) {
-          // Not laid out yet (e.g. view just switched): retry on the
-          // next build instead of dropping the jump silently.
-          _jumpedFor = null;
+          // Not laid out yet: retry on the next build instead of
+          // dropping the jump silently.
+          _jumpedKeys.remove(key);
           return;
         }
-        final idx = daysBetween(widget.start, todayMidnight).clamp(0, 6);
-        final stride = widget.view == 'grid' ? gridStride : listStride;
-        ctrl.jumpTo(min(idx * stride, ctrl.position.maxScrollExtent));
+        final stride = view == 'grid' ? gridStride : listStride;
+        ctrl.jumpTo(min(rawIdx * stride, ctrl.position.maxScrollExtent));
+        // Reveal after the jump lands so the first painted frame is
+        // already on today (no week-start flash).
+        setState(() => _readyKeys.add(key));
       });
     }
 
-    if (widget.view == 'grid') {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          // Gutters, spacing, padding and the 3px side margins around
-          // every day column.
-          final avail = constraints.maxWidth - 24 - 104 - 8 - 42;
-          final dayWidth = _fitWidth(avail, widget.gridDayWidth, 100);
-          maybeJump(0, dayWidth + 6);
-          return _WeekGrid(
-            start: widget.start,
-            byDay: byDay,
-            classesById: byId,
-            absenceKeys: widget.absenceKeys,
-            today: todayMidnight,
-            rotationLabel: widget.rotationLabel,
-            xtraByDay: xtraByDay,
-            viewportHeight: constraints.maxHeight.isFinite
-                ? constraints.maxHeight
-                : null,
-            controller: widget.gridCtrl,
-            vertController: widget.gridVertCtrl,
-            dayWidth: dayWidth,
-          );
-        },
-      );
+    // Hide the strip until the today-jump lands: painting offset 0 for
+    // one frame is exactly the flicker being fixed. Non-jump weeks and
+    // non-Android layouts render immediately. Only the first visit to a
+    // week hides; view switches reuse the kept-alive scrolled position.
+    bool hideForJump(String view) {
+      if (!widget.autoScrollToday) return false;
+      final rawIdx = daysBetween(widget.start, todayMidnight);
+      if (rawIdx < 0 || rawIdx >= 7) return false;
+      final key = '${view}_${isoFromDateTime(widget.start)}';
+      return !_readyKeys.contains(key);
     }
+
+    // Both views stay mounted in an IndexedStack: switching is a
+    // visibility toggle, so scroll positions survive and the today-jump
+    // runs once per week per view instead of on every toggle.
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Single left gutter, one gap, padding and the 3px side
+        // margins around every day column.
+        final gridAvail = constraints.maxWidth - 24 - 52 - 4 - 42;
+        final gridDayWidth = _fitWidth(gridAvail, widget.gridDayWidth, 100);
         // Horizontal padding plus the 4px side margins of every column.
-        final dayWidth = _fitWidth(
+        final listDayWidth = _fitWidth(
           constraints.maxWidth - 24 - 56,
           widget.listDayWidth,
           110,
         );
-        maybeJump(dayWidth + 8, 0);
+        maybeJump('list', listDayWidth + 8, 0);
+        maybeJump('grid', 0, gridDayWidth + 6);
+        final grid = _WeekGrid(
+          start: widget.start,
+          byDay: byDay,
+          classesById: byId,
+          absenceKeys: widget.absenceKeys,
+          today: todayMidnight,
+          rotationLabel: widget.rotationLabel,
+          xtraByDay: xtraByDay,
+          viewportHeight: constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : null,
+          controller: widget.gridCtrl,
+          vertController: widget.gridVertCtrl,
+          dayWidth: gridDayWidth,
+        );
         // Two-dimensional scroll: the inner strip scrolls horizontally
         // across days, the outer view vertically through tall columns.
         // Without the outer scroll, busy days overflow the viewport with
         // a yellow/black strip instead of scrolling.
-        return Scrollbar(
+        final strip = Scrollbar(
           controller: widget.listVertCtrl,
           thumbVisibility: true,
           child: SingleChildScrollView(
@@ -1288,23 +1837,30 @@ class _WeekBodyState extends State<_WeekBody> {
                   children: [
                     for (var i = 0; i < 7; i++)
                       _DayColumn(
-                        date: shiftDays(widget.start, i),
-                        isToday: shiftDays(widget.start, i) == todayMidnight,
-                        occurrences:
-                            byDay[shiftDays(widget.start, i)] ?? const [],
+                        date: days[i],
+                        isToday: days[i] == todayMidnight,
+                        occurrences: byDay[days[i]] ?? const [],
                         classesById: byId,
                         absenceKeys: widget.absenceKeys,
-                        rotationLabel: widget.rotationLabel(
-                          shiftDays(widget.start, i),
-                        ),
-                        xtra: xtraByDay[shiftDays(widget.start, i)] ?? const [],
-                        dayWidth: dayWidth,
+                        rotationLabel: widget.rotationLabel(days[i]),
+                        xtra: xtraByDay[days[i]] ?? const [],
+                        dayWidth: listDayWidth,
                       ),
                   ],
                 ),
               ),
             ),
           ),
+        );
+        final gridChild = hideForJump('grid')
+            ? Offstage(offstage: true, child: grid)
+            : grid;
+        final listChild = hideForJump('list')
+            ? Offstage(offstage: true, child: strip)
+            : strip;
+        return IndexedStack(
+          index: widget.view == 'grid' ? 1 : 0,
+          children: [listChild, gridChild],
         );
       },
     );
@@ -1326,6 +1882,9 @@ class _AdjustableBlock extends StatelessWidget {
   final Widget child;
   final Future<void> Function(int newStart, int newEnd) onCommit;
 
+  /// Class row for the quick-edit details button; null for Xtra blocks.
+  final ClassesData? quickEditRow;
+
   const _AdjustableBlock({
     required this.title,
     required this.startMinutes,
@@ -1337,6 +1896,7 @@ class _AdjustableBlock extends StatelessWidget {
     required this.laneWidth,
     required this.child,
     required this.onCommit,
+    this.quickEditRow,
   });
 
   @override
@@ -1354,6 +1914,7 @@ class _AdjustableBlock extends StatelessWidget {
       width: laneWidth,
       child: GestureDetector(
         onLongPress: () async {
+          final quickRow = quickEditRow;
           final result = await showModalBottomSheet<({int start, int end})>(
             context: context,
             showDragHandle: true,
@@ -1361,6 +1922,11 @@ class _AdjustableBlock extends StatelessWidget {
               title: title,
               startMinutes: startMinutes,
               endMinutes: endMinutes,
+              // The sheet's context is dead after pop, so the callback
+              // captures this block's context instead.
+              onQuickEdit: quickRow == null
+                  ? null
+                  : () => showClassQuickEditSheet(context, quickRow),
             ),
           );
           if (result != null &&
@@ -1393,11 +1959,13 @@ class _AdjustTimeSheet extends StatefulWidget {
   final String title;
   final int startMinutes;
   final int endMinutes;
+  final VoidCallback? onQuickEdit;
 
   const _AdjustTimeSheet({
     required this.title,
     required this.startMinutes,
     required this.endMinutes,
+    this.onQuickEdit,
   });
 
   @override
@@ -1464,6 +2032,20 @@ class _AdjustTimeSheetState extends State<_AdjustTimeSheet> {
               onPlus30: () => _shiftEnd(30),
             ),
             const SizedBox(height: 16),
+            if (widget.onQuickEdit != null) ...[
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    widget.onQuickEdit!.call();
+                  },
+                  icon: const Icon(Icons.tune_outlined),
+                  label: Text(context.l10n.quickEditTitle),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             Row(
               children: [
                 Expanded(

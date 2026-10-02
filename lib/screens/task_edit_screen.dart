@@ -931,10 +931,7 @@ class _ExamResultSectionState extends ConsumerState<ExamResultSection> {
             examTaskId: widget.examTaskId,
             score: score,
             maxScore: Value(max),
-            date:
-                '${now.year.toString().padLeft(4, '0')}-'
-                '${now.month.toString().padLeft(2, '0')}-'
-                '${now.day.toString().padLeft(2, '0')}',
+            date: isoFromDateTime(now),
           ),
         );
       } else {

@@ -179,13 +179,23 @@ class NotificationService {
       return;
     }
     _checkerStarted = true;
+    // Guarded: an unhandled throw here would escape the zone and crash
+    // release builds (and fail integration tests on a strict binding).
     Future.delayed(const Duration(seconds: 5), () async {
-      await scheduler.checkDueLinux();
-      await scheduler.nudgeOverdue();
+      try {
+        await scheduler.checkDueLinux();
+        await scheduler.nudgeOverdue();
+      } catch (e) {
+        debugPrint('Linux due check failed: $e');
+      }
     });
     Stream.periodic(const Duration(minutes: 1)).listen((_) async {
-      await scheduler.checkDueLinux();
-      await scheduler.nudgeOverdue();
+      try {
+        await scheduler.checkDueLinux();
+        await scheduler.nudgeOverdue();
+      } catch (e) {
+        debugPrint('Linux due check failed: $e');
+      }
     });
   }
 }
@@ -380,7 +390,8 @@ class ReminderScheduler {
     final today = DateTime(now.year, now.month, now.day);
     final occurrences = engine.occurrences(
       rangeStart: today,
-      rangeEnd: today.add(const Duration(days: 1)),
+      // Wall-clock step: Duration addition drifts across DST transitions.
+      rangeEnd: shiftDays(today, 1),
     );
     final byId = {for (final c in await classes.all()) c.id: c};
     final out = <({int id, String title, String body, DateTime fire})>[];

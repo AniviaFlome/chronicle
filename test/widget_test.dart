@@ -15,6 +15,7 @@ import 'package:chronicle/screens/focus_screen.dart';
 import 'package:chronicle/screens/grades_screen.dart';
 import 'package:chronicle/screens/mark_absence_dialog.dart';
 import 'package:chronicle/screens/occurrence_sheet.dart';
+import 'package:chronicle/screens/occurrence_tile.dart';
 import 'package:chronicle/screens/schedule_slot_dialog.dart';
 import 'package:chronicle/screens/settings_screen.dart';
 import 'package:chronicle/screens/task_edit_screen.dart';
@@ -281,21 +282,25 @@ void main() {
 
   testWidgets('Slot dialog returns a weekly meeting draft', (tester) async {
     SlotDraft? result;
+    final db = AppDatabase(NativeDatabase.memory());
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) {
-              return TextButton(
-                onPressed: () async {
-                  result = await showDialog<SlotDraft>(
-                    context: context,
-                    builder: (_) => const ScheduleSlotDialog(),
-                  );
-                },
-                child: const Text('Open slot'),
-              );
-            },
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return TextButton(
+                  onPressed: () async {
+                    result = await showDialog<SlotDraft>(
+                      context: context,
+                      builder: (_) => const ScheduleSlotDialog(),
+                    );
+                  },
+                  child: const Text('Open slot'),
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -309,6 +314,9 @@ void main() {
     expect(result!.startMinutes, 540);
     expect(result!.endMinutes, 600);
     expect(result!.rotation, RotationKind.weekly);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
   });
 
   testWidgets('New class starts with today only and empty times', (
@@ -1083,29 +1091,43 @@ void main() {
     tester,
   ) async {
     SlotDraft? result;
+    final db = AppDatabase(NativeDatabase.memory());
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) {
-              return TextButton(
-                onPressed: () async {
-                  result = await showDialog<SlotDraft>(
-                    context: context,
-                    builder: (_) => const ScheduleSlotDialog(
-                      dayRotationLength: 6,
-                      dayRotationLetters: true,
-                    ),
-                  );
-                },
-                child: const Text('Open slot'),
-              );
-            },
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return TextButton(
+                  onPressed: () async {
+                    result = await showDialog<SlotDraft>(
+                      context: context,
+                      builder: (_) => const ScheduleSlotDialog(
+                        dayRotationLength: 6,
+                        dayRotationLetters: true,
+                      ),
+                    );
+                  },
+                  child: const Text('Open slot'),
+                );
+              },
+            ),
           ),
         ),
       ),
     );
     await tester.tap(find.text('Open slot'));
+    await tester.pumpAndSettle();
+    // Preset chips lengthen the dialog: bring the rotation picker
+    // into view before tapping it.
+    await tester.drag(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(SingleChildScrollView),
+      ),
+      const Offset(0, -300),
+    );
     await tester.pumpAndSettle();
     await tester.tap(
       find.widgetWithText(DropdownButtonFormField<RotationKind>, 'Every week'),
@@ -1119,6 +1141,9 @@ void main() {
     expect(result, isNotNull);
     expect(result!.rotation, RotationKind.dayRotation);
     expect(result!.rotationDays, '[1]');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
   });
 
   testWidgets('Calendar headers show rotation day labels', (tester) async {
@@ -1488,12 +1513,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Time grid view'));
     await tester.pumpAndSettle();
-    // Fixed lesson/break boundaries label both gutters:
-    // 14:00, 15:00, 15:10, 16:10.
+    // Classic grid labels hours only; fixed boundaries shape the range
+    // and break shading, not the gutter labels.
     expect(find.text('14:00'), findsWidgets);
     expect(find.text('15:00'), findsWidgets);
-    expect(find.text('15:10'), findsWidgets);
-    expect(find.text('16:10'), findsWidgets);
+    expect(find.text('15:10'), findsNothing);
+    expect(find.text('16:10'), findsNothing);
     final closing = db.close();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
@@ -1549,6 +1574,50 @@ void main() {
     final moved = slots!.singleWhere((s) => s.id == slotId);
     expect(moved.startMinutes, 550);
     expect(moved.endMinutes, 600);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Grid adjust sheet opens class quick-edit', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.runAsync(() async {
+      final repo = ClassRepository(db);
+      final id = await repo.create(
+        ClassesCompanion.insert(name: 'Physics', colorValue: 0xFF4F6BED),
+      );
+      await repo.createScheduleItem(
+        ScheduleItemsCompanion.insert(
+          classId: id,
+          dayOfWeek: 1,
+          startMinutes: 540,
+          endMinutes: 600,
+          rotation: RotationKind.weekly,
+        ),
+      );
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: CalendarScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Time grid view'));
+    await tester.pumpAndSettle();
+
+    // Grid long-press still owns the adjust sheet; its details button
+    // routes to quick-edit.
+    await tester.longPress(find.text('Physics').first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Adjust Physics'), findsOneWidget);
+    await tester.tap(find.text('Quick edit'));
+    await tester.pumpAndSettle();
+    expect(find.text('Room'), findsOneWidget);
+    expect(find.text('Teacher'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());
@@ -1630,9 +1699,7 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
-  testWidgets('Fixed grid uses defaults from day start', (
-    tester,
-  ) async {
+  testWidgets('Fixed grid uses defaults from day start', (tester) async {
     final db = AppDatabase(NativeDatabase.memory());
     await tester.runAsync(() async {
       final repo = ClassRepository(db);
@@ -1662,16 +1729,17 @@ void main() {
     await tester.tap(find.byTooltip('Time grid view'));
     await tester.pumpAndSettle();
     await pumpForAsync(tester);
-    // Default 60/10 rhythm from 06:00 labels the grid.
+    // Default 60/10 rhythm from 06:00 shapes the range and breaks;
+    // the classic gutter labels hours only.
     expect(find.text('06:00'), findsWidgets);
     expect(find.text('07:00'), findsWidgets);
-    expect(find.text('07:10'), findsWidgets);
+    expect(find.text('07:10'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());
   });
 
-  testWidgets('Grid defaults to class-time boundaries', (tester) async {
+  testWidgets('Grid labels hours instead of class times', (tester) async {
     final db = AppDatabase(NativeDatabase.memory());
     await tester.runAsync(() async {
       final repo = ClassRepository(db);
@@ -1697,9 +1765,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Time grid view'));
     await tester.pumpAndSettle();
-    expect(find.text('09:40'), findsWidgets);
-    expect(find.text('10:30'), findsWidgets);
-    expect(find.text('06:00'), findsNothing);
+    // Classic grid: hourly gutter labels; class start/end times are not
+    // gutter labels (they show inside the blocks instead).
+    expect(find.text('09:00'), findsWidgets);
+    expect(find.text('10:00'), findsWidgets);
+    expect(find.text('09:40'), findsNothing);
+    expect(find.text('10:30'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());
@@ -1891,11 +1962,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    // Generated boundaries: 12:00, 12:45, 12:55, 13:40.
+    // Generated boundaries shape the range and break shading; the
+    // classic gutter labels hours only: 12:00, 13:00, 14:00.
     expect(find.text('12:00'), findsWidgets);
-    expect(find.text('12:45'), findsWidgets);
-    expect(find.text('12:55'), findsWidgets);
-    expect(find.text('13:40'), findsWidgets);
+    expect(find.text('13:00'), findsWidgets);
+    expect(find.text('14:00'), findsWidgets);
+    expect(find.text('12:45'), findsNothing);
+    expect(find.text('12:55'), findsNothing);
+    expect(find.text('13:40'), findsNothing);
     // One shaded break box per gap per day column (1 gap x 7 days).
     final breaks = find.byWidgetPredicate(
       (w) =>
@@ -2019,22 +2093,26 @@ void main() {
 
   testWidgets('Slot dialog auto-fills end from start', (tester) async {
     SlotDraft? result;
+    final db = AppDatabase(NativeDatabase.memory());
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) {
-              return TextButton(
-                onPressed: () async {
-                  result = await showDialog<SlotDraft>(
-                    context: context,
-                    builder: (_) =>
-                        const ScheduleSlotDialog(autoEndMinutes: 90),
-                  );
-                },
-                child: const Text('Open slot'),
-              );
-            },
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return TextButton(
+                  onPressed: () async {
+                    result = await showDialog<SlotDraft>(
+                      context: context,
+                      builder: (_) =>
+                          const ScheduleSlotDialog(autoEndMinutes: 90),
+                    );
+                  },
+                  child: const Text('Open slot'),
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -2052,6 +2130,9 @@ void main() {
     expect(result, isNotNull);
     expect(result!.startMinutes, 540);
     expect(result!.endMinutes, 630);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
   });
 
   testWidgets('Absences screen renders Turkish with TR locale', (tester) async {
@@ -2145,9 +2226,7 @@ void main() {
     await db.close();
   });
 
-  testWidgets('Class picker follows the current theme accents', (
-    tester,
-  ) async {
+  testWidgets('Class picker follows the current theme accents', (tester) async {
     tester.view.physicalSize = const Size(800, 1400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -2167,9 +2246,9 @@ void main() {
           (w.decoration as BoxDecoration?)?.shape == BoxShape.circle,
     );
     // 8 palette + Nord accents not already in the palette + 1 custom.
-    final nordExtras = lookupAppTheme(
-      'nord',
-    ).accents.values.where((v) => !classColorPalette.contains(v)).length;
+    final nordExtras = lookupAppTheme('nord').accents.values
+        .where((v) => !classColorPalette.contains(v))
+        .length;
     expect(dots, findsNWidgets(classColorPalette.length + nordExtras + 1));
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
@@ -2197,9 +2276,7 @@ void main() {
     expect(find.text('06:00'), findsWidgets);
     // Saved to settings for the next app start.
     expect(
-      await tester.runAsync(
-        () => SettingsRepository(db).calendarView(),
-      ),
+      await tester.runAsync(() => SettingsRepository(db).calendarView()),
       'grid',
     );
     // Navigate away and back within the same session: a fresh screen state
@@ -2322,9 +2399,7 @@ void main() {
     await tester.pumpAndSettle();
     await pumpForAsync(tester);
     expect(
-      await tester.runAsync(
-        () => SettingsRepository(db).absencesView(),
-      ),
+      await tester.runAsync(() => SettingsRepository(db).absencesView()),
       'list',
     );
     await tester.tap(find.byKey(const ValueKey('swapper_toggle')));
@@ -2373,10 +2448,7 @@ void main() {
       // viewport and must scroll instead of overflowing.
       for (var i = 0; i < 8; i++) {
         await repo.createClassWithSlots(
-          ClassesCompanion.insert(
-            name: 'Class $i',
-            colorValue: 0xFF4F6BED,
-          ),
+          ClassesCompanion.insert(name: 'Class $i', colorValue: 0xFF4F6BED),
           [
             ScheduleItemsCompanion.insert(
               classId: 0,
@@ -2441,10 +2513,8 @@ void main() {
     ];
     // Only bar labels sit inside an InkWell; body texts with the same
     // wording (e.g. screen titles) must not pollute the assertions.
-    Finder barLabel(String label) => find.descendant(
-      of: find.byType(InkWell),
-      matching: find.text(label),
-    );
+    Finder barLabel(String label) =>
+        find.descendant(of: find.byType(InkWell), matching: find.text(label));
     for (final label in labels) {
       expect(barLabel(label), findsOneWidget);
     }
@@ -2459,10 +2529,8 @@ void main() {
     ];
     // Only bar icons sit inside an InkWell; body icons (e.g. the empty
     // classes illustration) must not pollute the measurement.
-    Finder barIcon(IconData icon) => find.descendant(
-      of: find.byType(InkWell),
-      matching: find.byIcon(icon),
-    );
+    Finder barIcon(IconData icon) =>
+        find.descendant(of: find.byType(InkWell), matching: find.byIcon(icon));
     List<double> iconCenters() => [
       for (final icon in navIcons) tester.getCenter(barIcon(icon)).dx,
     ];
@@ -2531,6 +2599,289 @@ void main() {
     await tester.pumpAndSettle();
     await pumpForAsync(tester);
     expect(find.text('45:00'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Focus ring keeps countdown inside at large fonts', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(2.0)),
+            child: FocusScreen(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await pumpForAsync(tester);
+    expect(tester.takeException(), isNull);
+    final ringRect = tester.getRect(find.byType(CircularProgressIndicator));
+    final timerRect = tester.getRect(find.text('25:00'));
+    // The scaled-down countdown must sit inside the ring (past the
+    // 16px stroke), never overlapping it.
+    final inner = ringRect.deflate(16);
+    expect(timerRect.left, greaterThanOrEqualTo(inner.left - 1));
+    expect(timerRect.right, lessThanOrEqualTo(inner.right + 1));
+    expect(timerRect.top, greaterThanOrEqualTo(inner.top - 1));
+    expect(timerRect.bottom, lessThanOrEqualTo(inner.bottom + 1));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Tile long-press opens quick-edit and dot saves color', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    final id = (await tester.runAsync(
+      () => ClassRepository(db).create(
+        ClassesCompanion.insert(name: 'Physics', colorValue: 0xFF4F6BED),
+      ),
+    ))!;
+    final row = await tester.runAsync(() => ClassRepository(db).byId(id));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: OccurrenceTile(
+              occurrence: engine.ClassOccurrence(
+                classId: id,
+                scheduleItemId: 0,
+                date: DateTime(2026, 9, 30),
+                startMinutes: 540,
+                endMinutes: 600,
+              ),
+              classRow: row,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.longPress(find.byType(OccurrenceTile));
+    await tester.pumpAndSettle();
+    // Quick-edit sheet shows the class name and room field.
+    expect(find.text('Physics'), findsWidgets);
+    expect(find.text('Room'), findsOneWidget);
+    final dots = find.byWidgetPredicate(
+      (w) =>
+          w is Container &&
+          (w.decoration as BoxDecoration?)?.shape == BoxShape.circle,
+    );
+    // Palette dots only (no custom picker here); Default theme adds no
+    // accents.
+    expect(dots, findsNWidgets(classColorPalette.length));
+    await tester.tap(dots.at(1));
+    await pumpForAsync(tester);
+    final updated = (await tester.runAsync(
+      () => ClassRepository(db).byId(id),
+    ))!;
+    expect(updated.colorValue, classColorPalette[1]);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Quick-edit saves room, teacher and reminder', (tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    final id = (await tester.runAsync(
+      () => ClassRepository(db).create(
+        ClassesCompanion.insert(name: 'Physics', colorValue: 0xFF4F6BED),
+      ),
+    ))!;
+    final row = await tester.runAsync(() => ClassRepository(db).byId(id));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: OccurrenceTile(
+              occurrence: engine.ClassOccurrence(
+                classId: id,
+                scheduleItemId: 0,
+                date: DateTime(2026, 9, 30),
+                startMinutes: 540,
+                endMinutes: 600,
+              ),
+              classRow: row,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.longPress(find.byType(OccurrenceTile));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Room'), 'B-204');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Teacher'),
+      'Dr. Yılmaz',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Class reminder (minutes before)'),
+      '15',
+    );
+    await tester.tap(find.text('Save'));
+    await pumpForAsync(tester);
+    final updated = (await tester.runAsync(
+      () => ClassRepository(db).byId(id),
+    ))!;
+    expect(updated.room, 'B-204');
+    expect(updated.teacher, 'Dr. Yılmaz');
+    expect(updated.reminderMinutes, 15);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Absent tile keeps name on one line with badge below', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    final id = (await tester.runAsync(
+      () => ClassRepository(db).create(
+        ClassesCompanion.insert(
+          name: 'Very Long Class Name Here',
+          colorValue: 0xFF4F6BED,
+        ),
+      ),
+    ))!;
+    final row = await tester.runAsync(() => ClassRepository(db).byId(id));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: OccurrenceTile(
+              occurrence: engine.ClassOccurrence(
+                classId: id,
+                scheduleItemId: 0,
+                date: DateTime(2026, 9, 30),
+                startMinutes: 540,
+                endMinutes: 600,
+              ),
+              classRow: row,
+              absent: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Badge on its own line, name never wraps letter-by-letter.
+    expect(find.text('Absent'), findsOneWidget);
+    expect(find.text('Very Long Class Name Here'), findsOneWidget);
+    final name = tester.widget<Text>(find.text('Very Long Class Name Here'));
+    expect(name.maxLines, 1);
+    expect(name.overflow, TextOverflow.ellipsis);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Classes card long-press opens quick-edit', (tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.runAsync(
+      () => ClassRepository(
+        db,
+      ).create(ClassesCompanion.insert(name: 'Math', colorValue: 0xFF4F6BED)),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: ClassesScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Math'));
+    await tester.pumpAndSettle();
+    expect(find.text('Room'), findsOneWidget);
+    expect(find.text('Notes'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Quick-edit saves notes and card shows them', (tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    final id = (await tester.runAsync(
+      () => ClassRepository(
+        db,
+      ).create(ClassesCompanion.insert(name: 'Math', colorValue: 0xFF4F6BED)),
+    ))!;
+    final row = await tester.runAsync(() => ClassRepository(db).byId(id));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: OccurrenceTile(
+              occurrence: engine.ClassOccurrence(
+                classId: id,
+                scheduleItemId: 0,
+                date: DateTime(2026, 9, 30),
+                startMinutes: 540,
+                endMinutes: 600,
+              ),
+              classRow: row,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.longPress(find.byType(OccurrenceTile));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Notes'), 'GKS-101');
+    await tester.tap(find.text('Save'));
+    await pumpForAsync(tester);
+    final updated = (await tester.runAsync(
+      () => ClassRepository(db).byId(id),
+    ))!;
+    expect(updated.notes, 'GKS-101');
+    // Card surfaces the custom text under the teacher line.
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: ClassesScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('GKS-101'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());

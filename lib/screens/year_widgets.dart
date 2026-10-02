@@ -66,12 +66,7 @@ Future<bool> showYearDialog(
   final schoolDays = <int>{
     if (existing?.rotationSchoolDays != null)
       ...decodeIntList(existing!.rotationSchoolDays!)
-    else
-      1,
-    2,
-    3,
-    4,
-    5,
+    else ...[1, 2, 3, 4, 5],
   };
   bool rotationLetters = existing?.rotationLabels == 'letters';
   final formKey = GlobalKey<FormState>();
@@ -208,7 +203,10 @@ Future<bool> showYearDialog(
     ),
   );
 
-  if (saved != true || !context.mounted) return false;
+  if (saved != true || !context.mounted) {
+    name.dispose();
+    return false;
+  }
   final rotationDays = (schoolDays.toList()..sort());
   try {
     final repo = ref.read(classRepositoryProvider);
@@ -248,12 +246,14 @@ Future<bool> showYearDialog(
       );
       if (!updated) throw StateError('Year no longer exists');
     }
+    name.dispose();
     return true;
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(context.l10n.couldNotSaveYear('$e'))));
     }
+    name.dispose();
     return false;
   }
 }

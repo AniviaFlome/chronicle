@@ -153,17 +153,12 @@ class _Line {
   final String text;
   final double cx;
   final double cy;
-  final double top;
-  final double bottom;
 
-  _Line({
-    required this.text,
-    required this.cx,
-    required this.cy,
-    required this.top,
-    required this.bottom,
-  });
+  _Line({required this.text, required this.cx, required this.cy});
 }
+
+/// Whitespace splitter shared by the line builder below.
+final _wsPattern = RegExp(r'\s+');
 
 /// Groups words into visual lines: one baseline (shared center-y) broken
 /// at wide horizontal gaps (table columns). Bilsis rows use ~9pt text on
@@ -200,11 +195,9 @@ List<_Line> _toLines(List<BilsisWord> words) {
   for (final band in bands) {
     band.sort((a, b) => a.left.compareTo(b.left));
     var current = <BilsisWord>[band.first];
-    var currentHasCode =
-        _codeOf(band.first.text.replaceAll(RegExp(r'\s+'), '')) != null;
+    var currentHasCode = _codeOf(band.first.text.replaceAll(_wsPattern, '')) != null;
     for (final w in band.skip(1)) {
-      final wIsCode =
-          _codeOf(w.text.replaceAll(RegExp(r'\s+'), '')) != null;
+      final wIsCode = _codeOf(w.text.replaceAll(_wsPattern, '')) != null;
       // Two course codes sharing one baseline belong to overlapping
       // (conflicting) classes in the same grid cell: force a split even
       // when their gap is too narrow to look like a column gap.
@@ -231,14 +224,9 @@ _Line _makeLine(List<BilsisWord> words) {
   final first = words.first;
   final last = words.last;
   return _Line(
-    text: words.map((w) => w.text).join(' ').replaceAll(
-      RegExp(r'\s+'),
-      ' ',
-    ).trim(),
+    text: words.map((w) => w.text).join(' ').replaceAll(_wsPattern, ' ').trim(),
     cx: (first.left + last.right) / 2,
     cy: sumY / words.length,
-    top: sumY / words.length,
-    bottom: sumY / words.length,
   );
 }
 

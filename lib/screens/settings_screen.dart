@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../app.dart';
 import '../data/database.dart';
+import '../data/repositories.dart';
 import '../data/schedule_repository.dart';
 import '../providers.dart';
 import '../l10n/l10n.dart';
@@ -46,6 +47,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   int _defaultDuration = 60;
   int? _defaultReminder;
   bool _autoEnd = false;
+  List<int> _slotPresets = const [];
   bool _portraitLock = false;
   String _localeOverride = 'system';
   String _menuProviderId = '';
@@ -73,9 +75,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Future<void> _loadMenuProvider() async {
     try {
-      final value = await ref
-          .read(settingsRepositoryProvider)
-          .menuProviderId();
+      final value = await ref.read(settingsRepositoryProvider).menuProviderId();
       if (!mounted) return;
       setState(
         () => _menuProviderId = menuSources.containsKey(value) ? value : '',
@@ -118,7 +118,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Future<void> _setLocale(String value) async {
     setState(() => _localeOverride = value);
     await _saveSetting(
-      () => ref.read(settingsRepositoryProvider).setLocaleOverride(value).then((_) {
+      () => ref.read(settingsRepositoryProvider).setLocaleOverride(value).then((
+        _,
+      ) {
         ref.invalidate(appLocaleProvider);
       }),
       (m) => context.l10n.couldNotSaveSetting(m),
@@ -174,12 +176,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       final duration = await repo.defaultDurationMinutes();
       final reminder = await repo.defaultClassReminderMinutes();
       final autoEnd = await repo.autoEndTime();
+      final presets = await repo.slotTimePresets();
       if (!mounted) return;
       setState(() {
         _defaultStart = start;
         _defaultDuration = duration;
         _defaultReminder = reminder;
         _autoEnd = autoEnd;
+        _slotPresets = presets;
         _scheduleLoaded = true;
       });
     } catch (e) {
@@ -267,6 +271,73 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _autoEnd = !value);
+      showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
+    }
+  }
+
+  /// Edits the slot-editor start-time preset chips: comma-separated
+  /// HH:MM times, with a reset-to-defaults action.
+  Future<void> _editSlotPresets() async {
+    final input = TextEditingController(
+      text: _slotPresets.map(hhmm).join(', '),
+    );
+    var reset = false;
+    final repo = ref.read(settingsRepositoryProvider);
+    Future<void> savePresets(List<int> value) async {
+      await repo.setSlotTimePresets(value);
+      ref.invalidate(slotTimePresetsProvider);
+      if (!mounted) return;
+      setState(() => _slotPresets = value);
+    }
+
+    final text = await showDialog<String?>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.l10n.slotPresetsTitle),
+        content: TextFormField(
+          controller: input,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: context.l10n.slotPresetsEditHint,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              reset = true;
+              await savePresets(SettingsRepository.defaultSlotTimePresets);
+              if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+            },
+            child: Text(context.l10n.resetDefaults),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(context.l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(input.text.trim()),
+            child: Text(context.l10n.save),
+          ),
+        ],
+      ),
+    );
+    if (reset || text == null || !mounted) return;
+    final parts = text
+        .split(',')
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    final parsed = [for (final p in parts) parseSlotTime(p)];
+    if (parsed.isEmpty || parsed.any((m) => m == null)) {
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.slotPresetsInvalid);
+      return;
+    }
+    final out = parsed.whereType<int>().toSet().toList()..sort();
+    try {
+      await savePresets(out.take(24).toList());
+    } catch (e) {
+      if (!mounted) return;
       showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
     }
   }
@@ -403,12 +474,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           err == 'folder-missing'
               ? l10n.importErrorFolderMissing
               : err == 'manifest-missing'
-                  ? l10n.importErrorManifestMissing
-                  : err.startsWith(marker)
-                      ? l10n.importErrorManifestUnreadable(detail)
-                      : err == 'not-a-data-folder'
-                          ? l10n.importErrorInvalid
-                          : l10n.couldNotImportData(err),
+              ? l10n.importErrorManifestMissing
+              : err.startsWith(marker)
+              ? l10n.importErrorManifestUnreadable(detail)
+              : err == 'not-a-data-folder'
+              ? l10n.importErrorInvalid
+              : l10n.couldNotImportData(err),
         );
         return;
       }
@@ -483,14 +554,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final end = today.add(const Duration(days: 90));
-      final engine = await ref.read(engineProvider.future);
-      final classesById = await ref.read(classesByIdProvider.future);
-      final occs = engine.occurrences(rangeStart: today, rangeEnd: end);
-      final tasks = await ref.read(taskRepositoryProvider).watchAll().first;
-      final xtra = await ref
+      final end = shiftDays(today, 90);
+      final engineFuture = ref.read(engineProvider.future);
+      final classesFuture = ref.read(classesByIdProvider.future);
+      final tasksFuture = ref.read(taskRepositoryProvider).watchAll().first;
+      final xtraFuture = ref
           .read(xtraRepositoryProvider)
           .range(isoDate(today), isoDate(end));
+      final engine = await engineFuture;
+      final classesById = await classesFuture;
+      final occs = engine.occurrences(rangeStart: today, rangeEnd: end);
+      final tasks = await tasksFuture;
+      final xtra = await xtraFuture;
       final endIso = isoDate(end);
       final events = <IcsEvent>[
         for (final o in occs)
@@ -857,6 +932,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 onChanged: _scheduleLoaded ? _toggleAutoEnd : null,
               ),
               ListTile(
+                leading: const Icon(Icons.more_time_outlined),
+                title: Text(context.l10n.slotPresetsTitle),
+                subtitle: Text(
+                  !_scheduleLoaded
+                      ? context.l10n.loadingEllipsis
+                      : context.l10n.slotPresetsPreview(
+                          _slotPresets.take(5).map(hhmm).join(', ') +
+                              (_slotPresets.length > 5 ? ', …' : ''),
+                        ),
+                ),
+                enabled: _scheduleLoaded,
+                onTap: _editSlotPresets,
+              ),
+              ListTile(
                 leading: const Icon(Icons.notifications_outlined),
                 title: Text(context.l10n.defaultReminderTitle),
                 subtitle: Text(
@@ -906,7 +995,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     for (final entry in menuSources.entries)
                       DropdownMenuItem(
                         value: entry.key,
-                        child: Text(entry.value.name),
+                        child: Text(entry.value.name(context.l10n)),
                       ),
                   ],
                   onChanged: (v) {
@@ -958,14 +1047,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 }
 
 /// App version line at the bottom of Settings.
-class _VersionFooter extends StatelessWidget {
+class _VersionFooter extends StatefulWidget {
   const _VersionFooter();
+
+  @override
+  State<_VersionFooter> createState() => _VersionFooterState();
+}
+
+class _VersionFooterState extends State<_VersionFooter> {
+  late final Future<PackageInfo> _info = PackageInfo.fromPlatform();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
+      future: _info,
       builder: (context, snapshot) {
         final info = snapshot.data;
         if (info == null) return const SizedBox.shrink();
@@ -1020,18 +1116,18 @@ class _DataFolderTiles extends ConsumerWidget {
       if (exported != null) {
         lines.add(
           context.l10n.dataLastExport(
-            DateTime.fromMillisecondsSinceEpoch(
-              exported,
-            ).toString().substring(0, 16),
+            DateTime.fromMillisecondsSinceEpoch(exported)
+                .toString()
+                .substring(0, 16),
           ),
         );
       }
       if (imported != null) {
         lines.add(
           context.l10n.dataLastImport(
-            DateTime.fromMillisecondsSinceEpoch(
-              imported,
-            ).toString().substring(0, 16),
+            DateTime.fromMillisecondsSinceEpoch(imported)
+                .toString()
+                .substring(0, 16),
           ),
         );
       }
@@ -1112,17 +1208,13 @@ class _DataFolderTiles extends ConsumerWidget {
               ? null
               : (v) async {
                   try {
-                    await ref
-                        .read(settingsRepositoryProvider)
-                        .setAutoSync(v);
+                    await ref.read(settingsRepositoryProvider).setAutoSync(v);
                     ref.invalidate(dataFolderStatusProvider);
                   } catch (e) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(
-                            context.l10n.couldNotSaveSetting('$e'),
-                          ),
+                          content: Text(context.l10n.couldNotSaveSetting('$e')),
                         ),
                       );
                     }
@@ -1395,7 +1487,11 @@ class _DayRangePickerState extends ConsumerState<_DayRangePicker> {
   @override
   Widget build(BuildContext context) {
     if (!_loaded) return const SizedBox.shrink();
-    Widget field({required String label, required int value, required VoidCallback onTap}) {
+    Widget field({
+      required String label,
+      required int value,
+      required VoidCallback onTap,
+    }) {
       return InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(4),
@@ -1607,11 +1703,7 @@ class _GridMarkersPickerState extends ConsumerState<_GridMarkersPicker> {
                   children: [
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        fields[0],
-                        fields[1],
-                        fields[2],
-                      ],
+                      children: [fields[0], fields[1], fields[2]],
                     ),
                     const SizedBox(height: 12),
                     saveBtn,

@@ -16,9 +16,18 @@ import 'menu_provider.dart';
 /// tab structure throws [MenuFetchException] instead of silently emptying.
 class HacettepeMenuProvider implements MenuProvider {
   final http.Client _client;
+  final bool _ownsClient;
 
   HacettepeMenuProvider([http.Client? client])
-    : _client = client ?? http.Client();
+    : _client = client ?? http.Client(),
+      _ownsClient = client == null;
+
+  @override
+  void close() {
+    if (_ownsClient) _client.close();
+  }
+
+  static final RegExp _kcalNumber = RegExp(r'(\d+)');
 
   @override
   String get id => 'hacettepe';
@@ -32,10 +41,32 @@ class HacettepeMenuProvider implements MenuProvider {
     '2': 'Sıhhiye',
   };
 
+  // No legacy row formats to reject, but weekend rows stored before the
+  // hours override carry the site's weekday hours and must refetch.
+  @override
+  bool isCacheValid(MenuDay day) {
+    if (!_isWeekend(day.date)) return true;
+    return !day.meals.any(
+      (m) =>
+          (m.kind == 'ogle' || m.kind == 'vegan') &&
+          m.serviceHours.isNotEmpty &&
+          m.serviceHours != _weekendHours,
+    );
+  }
+
   static String dateParam(DateTime date) =>
       '${date.year.toString().padLeft(4, '0')}-'
       '${date.month.toString().padLeft(2, '0')}-'
       '${date.day.toString().padLeft(2, '0')}';
+
+  /// Weekend service window (Sat/Sun) for lunch and vegan: the site keeps
+  /// publishing weekday hours on weekends, but the halls actually serve
+  /// 12:00 - 13:30. Verified against the live Saturday page, which still
+  /// claims 11:30 - 14:00.
+  static const _weekendHours = '12:00 - 13:30';
+
+  static bool _isWeekend(DateTime date) =>
+      date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
 
   @override
   Future<MenuDay> fetchDay(DateTime date, String locationId) async {
@@ -64,16 +95,17 @@ class HacettepeMenuProvider implements MenuProvider {
   MenuDay parseDay(String html, DateTime date, String locationId) {
     final doc = html_parser.parse(html);
     const meals = ['sabah', 'ogle', 'aksam', 'vegan'];
-    final sections = [
-      for (final id in meals) doc.getElementById(id),
-    ].whereType<Element>().toList();
-    if (sections.isEmpty) {
+    if (meals.every((id) => doc.getElementById(id) == null)) {
       throw const MenuFetchException('Unexpected page structure');
     }
     final legend = <String, String>{};
     final parsed = <ServedMeal>[];
-    for (var i = 0; i < sections.length; i++) {
-      parsed.add(_parseMeal(sections[i], meals[i], legend));
+    // Look each tab up by id: a missing tab (e.g. no vegan section)
+    // must not shift the remaining sections onto the wrong kinds.
+    for (final id in meals) {
+      final section = doc.getElementById(id);
+      if (section == null) continue;
+      parsed.add(_parseMeal(section, id, legend, date));
     }
     return MenuDay(
       date: DateTime(date.year, date.month, date.day),
@@ -88,6 +120,7 @@ class HacettepeMenuProvider implements MenuProvider {
     Element section,
     String kind,
     Map<String, String> legend,
+    DateTime date,
   ) {
     final daily = section.querySelector('.daily-view') ?? section;
     var serviceHours = '';
@@ -99,7 +132,7 @@ class HacettepeMenuProvider implements MenuProvider {
       for (final span in summary.querySelectorAll('span')) {
         final text = span.text;
         if (text.contains('kcal')) {
-          final match = RegExp(r'(\d+)').firstMatch(text);
+          final match = _kcalNumber.firstMatch(text);
           if (match != null) totalKcal = int.tryParse(match.group(1)!);
         }
       }
@@ -112,6 +145,9 @@ class HacettepeMenuProvider implements MenuProvider {
         if (li.text.trim().isNotEmpty)
           MenuDish(name: li.text.trim(), category: ''),
     ];
+    if (_isWeekend(date) && (kind == 'ogle' || kind == 'vegan')) {
+      serviceHours = _weekendHours;
+    }
     return ServedMeal(
       kind: kind,
       serviceHours: serviceHours,

@@ -146,6 +146,16 @@ abstract class MenuProvider {
   /// Fetches one day. Throws [MenuFetchException] on network or parse
   /// failures so callers can fall back to cache.
   Future<MenuDay> fetchDay(DateTime date, String locationId);
+
+  /// Whether a cached day is still in a servable format. Defaults to true;
+  /// providers override this to invalidate rows written by older parsers
+  /// (e.g. pre-normalization data) so they refetch instead of showing
+  /// stale-format content until the cache TTL expires.
+  bool isCacheValid(MenuDay day) => true;
+
+  /// Releases resources held by the provider (e.g. its HTTP client).
+  /// Defaults to a no-op so test doubles stay trivial.
+  void close() {}
 }
 
 class MenuFetchException implements Exception {

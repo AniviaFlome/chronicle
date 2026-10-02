@@ -39,6 +39,15 @@ int? parseHHmm(String s) {
   return h * 60 + m;
 }
 
+/// Parses a slot preset entry: "HH:mm" or plain minutes-from-midnight.
+/// Null on bad input.
+int? parseSlotTime(String s) {
+  if (s.contains(':')) return parseHHmm(s);
+  final m = int.tryParse(s);
+  if (m == null || m < 0 || m > 1439) return null;
+  return m;
+}
+
 /// Fixed lesson/break grid: boundaries plus break gaps.
 /// Invalid configs (lesson <= 0, count <= 0) yield empty lists.
 ({List<int> boundaries, List<({int start, int end})> breaks})

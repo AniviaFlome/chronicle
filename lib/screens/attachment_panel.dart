@@ -98,7 +98,7 @@ class _AttachmentPanelState extends State<AttachmentPanel> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotLoadFiles('$e'))),
+          SnackBar(content: Text(context.l10n.couldNotDelete('$e'))),
         );
       }
     }

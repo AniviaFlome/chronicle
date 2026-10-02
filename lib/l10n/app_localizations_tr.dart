@@ -111,6 +111,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get menuSourceNone => 'Yok';
 
   @override
+  String get menuSourceItuName => 'İtü';
+
+  @override
   String get allergensTitle => 'Alerjenler';
 
   @override
@@ -257,9 +260,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String dueOn(Object date) {
     return 'Vade $date';
   }
-
-  @override
-  String get dayStreak => 'günlük seri';
 
   @override
   String get doneThisWeek => 'bu hafta tamamlanan';
@@ -700,6 +700,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get customMinutesLabel => 'Özel dakika';
 
   @override
+  String get customChipLabel => 'Özel';
+
+  @override
   String minutesShort(Object n) {
     return '$n dk';
   }
@@ -777,6 +780,9 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get editClass => 'Dersi düzenle';
+
+  @override
+  String get quickEditTitle => 'Hızlı düzenle';
 
   @override
   String couldNotMarkAbsent(Object error) {
@@ -1102,6 +1108,28 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get autoEndHint =>
       'Başlangıç değişince bitiş = başlangıç + varsayılan süre olur';
+
+  @override
+  String get slotPresetsTitle => 'Hazır başlangıç saatleri';
+
+  @override
+  String slotPresetsPreview(Object times) {
+    return 'Ders saati düzenleyicide çipler: $times';
+  }
+
+  @override
+  String get slotPresetsEditHint =>
+      'Virgülle ayrılmış saatler, ör. 08:00, 09:30';
+
+  @override
+  String get slotPresetsInvalid =>
+      'Saatleri HH:MM biçiminde virgülle ayırarak yazın';
+
+  @override
+  String get slotStartPresets => 'Başlangıç';
+
+  @override
+  String get resetDefaults => 'Varsayılanlara dön';
 
   @override
   String get reminderOffHint => 'Kapalı — derslerden önce hatırlatıcı yok';

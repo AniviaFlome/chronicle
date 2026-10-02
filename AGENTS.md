@@ -4,38 +4,38 @@ Flutter student planner. NixOS-first repo; `flutter`/`dart` only exist inside `n
 
 ## Shell / build
 - Always run via `nix develop --command bash -c "..."` from repo root.
-- Linux bundle: `nix develop --command bash -c "flutter build linux --release"`. `flake.nix` devShell sets `SQLITE_LIB` + `LD_LIBRARY_PATH` for drift. The GitHub release tarball additionally bundles `libsqlite3.so` with a `chronicle.sh` launcher (sets `LD_LIBRARY_PATH` to `bundle/lib`), so end-user systems need no global sqlite install.
+- Linux bundle: `nix develop --command bash -c "flutter build linux --release"`. devShell sets `SQLITE_LIB` + `LD_LIBRARY_PATH` for drift. Release tarball bundles `libsqlite3.so` under `bundle/lib` (found via `$ORIGIN/lib` RUNPATH — no launcher script, no system sqlite needed).
 
 ## Release
-- Version lives in `pubspec.yaml` (`1.0.0+1` → versionName/versionCode). Push tag `vX.Y.Z` to publish.
-- Android release signing reads `CHRONICLE_KEYSTORE` (+`_PASSWORD`, `_ALIAS`, `_KEY_PASSWORD`) from env; without them local builds fall back to debug keys. Upload keystore lives in `android/keystore/` (gitignored) — never commit it; CI restores it from the `ANDROID_KEYSTORE_BASE64` secret.
-- `.github/workflows/ci.yml` runs analyze + tests on push/PR. `release.yml` runs on tags: verify, signed universal APK + Linux bundle tarball, GitHub Release with `CHANGELOG.md` notes.
-- Keep `CHANGELOG.md` `[Unreleased]` section current; move entries under the version heading when tagging.
+- Version lives in `pubspec.yaml` (`versionName/versionCode`). Push tag `vX.Y.Z` to publish.
+- Android signing reads `CHRONICLE_KEYSTORE` (+`_PASSWORD`, `_ALIAS`, `_KEY_PASSWORD`) from env; without them builds fall back to debug keys. Upload keystore lives in `android/keystore/` (gitignored) — never commit it; CI restores it from `ANDROID_KEYSTORE_BASE64`.
+- `ci.yml` runs analyze + tests on push/PR. `release.yml` runs on tags: verify, signed universal APK + Linux tarball + AppImage + Flatpak, GitHub Release with `CHANGELOG.md` `[Unreleased]` notes.
+- Keep `CHANGELOG.md` `[Unreleased]` current; move entries under the version heading when tagging.
 
 ## Verify
 - `nix develop --command bash -c "flutter analyze --no-pub"`
-- Full widget suite: `nix develop --command bash -c "flutter test test/widget_test.dart --no-pub"` (~16s, 52 tests).
-- Single test: `flutter test test/widget_test.dart --no-pub --plain-name 'Exact test name'` — one `--plain-name` only; multiple names AND-match to zero.
+- `nix develop --command bash -c "flutter test --no-pub"` (unit + widget, all of `test/`)
+- Integration: one invocation per file — `for f in integration_test/*_test.dart; do flutter test "$f" --no-pub || exit 1; done` (single run can't host multiple full-app boots).
+- Single test: `--plain-name 'Exact test name'` — one flag only; multiple AND-match to zero.
 - Ignore drift "multiple databases" warnings in tests (each test makes its own `NativeDatabase.memory()`).
 
 ## Codegen — do not edit generated files
-- `lib/data/database.g.dart` from `lib/data/database.dart` + `lib/data/tables.dart` via `dart run build_runner build --delete-conflicting-outputs`. Bump `schemaVersion` + idempotent `_addColumnIfMissing` steps (killed migrates must re-run safely).
-- l10n: source is `lib/l10n/app_en.arb` / `app_tr.arb` (`l10n.yaml`); generated `app_localizations*.dart` via `flutter generate`. Never edit generated files; add strings to ARBs.
+- `lib/data/database.g.dart` from `database.dart` + `tables.dart` via `dart run build_runner build --delete-conflicting-outputs`. Bump `schemaVersion` + idempotent `_addColumnIfMissing` steps (killed migrates must re-run safely).
+- l10n source is `lib/l10n/app_en.arb` / `app_tr.arb` (`l10n.yaml`); generated `app_localizations*.dart` via `flutter generate`. Add strings to ARBs only.
 
 ## Architecture
-- Entry: `lib/main.dart` opens `AppDatabase`, reads `calendarView`/`absencesView` prefs, overrides `*ViewSeedProvider` before `runApp` (avoids list→grid flash). `StartupRunner` does post-frame reminder sync only.
-- `lib/app.dart`: `go_router` `ShellRoute` (`/`, `/calendar`, `/classes`, `/tasks`, `/absences`, `/settings`) + `NavigationRail`/`NavigationBar` switch at 600/900px.
-- State: hand-written Riverpod in `lib/providers.dart` (no riverpod codegen in use). Settings are the source of truth: `SettingsRepository` (`lib/data/repositories.dart`) → `dayRangeProvider`/`fixedGridProvider`/`weekStartDayProvider`/etc.
-- Schedule: `ScheduleRepository.loadEngine` → `domain/schedule_occurrence_engine.dart`; date math lives in `lib/utils/time_format.dart`.
-- Themes: `lib/theme.dart` `buildAppTheme` + `classBlockColor`/`classAccentColor`/`classOnBlockColor`. Class side-bars/blocks must use `classAccentColor`, backgrounds `classBlockColor`, text `classOnBlockColor` — never raw `Color(colorValue)` for fills.
-- Dining menu (`lib/services/menu/`, `/menu` route): `MenuProvider` abstraction + `menuSources` registry (only `hacettepe` ships). Page is empty until a source is picked in Settings → Dining menu (`menu_provider` key, default ''). Display-only scraping with 6h cache (`MenuCache` table, excluded from sync/backup).
-- Local data folder (`lib/services/data_folder.dart`): user-picked folder holding one JSON file per table (`manifest.json`, `<table>.json`, `tombstones.json`) plus `files/<stem>_<shortid>.<ext>` content blobs for class/year attachments (referenced by `class_files.json`/`year_files.json`; blob bytes copied locally on import, incoming absolute paths never trusted). Manual Export overwrites the files and prunes unreferenced blobs; manual Import merges newer rows by `updatedAt` keyed on `uuid`, with `SyncTombstones` for deletes. No network, no background watchers, no external-service integration — whatever syncs the folder is outside the app. One device at a time: export, let the folder sync elsewhere, import on the other side. `FolderSyncController` (`lib/services/folder_sync.dart`, started in `main.dart` post-frame) automates this while the app runs: debounced export on drift `tableUpdates()`, manifest-gated import every 30s + at startup, toggleable via `auto_sync` setting. No background services.
+- Entry `lib/main.dart`: opens `AppDatabase`, reads `calendarView`/`absencesView` prefs, overrides `*ViewSeedProvider` before `runApp` (avoids list→grid flash), applies portrait lock. `StartupRunner` does post-frame reminder sync + `warmCalendarWeek` + folder-sync start only — never read providers synchronously during mount.
+- `lib/app.dart`: `go_router` `ShellRoute` (`/`, `/calendar`, `/classes`, `/tasks`, `/absences`, `/menu`, `/settings`). `NavigationRail` at width ≥600 (extended ≥900); custom `_PhoneNavBar` below 600 (stock `NavigationBar` can't fit 7 labels).
+- State: hand-written Riverpod in `lib/providers.dart` — `riverpod_annotation`/`riverpod_generator` are deps but no `@riverpod` codegen is in use. Settings (`SettingsRepository`) is source of truth → `dayRangeProvider`/`fixedGridProvider`/`weekStartDayProvider`/etc. Calendar first paint is gated on warmed week inputs (`warmCalendarWeek`); add new geometry-affecting settings there.
+- Schedule: `ScheduleRepository.loadEngine` → `domain/schedule_occurrence_engine.dart`.
+- Themes (`lib/theme.dart`, 6 families: default/catppuccin/nord/dracula/gruvbox/tokyo-night): class fills must use `classBlockColor`, side-bars `classAccentColor`, text `classOnBlockColor` — never raw `Color(colorValue)`.
+- Dining menu (`lib/services/menu/`, `/menu`): `MenuProvider` + `menuSources` registry (`hacettepe`, `itu`). Page is empty until a source is picked in Settings (`menu_provider` key, default ''). 6h cache in `MenuCache` table, excluded from sync/backup.
+- Local data folder (`lib/services/data_folder.dart` + `folder_sync.dart`, started post-frame in `main.dart`): one JSON per table (`manifest.json`, `<table>.json`, `tombstones.json`) + `files/<stem>_<shortid>.<ext>` blobs for class/year attachments (blob bytes copied locally on import, incoming absolute paths never trusted). Merge is newer-`updatedAt`-wins keyed on `uuid`, deletes via `SyncTombstones`; conflicts preserved under `conflicts/`. Auto-sync (default on, `auto_sync` key): 5s-debounced merge-before-export on drift `tableUpdates()` (synced tables only), equality-gated import (manifest `exportedAt` + file mtimes — never wall-clock ordering) every 30s + at startup + on folder FS events + on app resume. Auto-export never prunes blobs; manual Export does.
 
 ## Hard rules (past bugs)
-- Dates: never `Duration(days: n)` add/subtract for calendar days (DST drift, e.g. Europe/Berlin Mar 29). Use `shiftDays(d, n)` and `DateTime(y, m, d + n)` construction. Same for absence-matrix weeks and `TaskRepository.nextRepeatDate`.
-- Day range is minutes (`day_start_minutes`/`day_end_minutes`, `dayRangeProvider` = minutes). Legacy `day_start_hour` keys remain as fallback; `setDayStartHour` writes both. Calendar grid takes `rangeStart/rangeEnd` minutes, draws faint `hourly` base + stronger `markers` + labeled break bands. Day columns shrink to fit all 7 across (min 110 list / 100 grid) before scrolling; Android phones keep the scroll strip with jump-to-today.
-- Absence matrix weeks respect `weekStartDayProvider`; W1 = week containing `year.startDate`. `_MatrixCell` tap toggles: empty→create on `weekStart` (540–600), single→delete, multi→dialog.
-- Settings keys to know: `calendar_view`/`absences_view`, `grid_markers_mode`, `grid_fixed_lesson/break`, `locale_override` (`system/en/tr`), `active_year_id`, `data_folder_path`, `data_last_export_at`, `data_last_import_at`.
-- Every repository insert must stamp `uuid: newUuid()` + `updatedAt: syncNow()`; every update must bump `updatedAt`; every delete must `recordTombstone` the row plus cascade children *before* deleting (FK cascades won't tombstone). New tables need the same two columns + v+1 migration entries, otherwise sync silently duplicates rows.
-- Tests: pump `SettingsScreen`/async-init screens with `pumpForAsync(tester)` helper; set `tester.view.physicalSize` for form screens; class-picker dot count = palette + current-theme accents + custom picker.
-- Linux window: `linux/runner/my_application.cc` forces resizable + 800×600 min; keep it.
+- Dates: never `Duration(days: n)` for calendar days (DST drift). Use `shiftDays(d, n)` / `DateTime(y, m, d + n)` (`lib/utils/time_format.dart`). Same for absence weeks and `TaskRepository.nextRepeatDate`.
+- Day range is minutes (`day_start_minutes`/`day_end_minutes`, `dayRangeProvider`). Legacy `day_start_hour` keys remain as fallback; setters write both.
+- Absence matrix weeks respect `weekStartDayProvider`; W1 = week containing `year.startDate`.
+- Every insert stamps `uuid: newUuid()` + `updatedAt: syncNow()`; every update bumps `updatedAt`; every delete `recordTombstone`s the row plus cascade children *before* deleting (FK cascades won't tombstone). New tables need both columns + migration entries or sync silently duplicates rows.
+- Tests: pump async-init screens with `pumpForAsync(tester)` helper (`test/widget_test.dart`); set `tester.view.physicalSize` for form/phone screens.
+- Linux window (`linux/runner/my_application.cc`): keep resizable + 800×600 minimum.

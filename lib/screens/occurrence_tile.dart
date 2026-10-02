@@ -5,13 +5,13 @@ import '../domain/schedule_models.dart' as engine;
 import '../theme.dart';
 import '../l10n/l10n.dart';
 import '../utils/time_format.dart';
+import 'class_quick_edit.dart';
 
 /// One class meeting shown in day/week lists.
 class OccurrenceTile extends StatelessWidget {
   final engine.ClassOccurrence occurrence;
   final ClassesData? classRow;
   final bool absent;
-  final bool showDate;
   final VoidCallback? onTap;
 
   const OccurrenceTile({
@@ -19,16 +19,16 @@ class OccurrenceTile extends StatelessWidget {
     required this.occurrence,
     required this.classRow,
     this.absent = false,
-    this.showDate = false,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final classRow = this.classRow;
     final raw = classRow == null
         ? theme.colorScheme.primary
-        : Color(classRow!.colorValue);
+        : Color(classRow.colorValue);
     final color = classAccentColor(theme.colorScheme, raw);
     final room = occurrence.room ?? classRow?.room;
 
@@ -36,6 +36,10 @@ class OccurrenceTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
+        // Every tile (calendar list, dashboard) gets long-press quick-edit.
+        onLongPress: classRow == null
+            ? null
+            : () => showClassQuickEditSheet(context, classRow),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -53,37 +57,28 @@ class OccurrenceTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              classRow?.name ?? context.l10n.classFallback,
-                              style: theme.textTheme.titleSmall,
-                            ),
-                          ),
-                          if (absent)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.errorContainer,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                context.l10n.absentBadge,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onErrorContainer,
-                                ),
-                              ),
-                            ),
-                        ],
+                      Text(
+                        classRow?.name ?? context.l10n.classFallback,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall,
                       ),
+                      // Absent marker lives on its own line under the name:
+                      // next to the name it squeezed the title into a few px
+                      // on narrow day columns and wrapped it letter by letter.
+                      if (absent)
+                        Text(
+                          context.l10n.absentBadge,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.error,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       const SizedBox(height: 2),
                       Text(
                         [
-                          if (showDate) isoFromDateTime(occurrence.date),
                           '${hhmm(occurrence.startMinutes)} - ${hhmm(occurrence.endMinutes)}',
                           if (room != null && room.isNotEmpty) room,
                         ].join(' · '),

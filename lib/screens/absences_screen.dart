@@ -91,38 +91,34 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text(context.l10n.couldNotLoad('$e'))),
             data: (all) {
-              final visible = all.where((a) {
-                if (_classId != null && a.classId != _classId) return false;
-                // Classes hidden by the year filter (or inactive ones)
-                // only show when no year is selected.
-                if (activeYear != null && !byId.containsKey(a.classId)) {
-                  return false;
-                }
-                return switch (_filter) {
-                  _ExcusedFilter.all => true,
-                  _ExcusedFilter.excused => a.isExcused,
-                  _ExcusedFilter.unexcused => !a.isExcused,
-                };
-              }).toList();
-
-              final withQuota = classList
-                  .where((c) => c.active && c.maxAbsences != null)
-                  .toList();
+              final selectedClassId = classList.any((c) => c.id == _classId)
+                  ? _classId
+                  : null;
 
               if (_view == 'grid') {
+                final visible = all.where((a) {
+                  if (_classId != null && a.classId != _classId) return false;
+                  // Classes hidden by the year filter (or inactive ones)
+                  // only show when no year is selected.
+                  if (activeYear != null && !byId.containsKey(a.classId)) {
+                    return false;
+                  }
+                  return switch (_filter) {
+                    _ExcusedFilter.all => true,
+                    _ExcusedFilter.excused => a.isExcused,
+                    _ExcusedFilter.unexcused => !a.isExcused,
+                  };
+                }).toList();
+
                 return _AbsencesGrid(
                   absences: visible,
                   byId: byId,
-                  selectedClassId: classList.any((c) => c.id == _classId)
-                      ? _classId
-                      : null,
+                  selectedClassId: selectedClassId,
                   createExcused: _filter == _ExcusedFilter.excused,
                   filterRow: _FilterRow(
                     filter: _filter,
                     onFilter: (f) => setState(() => _filter = f),
-                    classId: classList.any((c) => c.id == _classId)
-                        ? _classId
-                        : null,
+                    classId: selectedClassId,
                     classes: classList,
                     onClass: (v) => setState(() => _classId = v),
                     trailing: _viewSwitchOrNull(context),
@@ -130,15 +126,27 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                 );
               }
 
+              // One pass for all quota counts; previously each _QuotaCard
+              // scanned the full absence list (O(quotaCards x absences)).
+              final unexcusedByClass = <int, int>{};
+              for (final a in all) {
+                if (!a.isExcused) {
+                  unexcusedByClass[a.classId] =
+                      (unexcusedByClass[a.classId] ?? 0) + 1;
+                }
+              }
+
+              final withQuota = classList
+                  .where((c) => c.active && c.maxAbsences != null)
+                  .toList();
+
               return ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
                   _FilterRow(
                     filter: _filter,
                     onFilter: (f) => setState(() => _filter = f),
-                    classId: classList.any((c) => c.id == _classId)
-                        ? _classId
-                        : null,
+                    classId: selectedClassId,
                     classes: classList,
                     onClass: (v) => setState(() => _classId = v),
                     trailing: _viewSwitchOrNull(context),
@@ -157,9 +165,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                         padding: const EdgeInsets.only(bottom: 8),
                         child: _QuotaCard(
                           classRow: c,
-                          unexcused: all
-                              .where((a) => a.classId == c.id && !a.isExcused)
-                              .length,
+                          unexcused: unexcusedByClass[c.id] ?? 0,
                         ),
                       ),
                     const SizedBox(height: 8),
@@ -234,14 +240,19 @@ class _QuotaCard extends StatelessWidget {
   }
 }
 
-class _AbsenceTile extends ConsumerWidget {
+class _AbsenceTile extends StatelessWidget {
   final Absence absence;
   final ClassesData? classRow;
+  final VoidCallback onDelete;
 
-  const _AbsenceTile({required this.absence, required this.classRow});
+  const _AbsenceTile({
+    required this.absence,
+    required this.classRow,
+    required this.onDelete,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final raw = classRow == null
         ? theme.colorScheme.primary
@@ -321,8 +332,7 @@ class _AbsenceTile extends ConsumerWidget {
             IconButton(
               tooltip: context.l10n.deleteAbsenceTooltip,
               icon: const Icon(Icons.delete_outline),
-              onPressed: () =>
-                  ref.read(absenceRepositoryProvider).unmark(absence.id),
+              onPressed: onDelete,
             ),
           ],
         ),
@@ -462,6 +472,7 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
   final _hScroll = ScrollController();
   List<DateTime>? _lastWeeks;
   int _lastCurrentIndex = -1;
+  String? _readySig;
 
   @override
   void dispose() {
@@ -475,21 +486,37 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
     return DateTime(day.year, day.month, day.day - diff);
   }
 
-  void _maybeJumpToCurrent() {
-    if (!_hScroll.hasClients) return;
+  void _maybeJumpToCurrent(String sig) {
+    if (!_hScroll.hasClients) {
+      // Not laid out yet: retry on the next build instead of revealing
+      // the unjumped grid or dropping the jump silently.
+      _lastWeeks = null;
+      return;
+    }
+    void reveal() {
+      if (!mounted || _readySig == sig) return;
+      setState(() => _readySig = sig);
+    }
     final weeks = _lastWeeks;
     final index = _lastCurrentIndex;
     // Prevent repeated jumps.
     _lastCurrentIndex = -1;
-    if (weeks == null || index < 0) return;
+    if (weeks == null || index < 0) {
+      reveal();
+      return;
+    }
     // Only auto-jump for long year grids where current is off-screen.
-    if (weeks.length <= 8 || index <= 2) return;
+    if (weeks.length <= 8 || index <= 2) {
+      reveal();
+      return;
+    }
     const cellWidth = 44.0;
     const nameWidth = 120.0;
     final pos = _hScroll.position;
     // Skip when the current week is already visible: no slide on entry.
     if (nameWidth + index * cellWidth <
         pos.pixels + pos.viewportDimension - cellWidth) {
+      reveal();
       return;
     }
     // Clamp: near the last weeks the raw target overshoots maxScrollExtent
@@ -499,10 +526,17 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
             .clamp(0.0, pos.maxScrollExtent);
     // Post-frame jump once per weeks change.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_hScroll.hasClients) return;
+      if (!_hScroll.hasClients) {
+        _lastWeeks = null;
+        return;
+      }
       if ((_hScroll.offset - target).abs() > 1) {
         _hScroll.jumpTo(target);
       }
+      // Reveal after the jump lands so the first painted frame is
+      // already on the current week (no start flash).
+      if (!mounted) return;
+      setState(() => _readySig = sig);
     });
   }
 
@@ -574,12 +608,27 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
         break;
       }
     }
-    // Cache for post-frame jump.
+    // Cache for post-frame jump. The grid stays hidden until the jump
+    // lands so the first painted frame is already on the current week.
+    final jumpSig =
+        weeks.isEmpty
+            ? 'empty'
+            : '${isoFromDateTime(weeks.first)}_${isoFromDateTime(weeks.last)}_${weeks.length}_$currentIndex';
     if (_lastWeeks == null || _lastWeeks!.length != weeks.length) {
       _lastWeeks = weeks;
       _lastCurrentIndex = currentIndex;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeJumpToCurrent());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _maybeJumpToCurrent(jumpSig),
+      );
+    } else if (_readySig != jumpSig &&
+        (weeks.length <= 8 || currentIndex <= 2)) {
+      // No jump needed for this grid shape: reveal on the next frame.
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _maybeJumpToCurrent(jumpSig),
+      );
     }
+    final hideForJump =
+        _readySig != jumpSig && weeks.length > 8 && currentIndex > 2;
 
     final rows = [
       for (final c in widget.byId.values)
@@ -611,86 +660,93 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
             ),
           )
         else
-          SingleChildScrollView(
-            controller: _hScroll,
-            scrollDirection: Axis.horizontal,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Opacity(
+            opacity: hideForJump ? 0 : 1,
+            child: IgnorePointer(
+              ignoring: hideForJump,
+                child: SingleChildScrollView(
+                controller: _hScroll,
+                scrollDirection: Axis.horizontal,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(width: nameWidth),
-                    for (var i = 0; i < weeks.length; i++)
-                      SizedBox(
-                        width: cellWidth,
-                        child: Tooltip(
-                          message:
-                              '${isoFromDateTime(weeks[i])} – '
-                              '${isoFromDateTime(shiftDays(weeks[i], 6))}',
-                          child: Text(
-                            '${context.l10n.weekPrefix}${i + 1}',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: weeks[i] == todayStart
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.outline,
-                              fontWeight: weeks[i] == todayStart
-                                  ? FontWeight.bold
-                                  : null,
+                    Row(
+                      children: [
+                        const SizedBox(width: nameWidth),
+                        for (var i = 0; i < weeks.length; i++)
+                          SizedBox(
+                            width: cellWidth,
+                            child: Tooltip(
+                              message:
+                                  '${isoFromDateTime(weeks[i])} – '
+                                  '${isoFromDateTime(shiftDays(weeks[i], 6))}',
+                              child: Text(
+                                '${context.l10n.weekPrefix}${i + 1}',
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: weeks[i] == todayStart
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.outline,
+                                  fontWeight: weeks[i] == todayStart
+                                      ? FontWeight.bold
+                                      : null,
+                                ),
+                              ),
                             ),
                           ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    for (final c in rows)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: nameWidth,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: classAccentColor(
+                                        theme.colorScheme,
+                                        Color(c.colorValue),
+                                      ),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      c.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.bodyMedium,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            for (var i = 0; i < weeks.length; i++)
+                              _MatrixCell(
+                                items: byCell[(c.id, weeks[i])] ?? const [],
+                                color: Color(c.colorValue),
+                                className: c.name,
+                                weekLabel:
+                                    '${context.l10n.weekPrefix}${i + 1}',
+                                classId: c.id,
+                                weekStart: weeks[i],
+                                weekEnd: shiftDays(weeks[i], 6),
+                                createExcused: widget.createExcused,
+                              ),
+                          ],
                         ),
                       ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                for (final c in rows)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: nameWidth,
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: classAccentColor(
-                                    theme.colorScheme,
-                                    Color(c.colorValue),
-                                  ),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  c.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodyMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        for (var i = 0; i < weeks.length; i++)
-                          _MatrixCell(
-                            items: byCell[(c.id, weeks[i])] ?? const [],
-                            color: Color(c.colorValue),
-                            className: c.name,
-                            weekLabel: '${context.l10n.weekPrefix}${i + 1}',
-                            classId: c.id,
-                            weekStart: weeks[i],
-                            weekEnd: shiftDays(weeks[i], 6),
-                            createExcused: widget.createExcused,
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
       ],
@@ -863,7 +919,12 @@ class _MatrixCellDialog extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               for (final a in items)
-                _AbsenceTile(absence: a, classRow: names[a.classId]),
+                _AbsenceTile(
+                  absence: a,
+                  classRow: names[a.classId],
+                  onDelete: () =>
+                      ref.read(absenceRepositoryProvider).unmark(a.id),
+                ),
             ],
           ),
         ),

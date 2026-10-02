@@ -1,0 +1,7 @@
+#!/bin/sh
+# AppImage entry point for Chronicle. Library lookup needs no
+# LD_LIBRARY_PATH here: the binary carries $ORIGIN/lib in its RUNPATH,
+# resolving to usr/bin/lib below.
+set -e
+APPDIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+exec "$APPDIR/usr/bin/chronicle" "$@"

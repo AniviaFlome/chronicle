@@ -27,6 +27,11 @@ jobs:
       - run: flutter analyze --no-pub
       - run: flutter test --no-pub
         timeout-minutes: 30
+      # One invocation per file: a single `flutter test` run cannot host
+      # multiple files that each boot the full app (later files fail to
+      # attach). `flutter test` is headless, no xvfb needed.
+      - run: for f in integration_test/*_test.dart; do flutter test "$f" --no-pub || exit 1; done
+        timeout-minutes: 30
 
       - name: Restore upload keystore
         if: env.ANDROID_KEYSTORE_BASE64 != ''
@@ -60,14 +65,55 @@ jobs:
         run: |
           flutter build linux --release
           # drift loads sqlite via dlopen("libsqlite3.so"): ship a copy in
-          # bundle/lib plus a launcher that prefers it, so the tarball runs
-          # on systems without a global sqlite install.
+          # bundle/lib. The chronicle binary carries $ORIGIN/lib in its
+          # RUNPATH, so it finds the bundled copy with no launcher script.
           SQLITE_SO=$(ldconfig -p | grep -m1 'libsqlite3.so.0 ' | awk '{print $NF}')
           cp "$SQLITE_SO" build/linux/x64/release/bundle/lib/libsqlite3.so
-          printf '#!/bin/sh\nDIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nexport LD_LIBRARY_PATH="$DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\nexec "$DIR/chronicle" "$@"\n' > build/linux/x64/release/bundle/chronicle.sh
-          chmod +x build/linux/x64/release/bundle/chronicle.sh
           cd build/linux/x64/release/bundle
           tar -czvf $GITHUB_WORKSPACE/chronicle-linux-${{ github.ref_name }}.tar.gz *
+
+      - name: Build AppImage
+        run: |
+          BUNDLE=build/linux/x64/release/bundle
+          rm -rf AppDir && mkdir -p AppDir/usr/bin \
+            AppDir/usr/share/applications \
+            AppDir/usr/share/icons/hicolor/192x192/apps
+          # Bundle tree preserved verbatim under usr/bin: the binary finds
+          # lib/ via its own $ORIGIN/lib RUNPATH and data/ next to itself.
+          cp -r "$BUNDLE/." AppDir/usr/bin/
+          cp packaging/AppRun AppDir/AppRun
+          chmod +x AppDir/AppRun
+          cp packaging/chronicle.desktop AppDir/com.chronicleapp.chronicle.desktop
+          cp packaging/chronicle.desktop AppDir/usr/share/applications/
+          cp packaging/com.chronicleapp.chronicle.png AppDir/com.chronicleapp.chronicle.png
+          cp packaging/com.chronicleapp.chronicle.png \
+            AppDir/usr/share/icons/hicolor/192x192/apps/
+          wget -q -O appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          ./appimagetool --appimage-extract >/dev/null
+          ARCH=x86_64 ./squashfs-root/AppRun --no-appstream \
+            AppDir "$GITHUB_WORKSPACE/chronicle-${{ github.ref_name }}-x86_64.AppImage"
+
+      - name: Install Flatpak toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y flathub org.gnome.Platform//48 org.gnome.Sdk//48
+
+      - name: Build Flatpak bundle
+        run: |
+          BUNDLE=build/linux/x64/release/bundle
+          STAGE=packaging/flatpak/stage
+          rm -rf "$STAGE" repo flatpak-build && mkdir -p "$STAGE"
+          cp -r "$BUNDLE/." "$STAGE/"
+          cp packaging/chronicle.desktop "$STAGE/com.chronicleapp.chronicle.desktop"
+          cp packaging/com.chronicleapp.chronicle.png "$STAGE/com.chronicleapp.chronicle.png"
+          flatpak-builder --force-clean --repo=repo --default-branch=stable \
+            flatpak-build packaging/flatpak/com.chronicleapp.chronicle.yml
+          flatpak build-bundle repo \
+            "$GITHUB_WORKSPACE/chronicle-${{ github.ref_name }}.flatpak" \
+            com.chronicleapp.chronicle stable
 
       - name: Release notes from CHANGELOG
         run: |
@@ -83,3 +129,5 @@ jobs:
           files: |
             chronicle-${{ github.ref_name }}.apk
             chronicle-linux-${{ github.ref_name }}.tar.gz
+            chronicle-${{ github.ref_name }}-x86_64.AppImage
+            chronicle-${{ github.ref_name }}.flatpak

@@ -8,12 +8,7 @@ Cross-platform student planner: class schedules, absences, tasks and exams, a fo
 
 Get the latest release from Releases:
 
-- Android: install the APK (`chronicle-vX.Y.Z.apk`).
-- Linux: extract `chronicle-linux-vX.Y.Z.tar.gz` and run `chronicle.sh`
-  (it prefers the bundled `libsqlite3.so`, so no system sqlite install is
-  needed; a system sqlite works too).
-
-## Changelog
+[<img src="assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="80">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.chronicleapp.chronicle%22%2C%22url%22%3A%22https%3A//github.com/AniviaFlome/chronicle%22%2C%22author%22%3A%22AniviaFlome%22%2C%22name%22%3A%22Chronicle%22%7D)
 
 ## Changelog
 

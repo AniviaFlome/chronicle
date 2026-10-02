@@ -24,3 +24,8 @@ jobs:
       - run: flutter analyze --no-pub
       - run: flutter test --no-pub
         timeout-minutes: 30
+      # One invocation per file: a single `flutter test` run cannot host
+      # multiple files that each boot the full app (later files fail to
+      # attach). `flutter test` is headless, no xvfb needed.
+      - run: for f in integration_test/*_test.dart; do flutter test "$f" --no-pub || exit 1; done
+        timeout-minutes: 30

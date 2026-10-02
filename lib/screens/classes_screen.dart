@@ -6,6 +6,7 @@ import '../providers.dart';
 import '../theme.dart';
 import '../l10n/l10n.dart';
 import 'class_edit_screen.dart';
+import 'class_quick_edit.dart';
 import 'year_widgets.dart';
 
 class ClassesScreen extends ConsumerWidget {
@@ -154,6 +155,9 @@ class _ClassCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onOpen,
+        // Same quick-edit as calendar tiles: color, room, teacher,
+        // reminder, notes.
+        onLongPress: () => showClassQuickEditSheet(context, classRow),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
@@ -175,6 +179,16 @@ class _ClassCard extends StatelessWidget {
                     if (classRow.teacher != null &&
                         classRow.teacher!.isNotEmpty)
                       Text(classRow.teacher!, style: theme.textTheme.bodySmall),
+                    // Generic custom text (class code, section, anything).
+                    if (classRow.notes != null && classRow.notes!.isNotEmpty)
+                      Text(
+                        classRow.notes!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                   ],
                 ),
               ),

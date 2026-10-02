@@ -170,8 +170,10 @@ class ClassOccurrence {
     this.isMoved = false,
   });
 
-  DateTime get start => date.add(Duration(minutes: startMinutes));
-  DateTime get end => date.add(Duration(minutes: endMinutes));
+  DateTime get start =>
+      DateTime(date.year, date.month, date.day, startMinutes ~/ 60, startMinutes % 60);
+  DateTime get end =>
+      DateTime(date.year, date.month, date.day, endMinutes ~/ 60, endMinutes % 60);
 
   @override
   bool operator ==(Object other) =>

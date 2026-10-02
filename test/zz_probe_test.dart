@@ -53,16 +53,20 @@ void main() {
 
   testWidgets('probe slot dialog 360px', (tester) async {
     await narrow(tester);
+    final db = AppDatabase(NativeDatabase.memory());
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => TextButton(
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => const ScheduleSlotDialog(),
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showDialog(
+                  context: context,
+                  builder: (_) => const ScheduleSlotDialog(),
+                ),
+                child: const Text('Open'),
               ),
-              child: const Text('Open'),
             ),
           ),
         ),
@@ -70,7 +74,9 @@ void main() {
     );
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-    await tester.runAsync(() => Future<void>.value());
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
   });
 
   testWidgets('probe year dialog 360px', (tester) async {

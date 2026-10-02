@@ -49,6 +49,16 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     _init();
   }
 
+  @override
+  void dispose() {
+    if (widget.provider == null) {
+      // Only close providers we created; injected test doubles are owned
+      // by the caller.
+      _provider?.close();
+    }
+    super.dispose();
+  }
+
   Future<void> _init() async {
     MenuProvider? provider = widget.provider;
     var location = '1';
@@ -84,7 +94,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     if (!refresh) {
       final cached = await repo.cachedDay(provider.id, _location, iso);
       if (!mounted || gen != _loadGen) return;
-      if (cached != null) {
+      if (cached != null && provider.isCacheValid(cached.day)) {
         final age = DateTime.now().millisecondsSinceEpoch - cached.fetchedAt;
         setState(() {
           _day = cached.day;
@@ -280,6 +290,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             // segments get proper touch targets and never squeeze against
             // the label on narrow Android phones. Scrolls instead of
             // overflowing when the labels are wider than the screen.
+            // Single-location providers (Itu) have nothing to pick.
+            if (provider.locations.length > 1)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -552,8 +564,7 @@ class _AllergenPanel extends StatefulWidget {
   State<_AllergenPanel> createState() => _AllergenPanelState();
 }
 
-class _AllergenPanelState extends State<_AllergenPanel>
-    with SingleTickerProviderStateMixin {
+class _AllergenPanelState extends State<_AllergenPanel> {
   bool _expanded = false;
 
   static const _animDuration = Duration(milliseconds: 120);

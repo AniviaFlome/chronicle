@@ -5,14 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/database.dart';
-import '../domain/grades.dart';
 import '../l10n/l10n.dart';
 import '../providers.dart';
 import '../utils/ui_feedback.dart';
 
 enum _Phase { idle, work, rest }
 
-/// Pomodoro focus timer. Sessions are recorded for streaks and statistics.
+/// Pomodoro focus timer. Sessions are recorded for statistics.
 class FocusScreen extends ConsumerStatefulWidget {
   final int workSeconds;
   final int breakSeconds;
@@ -35,8 +34,6 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   int _remaining = 0;
   late int _workSecondsState;
   late int _breakSecondsState;
-  final _customWork = TextEditingController();
-  final _customBreak = TextEditingController();
   DateTime? _workStartedAt;
   Timer? _timer;
 
@@ -50,24 +47,30 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   }
 
   /// Applies persisted custom durations, unless the caller passed explicit
-  /// non-default durations (as widget tests do).
+  /// non-default durations (as widget tests do). Only rebuilds when a
+  /// value actually changes, so the first frame never flashes.
   Future<void> _loadDurations() async {
     try {
       final repo = ref.read(settingsRepositoryProvider);
       final work = await repo.focusWorkMinutes();
       final rest = await repo.focusBreakMinutes();
       if (!mounted || _phase != _Phase.idle) return;
+      var applied = false;
+      var nextWork = _workSecondsState;
+      var nextRest = _breakSecondsState;
+      if (widget.workSeconds == _fallbackWorkSeconds) {
+        nextWork = work * 60;
+        applied = true;
+      }
+      if (widget.breakSeconds == _fallbackBreakSeconds) {
+        nextRest = rest * 60;
+        applied = true;
+      }
+      if (!applied) return;
       setState(() {
-        var applied = false;
-        if (widget.workSeconds == _fallbackWorkSeconds) {
-          _workSecondsState = work * 60;
-          applied = true;
-        }
-        if (widget.breakSeconds == _fallbackBreakSeconds) {
-          _breakSecondsState = rest * 60;
-          applied = true;
-        }
-        if (applied) _remaining = _workSecondsState;
+        _workSecondsState = nextWork;
+        _breakSecondsState = nextRest;
+        _remaining = _workSecondsState;
       });
     } catch (e) {
       logLoadFailure('Load focus durations', e);
@@ -109,8 +112,6 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    _customWork.dispose();
-    _customBreak.dispose();
     super.dispose();
   }
 
@@ -198,17 +199,14 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
     final today = DateTime.now();
     final todayMidnight = DateTime(today.year, today.month, today.day);
     var sessionsToday = 0;
-    final activeDays = <DateTime>{};
     for (final s in sessions.value ?? const <PomodoroSession>[]) {
       final day = DateTime(
         s.startedAt.year,
         s.startedAt.month,
         s.startedAt.day,
       );
-      activeDays.add(day);
       if (day == todayMidnight) sessionsToday++;
     }
-    final streak = currentStreak(activeDays, todayMidnight);
 
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.focusTitle)),
@@ -216,42 +214,50 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
         padding: const EdgeInsets.all(24),
         children: [
           Center(
-            child: SizedBox(
-              width: 220,
-              height: 220,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    value: _total <= 0 ? 0 : 1 - _remaining / _total,
-                    strokeWidth: 12,
-                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _phaseLabel,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.outline,
-                        ),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: SizedBox(
+                width: 268,
+                height: 268,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Fill the box: an unconstrained indicator falls back
+                    // to its 36px default and hides behind the countdown.
+                    Positioned.fill(
+                      child: CircularProgressIndicator(
+                        value: _total <= 0 ? 0 : 1 - _remaining / _total,
+                        strokeWidth: 16,
+                        backgroundColor:
+                            theme.colorScheme.surfaceContainerHighest,
                       ),
-                      // Fixed width + scale-down: large system fonts must
-                      // never push the countdown into the progress ring.
-                      SizedBox(
-                        width: 164,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.center,
-                          child: Text(
-                            _mmss(_remaining),
-                            style: theme.textTheme.displayMedium,
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _phaseLabel,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.outline,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        // Fixed width + scale-down: large system fonts must
+                        // never push the countdown into the progress ring.
+                        SizedBox(
+                          width: 200,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.center,
+                            child: Text(
+                              _mmss(_remaining),
+                              style: theme.textTheme.displayMedium,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -261,7 +267,6 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
               label: context.l10n.focusWorkLabel,
               presets: const [15, 25, 50],
               selected: _workSecondsState ~/ 60,
-              controller: _customWork,
               max: 480,
               onSelect: _setWorkMinutes,
             ),
@@ -270,7 +275,6 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
               label: context.l10n.focusBreakLabel,
               presets: const [5, 10, 15],
               selected: _breakSecondsState ~/ 60,
-              controller: _customBreak,
               max: 120,
               onSelect: _setBreakMinutes,
             ),
@@ -295,20 +299,12 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
               label: Text(context.l10n.skipBreak),
             ),
           const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _StatChip(
-                icon: Icons.local_fire_department_outlined,
-                value: '$streak',
-                label: context.l10n.dayStreak,
-              ),
-              _StatChip(
-                icon: Icons.today_outlined,
-                value: '$sessionsToday',
-                label: context.l10n.todayChip,
-              ),
-            ],
+          Center(
+            child: _StatChip(
+              icon: Icons.today_outlined,
+              value: '$sessionsToday',
+              label: context.l10n.todayChip,
+            ),
           ),
         ],
       ),
@@ -320,7 +316,6 @@ class _DurationRow extends StatelessWidget {
   final String label;
   final List<int> presets;
   final int selected;
-  final TextEditingController controller;
   final int max;
   final Future<void> Function(int minutes) onSelect;
 
@@ -328,14 +323,24 @@ class _DurationRow extends StatelessWidget {
     required this.label,
     required this.presets,
     required this.selected,
-    required this.controller,
     required this.max,
     required this.onSelect,
   });
 
+  /// Custom-minutes dialog behind the custom chip: same validation as the
+  /// old inline field (whole number within 1..max), errors shown inline.
+  Future<void> _askCustom(BuildContext context) async {
+    final minutes = await showDialog<int>(
+      context: context,
+      builder: (_) => _CustomMinutesDialog(max: max),
+    );
+    if (minutes != null) await onSelect(minutes);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isCustom = !presets.contains(selected);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -354,32 +359,74 @@ class _DurationRow extends StatelessWidget {
                   onSelect(p);
                 },
               ),
-            SizedBox(
-              width: 120,
-              child: TextFormField(
-                controller: controller,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: context.l10n.customMinutesLabel,
-                  isDense: true,
-                ),
-                onFieldSubmitted: (value) {
-                  final minutes = int.tryParse(value.trim());
-                  if (minutes == null || minutes < 1 || minutes > max) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(context.l10n.enterNonNegative),
-                      ),
-                    );
-                    return;
-                  }
-                  controller.clear();
-                  onSelect(minutes);
-                },
+            // Same visual language as the presets: the old inline text
+            // field looked like a different control entirely.
+            ChoiceChip(
+              label: Text(
+                isCustom
+                    ? context.l10n.minutesShort(selected)
+                    : context.l10n.customChipLabel,
               ),
+              avatar: const Icon(Icons.edit_outlined, size: 18),
+              selected: isCustom,
+              onSelected: (_) => _askCustom(context),
             ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+/// Custom-minutes dialog: owns its text controller so disposal lines up
+/// with the route lifecycle (no use-after-dispose during pop animation).
+class _CustomMinutesDialog extends StatefulWidget {
+  final int max;
+
+  const _CustomMinutesDialog({required this.max});
+
+  @override
+  State<_CustomMinutesDialog> createState() => _CustomMinutesDialogState();
+}
+
+class _CustomMinutesDialogState extends State<_CustomMinutesDialog> {
+  final _controller = TextEditingController();
+  bool _showError = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final parsed = int.tryParse(_controller.text.trim());
+    if (parsed == null || parsed < 1 || parsed > widget.max) {
+      setState(() => _showError = true);
+      return;
+    }
+    Navigator.of(context).pop(parsed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(context.l10n.customMinutesLabel),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          errorText: _showError ? context.l10n.enterNonNegative : null,
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(context.l10n.cancel),
+        ),
+        FilledButton(onPressed: _submit, child: Text(context.l10n.save)),
       ],
     );
   }

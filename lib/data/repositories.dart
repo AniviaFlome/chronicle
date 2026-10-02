@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -21,10 +22,6 @@ String newUuid() => const Uuid().v4();
 Future<String> resolveAttachmentPath(String stored) =>
     ClassFilesService.resolveStoredPath(root: null, stored: stored);
 
-extension ClassCompanions on ClassesCompanion {
-  // intentionally minimal; UI constructs companions inline
-}
-
 /// Records a tombstone so a hard delete propagates through sync.
 /// Keeps the newest deletedAt per (table, uuid).
 Future<void> recordTombstone(
@@ -36,9 +33,8 @@ Future<void> recordTombstone(
   if (uuid.isEmpty) return;
   final deletedAt = at ?? syncNow();
   final existing =
-      await (db.select(db.syncTombstones)..where(
-            (t) => t.tableKey.equals(table) & t.uuid.equals(uuid),
-          ))
+      await (db.select(db.syncTombstones)
+            ..where((t) => t.tableKey.equals(table) & t.uuid.equals(uuid)))
           .getSingleOrNull();
   if (existing != null && existing.deletedAt >= deletedAt) return;
   await db
@@ -109,39 +105,40 @@ class ClassRepository {
         entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
       );
 
-  Future<bool> updateYear(AcademicYear row) => db
-      .update(db.academicYears)
-      .replace(row.copyWith(updatedAt: syncNow()));
+  Future<bool> updateYear(AcademicYear row) =>
+      db.update(db.academicYears).replace(row.copyWith(updatedAt: syncNow()));
 
   /// Deletes a year and records a tombstone so the delete syncs.
   /// Member classes are FK-set-null (no tombstones); both sides derive the
   /// same outcome from the same tombstone set. Attached year files are
   /// tombstoned too, and removed from disk best-effort.
-  Future<int> deleteYear(int id) async {
-    final row =
-        await (db.select(
-          db.academicYears,
-        )..where((y) => y.id.equals(id))).getSingleOrNull();
-    if (row != null) {
-      await recordTombstone(db, SyncTables.years, row.uuid);
-      try {
-        final files = await YearFileRepository(db).forYear(id);
-        for (final f in files) {
-          await recordTombstone(db, SyncTables.yearFiles, f.uuid);
-        }
-        for (final f in files) {
-          try {
-            final file = File(await resolveAttachmentPath(f.storedPath));
-            if (await file.exists()) await file.delete();
-          } catch (_) {
-            // Best-effort: a missing file must not block year deletion.
+  Future<int> deleteYear(int id) {
+    final now = syncNow();
+    return db.transaction(() async {
+      final row = await (db.select(
+        db.academicYears,
+      )..where((y) => y.id.equals(id))).getSingleOrNull();
+      if (row != null) {
+        await recordTombstone(db, SyncTables.years, row.uuid, now);
+        try {
+          final files = await YearFileRepository(db).forYear(id);
+          for (final f in files) {
+            await recordTombstone(db, SyncTables.yearFiles, f.uuid, now);
           }
+          for (final f in files) {
+            try {
+              final file = File(await resolveAttachmentPath(f.storedPath));
+              if (await file.exists()) await file.delete();
+            } catch (_) {
+              // Best-effort: a missing file must not block year deletion.
+            }
+          }
+        } catch (_) {
+          // Best-effort cleanup only.
         }
-      } catch (_) {
-        // Best-effort cleanup only.
       }
-    }
-    return (db.delete(db.academicYears)..where((y) => y.id.equals(id))).go();
+      return (db.delete(db.academicYears)..where((y) => y.id.equals(id))).go();
+    });
   }
 
   /// Creates a class together with its meeting-time slots atomically, so a
@@ -172,54 +169,53 @@ class ClassRepository {
     });
   }
 
-  Future<bool> update(ClassesData row) => db
-      .update(db.classes)
-      .replace(row.copyWith(updatedAt: syncNow()));
+  Future<bool> update(ClassesData row) =>
+      db.update(db.classes).replace(row.copyWith(updatedAt: syncNow()));
 
   /// Deletes a class, tombstoning it plus cascade children (slots,
   /// exceptions, absences, attached files) so deletes converge on peer
   /// devices. File blobs are removed from disk best-effort.
-  Future<int> delete(int id) async {
+  Future<int> delete(int id) {
     final now = syncNow();
-    final row =
-        await (db.select(
-          db.classes,
-        )..where((c) => c.id.equals(id))).getSingleOrNull();
-    if (row != null) {
-      await recordTombstone(db, SyncTables.classes, row.uuid, now);
-      final items = await scheduleItemsFor(id);
-      for (final item in items) {
-        await recordTombstone(db, SyncTables.scheduleItems, item.uuid, now);
-        final exceptions = await exceptionsFor(item.id);
-        for (final e in exceptions) {
-          await recordTombstone(db, SyncTables.exceptions, e.uuid, now);
-        }
-      }
-      final classAbsences = await AbsenceRepository(db).forClass(id);
-      for (final a in classAbsences) {
-        await recordTombstone(db, SyncTables.absences, a.uuid, now);
-      }
-      final classFiles = await ClassFileRepository(db).forClass(id);
-      for (final f in classFiles) {
-        await recordTombstone(db, SyncTables.classFiles, f.uuid, now);
-      }
-      // Remove file blobs from disk; rows go via FK cascade (or
-      // explicit delete when cascade is off, e.g. tests).
-      try {
-        final files = await ClassFileRepository(db).forClass(id);
-        for (final f in files) {
-          try {
-            final file = File(await resolveAttachmentPath(f.storedPath));
-            if (await file.exists()) await file.delete();
-          } catch (_) {
-            // Best-effort: a missing file must not block class deletion.
+    return db.transaction(() async {
+      final row = await (db.select(
+        db.classes,
+      )..where((c) => c.id.equals(id))).getSingleOrNull();
+      if (row != null) {
+        await recordTombstone(db, SyncTables.classes, row.uuid, now);
+        final items = await scheduleItemsFor(id);
+        for (final item in items) {
+          await recordTombstone(db, SyncTables.scheduleItems, item.uuid, now);
+          final exceptions = await exceptionsFor(item.id);
+          for (final e in exceptions) {
+            await recordTombstone(db, SyncTables.exceptions, e.uuid, now);
           }
         }
-      } catch (_) {
-        // Best-effort cleanup only.
+        final classAbsences = await AbsenceRepository(db).forClass(id);
+        for (final a in classAbsences) {
+          await recordTombstone(db, SyncTables.absences, a.uuid, now);
+        }
+        final classFiles = await ClassFileRepository(db).forClass(id);
+        for (final f in classFiles) {
+          await recordTombstone(db, SyncTables.classFiles, f.uuid, now);
+        }
+        // Remove file blobs from disk; rows go via FK cascade (or
+        // explicit delete when cascade is off, e.g. tests).
+        try {
+          for (final f in classFiles) {
+            try {
+              final file = File(await resolveAttachmentPath(f.storedPath));
+              if (await file.exists()) await file.delete();
+            } catch (_) {
+              // Best-effort: a missing file must not block class deletion.
+            }
+          }
+        } catch (_) {
+          // Best-effort cleanup only.
+        }
       }
-    }
-    return (db.delete(db.classes)..where((c) => c.id.equals(id))).go();
+      return (db.delete(db.classes)..where((c) => c.id.equals(id))).go();
+    });
   }
 
   /// Deletes every class via [delete] (tombstones + cascade each).
@@ -248,42 +244,45 @@ class ClassRepository {
         entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
       );
 
-  Future<bool> updateScheduleItem(ScheduleItem row) => db
-      .update(db.scheduleItems)
-      .replace(row.copyWith(updatedAt: syncNow()));
+  Future<bool> updateScheduleItem(ScheduleItem row) =>
+      db.update(db.scheduleItems).replace(row.copyWith(updatedAt: syncNow()));
 
   /// Deletes a slot, tombstoning it plus its exceptions.
-  Future<int> deleteScheduleItem(int id) async {
+  Future<int> deleteScheduleItem(int id) {
     final now = syncNow();
-    final row =
-        await (db.select(
-          db.scheduleItems,
-        )..where((s) => s.id.equals(id))).getSingleOrNull();
-    if (row != null) {
-      await recordTombstone(db, SyncTables.scheduleItems, row.uuid, now);
-      final exceptions = await exceptionsFor(id);
-      for (final e in exceptions) {
-        await recordTombstone(db, SyncTables.exceptions, e.uuid, now);
+    return db.transaction(() async {
+      final row = await (db.select(
+        db.scheduleItems,
+      )..where((s) => s.id.equals(id))).getSingleOrNull();
+      if (row != null) {
+        await recordTombstone(db, SyncTables.scheduleItems, row.uuid, now);
+        final exceptions = await exceptionsFor(id);
+        for (final e in exceptions) {
+          await recordTombstone(db, SyncTables.exceptions, e.uuid, now);
+        }
       }
-    }
-    return (db.delete(db.scheduleItems)..where((s) => s.id.equals(id))).go();
+      return (db.delete(db.scheduleItems)..where((s) => s.id.equals(id))).go();
+    });
   }
 
   /// Moves/resizes a slot's times, used by calendar drag editing.
-  Future<bool> updateSlotTimes(int id, int startMinutes, int endMinutes) async {
-    final row = await (db.select(
-      db.scheduleItems,
-    )..where((s) => s.id.equals(id))).getSingleOrNull();
-    if (row == null) return false;
-    return db
-        .update(db.scheduleItems)
-        .replace(
-          row.copyWith(
-            startMinutes: startMinutes,
-            endMinutes: endMinutes,
-            updatedAt: syncNow(),
-          ),
-        );
+  Future<bool> updateSlotTimes(
+    int id,
+    int startMinutes,
+    int endMinutes,
+  ) async {
+    // Single conditional write instead of read-then-replace (one query,
+    // no lost-update window between the select and the replace).
+    final count =
+        await (db.update(db.scheduleItems)..where((s) => s.id.equals(id)))
+            .write(
+              ScheduleItemsCompanion(
+                startMinutes: Value(startMinutes),
+                endMinutes: Value(endMinutes),
+                updatedAt: Value(syncNow()),
+              ),
+            );
+    return count > 0;
   }
 
   // --- Exceptions ---
@@ -293,47 +292,11 @@ class ClassRepository {
         db.scheduleExceptions,
       )..where((e) => e.scheduleItemId.equals(scheduleItemId))).get();
 
-  Future<int> createException(ScheduleExceptionsCompanion entry) => db
-      .into(db.scheduleExceptions)
-      .insert(
-        entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
-      );
-
-  Future<int> deleteException(int id) async {
-    final row =
-        await (db.select(
-          db.scheduleExceptions,
-        )..where((e) => e.id.equals(id))).getSingleOrNull();
-    if (row != null) {
-      await recordTombstone(db, SyncTables.exceptions, row.uuid);
-    }
-    return (db.delete(db.scheduleExceptions)..where((e) => e.id.equals(id)))
-        .go();
-  }
-
   // --- Holidays ---
 
   Stream<List<Holiday>> watchHolidays() => (db.select(
     db.holidays,
   )..orderBy([(h) => OrderingTerm.asc(h.startDate)])).watch();
-
-  Future<int> createHoliday(HolidaysCompanion entry) => db
-      .into(db.holidays)
-      .insert(
-        entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
-      );
-
-  Future<bool> updateHoliday(Holiday row) =>
-      db.update(db.holidays).replace(row.copyWith(updatedAt: syncNow()));
-
-  Future<int> deleteHoliday(int id) async {
-    final row =
-        await (db.select(
-          db.holidays,
-        )..where((h) => h.id.equals(id))).getSingleOrNull();
-    if (row != null) await recordTombstone(db, SyncTables.holidays, row.uuid);
-    return (db.delete(db.holidays)..where((h) => h.id.equals(id))).go();
-  }
 }
 
 class AbsenceRepository {
@@ -372,9 +335,7 @@ class AbsenceRepository {
 
   /// One-shot list for tombstoning cascade deletes.
   Future<List<Absence>> forClass(int classId) =>
-      (db.select(
-        db.absences,
-      )..where((a) => a.classId.equals(classId))).get();
+      (db.select(db.absences)..where((a) => a.classId.equals(classId))).get();
 
   Future<int> mark(AbsencesCompanion entry) => db
       .into(db.absences)
@@ -395,13 +356,16 @@ class AbsenceRepository {
     return query.map((row) => row.read(count) ?? 0).getSingle();
   }
 
-  Future<void> unmark(int id) async {
-    final row =
-        await (db.select(
-          db.absences,
-        )..where((a) => a.id.equals(id))).getSingleOrNull();
-    if (row != null) await recordTombstone(db, SyncTables.absences, row.uuid);
-    await (db.delete(db.absences)..where((a) => a.id.equals(id))).go();
+  Future<void> unmark(int id) {
+    return db.transaction(() async {
+      final row = await (db.select(
+        db.absences,
+      )..where((a) => a.id.equals(id))).getSingleOrNull();
+      if (row != null) {
+        await recordTombstone(db, SyncTables.absences, row.uuid);
+      }
+      await (db.delete(db.absences)..where((a) => a.id.equals(id))).go();
+    });
   }
 }
 
@@ -475,10 +439,7 @@ class TaskRepository {
       final id = await db
           .into(db.tasks)
           .insert(
-            entry.copyWith(
-              uuid: Value(newUuid()),
-              updatedAt: Value(now),
-            ),
+            entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(now)),
           );
       for (var i = 0; i < subtaskTitles.length; i++) {
         await db
@@ -620,34 +581,33 @@ class TaskRepository {
 
   /// Deletes a task, tombstoning it plus children (subtasks, reminders,
   /// grades) so deletes converge on peer devices.
-  Future<int> delete(int id) async {
+  Future<int> delete(int id) {
     final now = syncNow();
-    final row =
-        await (db.select(
-          db.tasks,
-        )..where((t) => t.id.equals(id))).getSingleOrNull();
-    if (row != null) {
-      await recordTombstone(db, SyncTables.tasks, row.uuid, now);
-      final subs =
-          await (db.select(
-            db.subtasks,
-          )..where((s) => s.taskId.equals(id))).get();
-      for (final s in subs) {
-        await recordTombstone(db, SyncTables.subtasks, s.uuid, now);
+    return db.transaction(() async {
+      final row = await (db.select(
+        db.tasks,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (row != null) {
+        await recordTombstone(db, SyncTables.tasks, row.uuid, now);
+        final subs = await (db.select(
+          db.subtasks,
+        )..where((s) => s.taskId.equals(id))).get();
+        for (final s in subs) {
+          await recordTombstone(db, SyncTables.subtasks, s.uuid, now);
+        }
+        final rems = await remindersFor(id);
+        for (final r in rems) {
+          await recordTombstone(db, SyncTables.reminders, r.uuid, now);
+        }
+        final grades = await (db.select(
+          db.grades,
+        )..where((g) => g.examTaskId.equals(id))).get();
+        for (final g in grades) {
+          await recordTombstone(db, SyncTables.grades, g.uuid, now);
+        }
       }
-      final rems = await remindersFor(id);
-      for (final r in rems) {
-        await recordTombstone(db, SyncTables.reminders, r.uuid, now);
-      }
-      final grades =
-          await (db.select(
-            db.grades,
-          )..where((g) => g.examTaskId.equals(id))).get();
-      for (final g in grades) {
-        await recordTombstone(db, SyncTables.grades, g.uuid, now);
-      }
-    }
-    return (db.delete(db.tasks)..where((t) => t.id.equals(id))).go();
+      return (db.delete(db.tasks)..where((t) => t.id.equals(id))).go();
+    });
   }
 
   // --- Subtasks ---
@@ -661,13 +621,16 @@ class TaskRepository {
   Future<bool> updateSubtask(Subtask row) =>
       db.update(db.subtasks).replace(row.copyWith(updatedAt: syncNow()));
 
-  Future<int> deleteSubtask(int id) async {
-    final row =
-        await (db.select(
-          db.subtasks,
-        )..where((s) => s.id.equals(id))).getSingleOrNull();
-    if (row != null) await recordTombstone(db, SyncTables.subtasks, row.uuid);
-    return (db.delete(db.subtasks)..where((s) => s.id.equals(id))).go();
+  Future<int> deleteSubtask(int id) {
+    return db.transaction(() async {
+      final row = await (db.select(
+        db.subtasks,
+      )..where((s) => s.id.equals(id))).getSingleOrNull();
+      if (row != null) {
+        await recordTombstone(db, SyncTables.subtasks, row.uuid);
+      }
+      return (db.delete(db.subtasks)..where((s) => s.id.equals(id))).go();
+    });
   }
 
   Stream<List<Subtask>> watchSubtasks(int taskId) =>
@@ -694,13 +657,16 @@ class TaskRepository {
         entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
       );
 
-  Future<int> deleteReminder(int id) async {
-    final row =
-        await (db.select(
-          db.taskReminders,
-        )..where((r) => r.id.equals(id))).getSingleOrNull();
-    if (row != null) await recordTombstone(db, SyncTables.reminders, row.uuid);
-    return (db.delete(db.taskReminders)..where((r) => r.id.equals(id))).go();
+  Future<int> deleteReminder(int id) {
+    return db.transaction(() async {
+      final row = await (db.select(
+        db.taskReminders,
+      )..where((r) => r.id.equals(id))).getSingleOrNull();
+      if (row != null) {
+        await recordTombstone(db, SyncTables.reminders, row.uuid);
+      }
+      return (db.delete(db.taskReminders)..where((r) => r.id.equals(id))).go();
+    });
   }
 }
 
@@ -747,13 +713,14 @@ class GradeRepository {
   Future<bool> update(Grade row) =>
       db.update(db.grades).replace(row.copyWith(updatedAt: syncNow()));
 
-  Future<int> delete(int id) async {
-    final row =
-        await (db.select(
-          db.grades,
-        )..where((g) => g.id.equals(id))).getSingleOrNull();
-    if (row != null) await recordTombstone(db, SyncTables.grades, row.uuid);
-    return (db.delete(db.grades)..where((g) => g.id.equals(id))).go();
+  Future<int> delete(int id) {
+    return db.transaction(() async {
+      final row = await (db.select(
+        db.grades,
+      )..where((g) => g.id.equals(id))).getSingleOrNull();
+      if (row != null) await recordTombstone(db, SyncTables.grades, row.uuid);
+      return (db.delete(db.grades)..where((g) => g.id.equals(id))).go();
+    });
   }
 }
 
@@ -813,29 +780,32 @@ class XtraRepository {
       db.update(db.xtraEvents).replace(row.copyWith(updatedAt: syncNow()));
 
   /// Moves/resizes an event's times, used by calendar drag editing.
-  Future<bool> updateXtraTimes(int id, int startMinutes, int endMinutes) async {
-    final row = await (db.select(
-      db.xtraEvents,
-    )..where((e) => e.id.equals(id))).getSingleOrNull();
-    if (row == null) return false;
-    return db
-        .update(db.xtraEvents)
-        .replace(
-          row.copyWith(
+  Future<bool> updateXtraTimes(
+    int id,
+    int startMinutes,
+    int endMinutes,
+  ) async {
+    // Single conditional write instead of read-then-replace (one query,
+    // no lost-update window between the select and the replace).
+    final count =
+        await (db.update(db.xtraEvents)..where((e) => e.id.equals(id))).write(
+          XtraEventsCompanion(
             startMinutes: Value(startMinutes),
             endMinutes: Value(endMinutes),
-            updatedAt: syncNow(),
+            updatedAt: Value(syncNow()),
           ),
         );
+    return count > 0;
   }
 
-  Future<int> delete(int id) async {
-    final row =
-        await (db.select(
-          db.xtraEvents,
-        )..where((e) => e.id.equals(id))).getSingleOrNull();
-    if (row != null) await recordTombstone(db, SyncTables.xtra, row.uuid);
-    return (db.delete(db.xtraEvents)..where((e) => e.id.equals(id))).go();
+  Future<int> delete(int id) {
+    return db.transaction(() async {
+      final row = await (db.select(
+        db.xtraEvents,
+      )..where((e) => e.id.equals(id))).getSingleOrNull();
+      if (row != null) await recordTombstone(db, SyncTables.xtra, row.uuid);
+      return (db.delete(db.xtraEvents)..where((e) => e.id.equals(id))).go();
+    });
   }
 }
 
@@ -879,8 +849,6 @@ class SettingsRepository {
 
   Future<int> weekStartDay() async =>
       int.tryParse(await get('week_start_day') ?? '') ?? 1;
-
-  Future<bool> use24h() async => (await get('time_24h')) != 'false';
 
   static const appThemeKey = 'app_theme';
   static const accentColorKey = 'accent_color';
@@ -1021,11 +989,48 @@ class SettingsRepository {
 
   /// When true, picking a start time auto-sets end = start + default
   /// duration. Defaults to false.
-  Future<bool> autoEndTime() async =>
-      (await get(autoEndTimeKey)) == 'true';
+  Future<bool> autoEndTime() async => (await get(autoEndTimeKey)) == 'true';
 
   Future<void> setAutoEndTime(bool value) =>
       set(autoEndTimeKey, value ? 'true' : 'false');
+
+  static const slotTimePresetsKey = 'slot_time_presets';
+
+  /// Lesson-start presets offered as chips in the slot editor.
+  /// Defaults to hourly 08:00-18:00.
+  static const defaultSlotTimePresets = [
+    480,
+    540,
+    600,
+    660,
+    720,
+    780,
+    840,
+    900,
+    960,
+    1020,
+    1080,
+  ];
+
+  /// Stored as comma-separated minutes; accepts "HH:MM" or plain minutes
+  /// on the way in so the settings editor can round-trip display text.
+  Future<List<int>> slotTimePresets() async {
+    final raw = await get(slotTimePresetsKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return List.of(defaultSlotTimePresets);
+    }
+    final out = <int>[];
+    for (final part in raw.split(',')) {
+      final m = parseSlotTime(part.trim());
+      if (m != null && !out.contains(m)) out.add(m);
+    }
+    if (out.isEmpty) return List.of(defaultSlotTimePresets);
+    out.sort();
+    return out.take(24).toList();
+  }
+
+  Future<void> setSlotTimePresets(List<int> value) =>
+      set(slotTimePresetsKey, value.map((m) => m.clamp(0, 1439)).join(','));
 
   static const localeOverrideKey = 'locale_override';
 
@@ -1036,15 +1041,13 @@ class SettingsRepository {
     return raw != null && known.contains(raw) ? raw : 'system';
   }
 
-  Future<void> setLocaleOverride(String value) =>
-      set(localeOverrideKey, value);
+  Future<void> setLocaleOverride(String value) => set(localeOverrideKey, value);
 
   static const portraitLockKey = 'portrait_lock';
 
   /// When true, the app is locked to portrait orientation (phones).
   /// Defaults to false.
-  Future<bool> portraitLock() async =>
-      (await get(portraitLockKey)) == 'true';
+  Future<bool> portraitLock() async => (await get(portraitLockKey)) == 'true';
 
   Future<void> setPortraitLock(bool value) =>
       set(portraitLockKey, value ? 'true' : 'false');
@@ -1085,15 +1088,6 @@ class SettingsRepository {
     await setDayStartMinutes(h * 60);
   }
 
-  /// Last hour shown in the calendar grid. Defaults to 22.
-  /// Kept for backward compat; new code uses [dayEndMinutes].
-  Future<int> dayEndHour() async {
-    final mins = await dayEndMinutes();
-    // Historical semantic: hour value 1..24 where 24 = midnight end.
-    final h = (mins / 60).ceil().clamp(1, 24);
-    return h;
-  }
-
   Future<void> setDayEndHour(int value) async {
     final h = value.clamp(1, 24);
     await set(dayEndHourKey, h.toString());
@@ -1106,8 +1100,7 @@ class SettingsRepository {
     final raw = await get(dayStartMinutesKey);
     final parsed = raw == null ? null : int.tryParse(raw.trim());
     if (parsed != null) return parsed.clamp(0, 1439);
-    final legacy =
-        int.tryParse(await get(dayStartHourKey) ?? '') ?? 6;
+    final legacy = int.tryParse(await get(dayStartHourKey) ?? '') ?? 6;
     return (legacy.clamp(0, 23) * 60).clamp(0, 1439);
   }
 
@@ -1123,18 +1116,14 @@ class SettingsRepository {
     final raw = await get(dayEndMinutesKey);
     final parsed = raw == null ? null : int.tryParse(raw.trim());
     if (parsed != null) return parsed.clamp(1, 1440);
-    final legacy =
-        int.tryParse(await get(dayEndHourKey) ?? '') ?? 22;
+    final legacy = int.tryParse(await get(dayEndHourKey) ?? '') ?? 22;
     return (legacy.clamp(1, 24) * 60).clamp(1, 1440);
   }
 
   Future<void> setDayEndMinutes(int value) async {
     final v = value.clamp(1, 1440);
     await set(dayEndMinutesKey, v.toString());
-    await set(
-      dayEndHourKey,
-      ((v / 60).ceil().clamp(1, 24)).toString(),
-    );
+    await set(dayEndHourKey, ((v / 60).ceil().clamp(1, 24)).toString());
   }
 
   static const activeYearKey = 'active_year_id';
@@ -1225,18 +1214,18 @@ class SettingsRepository {
       set(dataLastConflictsKey, value.toString());
 
   static const menuLocationKey = 'menu_location';
+
   /// Dining-hall location id for the menu page. Defaults to '1'.
   /// Validated against the provider's locations by the caller.
-  Future<String> menuLocation() async =>
-      (await get(menuLocationKey)) ?? '1';
+  Future<String> menuLocation() async => (await get(menuLocationKey)) ?? '1';
 
   Future<void> setMenuLocation(String value) => set(menuLocationKey, value);
 
   static const menuProviderKey = 'menu_provider';
+
   /// Dining-menu source id, or '' for none. Menu page stays empty until
   /// the user picks a source. Defaults to ''.
-  Future<String> menuProviderId() async =>
-      (await get(menuProviderKey)) ?? '';
+  Future<String> menuProviderId() async => (await get(menuProviderKey)) ?? '';
 
   Future<void> setMenuProviderId(String value) => set(menuProviderKey, value);
 
@@ -1270,9 +1259,7 @@ class MenuCacheRepository {
     if (row == null) return null;
     try {
       final day = MenuDay.fromJson(
-        Map<String, dynamic>.from(
-          jsonDecode(row.payload) as Map,
-        ),
+        Map<String, dynamic>.from(jsonDecode(row.payload) as Map),
       );
       return (day: day, fetchedAt: row.fetchedAt);
     } catch (_) {
@@ -1332,26 +1319,27 @@ class YearFileRepository {
         entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
       );
 
-  Future<int> delete(int id) async {
-    final row =
-        await (db.select(
-          db.yearFiles,
-        )..where((t) => t.id.equals(id))).getSingleOrNull();
-    if (row != null) {
-      await recordTombstone(db, SyncTables.yearFiles, row.uuid);
-    }
-    final count = await (db.delete(
-      db.yearFiles,
-    )..where((t) => t.id.equals(id))).go();
-    if (row != null) {
-      try {
-        final file = File(await resolveAttachmentPath(row.storedPath));
-        if (await file.exists()) await file.delete();
-      } catch (_) {
-        // Best-effort: DB row is already gone.
+  Future<int> delete(int id) {
+    return db.transaction(() async {
+      final row = await (db.select(
+        db.yearFiles,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (row != null) {
+        await recordTombstone(db, SyncTables.yearFiles, row.uuid);
       }
-    }
-    return count;
+      final count = await (db.delete(
+        db.yearFiles,
+      )..where((t) => t.id.equals(id))).go();
+      if (row != null) {
+        try {
+          final file = File(await resolveAttachmentPath(row.storedPath));
+          if (await file.exists()) await file.delete();
+        } catch (_) {
+          // Best-effort: DB row is already gone.
+        }
+      }
+      return count;
+    });
   }
 }
 
@@ -1380,25 +1368,26 @@ class ClassFileRepository {
         entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
       );
 
-  Future<int> delete(int id) async {
-    final row =
-        await (db.select(
-          db.classFiles,
-        )..where((t) => t.id.equals(id))).getSingleOrNull();
-    if (row != null) {
-      await recordTombstone(db, SyncTables.classFiles, row.uuid);
-    }
-    final count = await (db.delete(
-      db.classFiles,
-    )..where((t) => t.id.equals(id))).go();
-    if (row != null) {
-      try {
-        final file = File(await resolveAttachmentPath(row.storedPath));
-        if (await file.exists()) await file.delete();
-      } catch (_) {
-        // Best-effort: DB row is already gone.
+  Future<int> delete(int id) {
+    return db.transaction(() async {
+      final row = await (db.select(
+        db.classFiles,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (row != null) {
+        await recordTombstone(db, SyncTables.classFiles, row.uuid);
       }
-    }
-    return count;
+      final count = await (db.delete(
+        db.classFiles,
+      )..where((t) => t.id.equals(id))).go();
+      if (row != null) {
+        try {
+          final file = File(await resolveAttachmentPath(row.storedPath));
+          if (await file.exists()) await file.delete();
+        } catch (_) {
+          // Best-effort: DB row is already gone.
+        }
+      }
+      return count;
+    });
   }
 }

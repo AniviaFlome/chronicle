@@ -44,6 +44,7 @@
   "menuSourceTitle": "Dining menu",
   "menuSourceLabel": "Menu source",
   "menuSourceNone": "None",
+  "menuSourceItuName": "Itu",
   "allergensTitle": "Allergens",
   "classFallback": "Class",
   "absentBadge": "Absent",
@@ -143,7 +144,6 @@
       "date": {}
     }
   },
-  "dayStreak": "day streak",
   "doneThisWeek": "done this week",
   "focusedThisWeek": "focused this week",
   "classesTitle": "Classes",
@@ -428,6 +428,7 @@
   "focusWorkLabel": "Work length",
   "focusBreakLabel": "Break length",
   "customMinutesLabel": "Custom minutes",
+  "customChipLabel": "Custom",
   "minutesShort": "{n} min",
   "@minutesShort": {
     "placeholders": {
@@ -476,6 +477,7 @@
   },
   "markAbsent": "Mark absent",
   "editClass": "Edit class",
+  "quickEditTitle": "Quick edit",
   "couldNotMarkAbsent": "Could not mark absent: {error}",
   "@couldNotMarkAbsent": {
     "placeholders": {
@@ -644,6 +646,17 @@
   },
   "autoEndTitle": "Auto-set end time",
   "autoEndHint": "Changing a start time sets end = start + default duration",
+  "slotPresetsTitle": "Slot start presets",
+  "slotPresetsPreview": "Chips in the slot editor: {times}",
+  "@slotPresetsPreview": {
+    "placeholders": {
+      "times": {}
+    }
+  },
+  "slotPresetsEditHint": "Comma-separated times, e.g. 08:00, 09:30",
+  "slotPresetsInvalid": "Use HH:MM times separated by commas",
+  "slotStartPresets": "Start at",
+  "resetDefaults": "Reset to defaults",
   "reminderOffHint": "Off — no reminder before classes",
   "remindsBeforeHint": "Reminds {minutes} min before each class",
   "@remindsBeforeHint": {

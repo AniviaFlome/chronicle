@@ -289,7 +289,7 @@ class Grades extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
 }
 
-/// Completed focus sessions for streaks and statistics.
+/// Completed focus sessions for statistics.
 class PomodoroSessions extends Table {
   IntColumn get id => integer().autoIncrement()();
   DateTimeColumn get startedAt => dateTime()();

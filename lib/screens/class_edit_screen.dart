@@ -311,6 +311,8 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pickerColors = _pickerColors();
+    final isCustomColor = !pickerColors.contains(_color);
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.existing == null ? context.l10n.addClass : context.l10n.editClass),
@@ -343,7 +345,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final value in _pickerColors())
+                for (final value in pickerColors)
                   InkWell(
                     onTap: () => setState(() => _color = value),
                     borderRadius: BorderRadius.circular(16),
@@ -382,22 +384,19 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
                       height: 32,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color:
-                            !_pickerColors().contains(_color)
+                        color: isCustomColor
                                 ? Color(_color)
                                 : Theme.of(
                                   context,
                                 ).colorScheme.surfaceContainerHighest,
                         border: Border.all(
-                          color:
-                              !_pickerColors().contains(_color)
+                          color: isCustomColor
                                   ? Theme.of(context).colorScheme.onSurface
                                   : Colors.transparent,
                           width: 2,
                         ),
                       ),
-                      child:
-                          _pickerColors().contains(_color)
+                      child: !isCustomColor
                               ? Icon(
                                 Icons.add,
                                 size: 18,
@@ -619,7 +618,6 @@ class _ScheduleSection extends ConsumerWidget {
     } catch (e) {
       logLoadFailure('Rotation options, continuing without', e);
     }
-    if (!context.mounted) return;
     if (!context.mounted) return;
     final draft = await showDialog<SlotDraft>(
       context: context,

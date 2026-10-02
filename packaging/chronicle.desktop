@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Name=Chronicle
+GenericName=Student planner
+Comment=Classes, tasks, exams, absences and focus timer for students
+Exec=chronicle
+Icon=com.chronicleapp.chronicle
+StartupWMClass=chronicle
+Terminal=false
+Type=Application
+Categories=Education;Office;Calendar;

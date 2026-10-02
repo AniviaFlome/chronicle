@@ -43,19 +43,3 @@ int daysUntil(String isoDue, DateTime today) {
   final b = DateTime(due.year, due.month, due.day);
   return daysBetween(a, b);
 }
-
-/// Current streak: consecutive active days ending today or yesterday.
-/// [activeDays] are local-midnight dates with any completion or session.
-int currentStreak(Set<DateTime> activeDays, DateTime today) {
-  var cursor = DateTime(today.year, today.month, today.day);
-  if (!activeDays.contains(cursor)) {
-    cursor = shiftDays(cursor, -1);
-    if (!activeDays.contains(cursor)) return 0;
-  }
-  var streak = 0;
-  while (activeDays.contains(cursor)) {
-    streak++;
-    cursor = shiftDays(cursor, -1);
-  }
-  return streak;
-}

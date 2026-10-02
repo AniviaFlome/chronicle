@@ -111,6 +111,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuSourceNone => 'None';
 
   @override
+  String get menuSourceItuName => 'Itu';
+
+  @override
   String get allergensTitle => 'Allergens';
 
   @override
@@ -257,9 +260,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String dueOn(Object date) {
     return 'Due $date';
   }
-
-  @override
-  String get dayStreak => 'day streak';
 
   @override
   String get doneThisWeek => 'done this week';
@@ -728,6 +728,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get customMinutesLabel => 'Custom minutes';
 
   @override
+  String get customChipLabel => 'Custom';
+
+  @override
   String minutesShort(Object n) {
     return '$n min';
   }
@@ -805,6 +808,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editClass => 'Edit class';
+
+  @override
+  String get quickEditTitle => 'Quick edit';
 
   @override
   String couldNotMarkAbsent(Object error) {
@@ -1127,6 +1133,26 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get autoEndHint =>
       'Changing a start time sets end = start + default duration';
+
+  @override
+  String get slotPresetsTitle => 'Slot start presets';
+
+  @override
+  String slotPresetsPreview(Object times) {
+    return 'Chips in the slot editor: $times';
+  }
+
+  @override
+  String get slotPresetsEditHint => 'Comma-separated times, e.g. 08:00, 09:30';
+
+  @override
+  String get slotPresetsInvalid => 'Use HH:MM times separated by commas';
+
+  @override
+  String get slotStartPresets => 'Start at';
+
+  @override
+  String get resetDefaults => 'Reset to defaults';
 
   @override
   String get reminderOffHint => 'Off — no reminder before classes';

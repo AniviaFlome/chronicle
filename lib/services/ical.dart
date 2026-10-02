@@ -2,6 +2,8 @@
 /// Dates are floating local times, matching app storage.
 library;
 
+import '../utils/time_format.dart';
+
 /// One calendar event for export, or one parsed instance from import.
 class IcsEvent {
   final String title;
@@ -222,7 +224,8 @@ List<IcsEvent> _expandEvent(Map<String, String> props) {
       .where((d) => d >= 1)
       .toSet();
 
-  final horizon = start.add(const Duration(days: 730));
+  // Wall-clock horizon: Duration addition drifts across DST transitions.
+  final horizon = shiftDays(start, 730);
   final out = <IcsEvent>[];
   var cursor = DateTime(start.year, start.month, start.day);
   var produced = 0;
@@ -249,7 +252,8 @@ List<IcsEvent> _expandEvent(Map<String, String> props) {
       produced++;
       if (count != null && produced >= count) break;
     }
-    cursor = cursor.add(const Duration(days: 1));
+    // Wall-clock step: Duration addition drifts across DST transitions.
+    cursor = shiftDays(cursor, 1);
   }
   return out;
 }

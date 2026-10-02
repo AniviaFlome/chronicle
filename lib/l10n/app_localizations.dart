@@ -296,6 +296,12 @@ abstract class AppLocalizations {
   /// **'None'**
   String get menuSourceNone;
 
+  /// No description provided for @menuSourceItuName.
+  ///
+  /// In en, this message translates to:
+  /// **'Itu'**
+  String get menuSourceItuName;
+
   /// No description provided for @allergensTitle.
   ///
   /// In en, this message translates to:
@@ -547,12 +553,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Due {date}'**
   String dueOn(Object date);
-
-  /// No description provided for @dayStreak.
-  ///
-  /// In en, this message translates to:
-  /// **'day streak'**
-  String get dayStreak;
 
   /// No description provided for @doneThisWeek.
   ///
@@ -1298,6 +1298,12 @@ abstract class AppLocalizations {
   /// **'Custom minutes'**
   String get customMinutesLabel;
 
+  /// No description provided for @customChipLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get customChipLabel;
+
   /// No description provided for @minutesShort.
   ///
   /// In en, this message translates to:
@@ -1435,6 +1441,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Edit class'**
   String get editClass;
+
+  /// No description provided for @quickEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick edit'**
+  String get quickEditTitle;
 
   /// No description provided for @couldNotMarkAbsent.
   ///
@@ -2017,6 +2029,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Changing a start time sets end = start + default duration'**
   String get autoEndHint;
+
+  /// No description provided for @slotPresetsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Slot start presets'**
+  String get slotPresetsTitle;
+
+  /// No description provided for @slotPresetsPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Chips in the slot editor: {times}'**
+  String slotPresetsPreview(Object times);
+
+  /// No description provided for @slotPresetsEditHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated times, e.g. 08:00, 09:30'**
+  String get slotPresetsEditHint;
+
+  /// No description provided for @slotPresetsInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Use HH:MM times separated by commas'**
+  String get slotPresetsInvalid;
+
+  /// No description provided for @slotStartPresets.
+  ///
+  /// In en, this message translates to:
+  /// **'Start at'**
+  String get slotStartPresets;
+
+  /// No description provided for @resetDefaults.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to defaults'**
+  String get resetDefaults;
 
   /// No description provided for @reminderOffHint.
   ///

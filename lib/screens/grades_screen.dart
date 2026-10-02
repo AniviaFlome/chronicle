@@ -106,7 +106,12 @@ class GradesScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              for (final g in list) _GradeTile(item: g),
+              for (final g in list)
+                _GradeTile(
+                  item: g,
+                  onDelete: () =>
+                      ref.read(gradeRepositoryProvider).delete(g.grade.id),
+                ),
             ],
           );
         },
@@ -124,11 +129,12 @@ class _ClassAverageRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final classRow = items.first.classRow;
-    final avg =
-        items
-            .map((g) => gradePercent(g.grade.score, g.grade.maxScore))
-            .reduce((a, b) => a + b) /
-        items.length;
+    final avg = items.isEmpty
+        ? 0.0
+        : items
+                .map((g) => gradePercent(g.grade.score, g.grade.maxScore))
+                .reduce((a, b) => a + b) /
+            items.length;
     final color = classAccentColor(
       theme.colorScheme,
       classRow == null
@@ -168,13 +174,14 @@ class _ClassAverageRow extends StatelessWidget {
   }
 }
 
-class _GradeTile extends ConsumerWidget {
+class _GradeTile extends StatelessWidget {
   final GradeWithExam item;
+  final VoidCallback onDelete;
 
-  const _GradeTile({required this.item});
+  const _GradeTile({required this.item, required this.onDelete});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final percent = gradePercent(item.grade.score, item.grade.maxScore);
 
@@ -203,8 +210,7 @@ class _GradeTile extends ConsumerWidget {
             IconButton(
               tooltip: context.l10n.deleteGradeTooltip,
               icon: const Icon(Icons.delete_outline),
-              onPressed: () =>
-                  ref.read(gradeRepositoryProvider).delete(item.grade.id),
+              onPressed: onDelete,
             ),
           ],
         ),

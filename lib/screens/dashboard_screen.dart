@@ -21,7 +21,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(const Duration(days: 1));
+    final tomorrow = shiftDays(today, 1);
     final theme = Theme.of(context);
 
     final todayOcc = ref.watch(occurrencesProvider((today, today)));
@@ -106,7 +106,7 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   List<TaskWithDetails> _upcoming(List<TaskWithDetails> all, DateTime today) {
-    final limit = isoFromDateTime(today.add(const Duration(days: 7)));
+    final limit = isoFromDateTime(shiftDays(today, 7));
     final items = all
         .where(
           (t) =>
@@ -300,13 +300,6 @@ class _StatsCard extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            Expanded(
-              child: _Stat(
-                icon: Icons.local_fire_department_outlined,
-                value: '${stats.streakDays}',
-                label: context.l10n.dayStreak,
-              ),
-            ),
             Expanded(
               child: _Stat(
                 icon: Icons.check_circle_outline,

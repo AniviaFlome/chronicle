@@ -125,20 +125,23 @@ class DataFolderService {
       }
     }
 
-    await fix(db.academicYears, 'academic_years');
-    await fix(db.classes, 'classes');
-    await fix(db.scheduleItems, 'schedule_items');
-    await fix(db.scheduleExceptions, 'schedule_exceptions');
-    await fix(db.holidays, 'holidays');
-    await fix(db.absences, 'absences');
-    await fix(db.tasks, 'tasks');
-    await fix(db.subtasks, 'subtasks');
-    await fix(db.taskReminders, 'task_reminders');
-    await fix(db.grades, 'grades');
-    await fix(db.pomodoroSessions, 'pomodoro_sessions');
-    await fix(db.xtraEvents, 'xtra_events');
-    await fix(db.classFiles, 'class_files');
-    await fix(db.yearFiles, 'year_files');
+    // Legacy rows are independent per table, so fix them concurrently.
+    await Future.wait([
+      fix(db.academicYears, 'academic_years'),
+      fix(db.classes, 'classes'),
+      fix(db.scheduleItems, 'schedule_items'),
+      fix(db.scheduleExceptions, 'schedule_exceptions'),
+      fix(db.holidays, 'holidays'),
+      fix(db.absences, 'absences'),
+      fix(db.tasks, 'tasks'),
+      fix(db.subtasks, 'subtasks'),
+      fix(db.taskReminders, 'task_reminders'),
+      fix(db.grades, 'grades'),
+      fix(db.pomodoroSessions, 'pomodoro_sessions'),
+      fix(db.xtraEvents, 'xtra_events'),
+      fix(db.classFiles, 'class_files'),
+      fix(db.yearFiles, 'year_files'),
+    ]);
   }
 
   Future<List<Map<String, dynamic>>> _rows(
@@ -166,23 +169,43 @@ class DataFolderService {
     try {
       await ensureSyncIdentity();
       if (!await dir.exists()) await dir.create(recursive: true);
+      // One batch: all table scans plus tombstones run concurrently
+      // instead of 15 sequential round-trips (drift serializes them safely).
+      final scansFuture = Future.wait([
+        _rows(db.select(db.academicYears)),
+        _rows(db.select(db.classes)),
+        _rows(db.select(db.scheduleItems)),
+        _rows(db.select(db.scheduleExceptions)),
+        _rows(db.select(db.holidays)),
+        _rows(db.select(db.absences)),
+        _rows(db.select(db.tasks)),
+        _rows(db.select(db.subtasks)),
+        _rows(db.select(db.taskReminders)),
+        _rows(db.select(db.grades)),
+        _rows(db.select(db.pomodoroSessions)),
+        _rows(db.select(db.xtraEvents)),
+        _rows(db.select(db.classFiles)),
+        _rows(db.select(db.yearFiles)),
+      ]);
+      final tombstonesFuture = db.select(db.syncTombstones).get();
+      final scans = await scansFuture;
+      final tombstones = await tombstonesFuture;
       final tables = <String, List<Map<String, dynamic>>>{
-        'academicYears': await _rows(db.select(db.academicYears)),
-        'classes': await _rows(db.select(db.classes)),
-        'scheduleItems': await _rows(db.select(db.scheduleItems)),
-        'scheduleExceptions': await _rows(db.select(db.scheduleExceptions)),
-        'holidays': await _rows(db.select(db.holidays)),
-        'absences': await _rows(db.select(db.absences)),
-        'tasks': await _rows(db.select(db.tasks)),
-        'subtasks': await _rows(db.select(db.subtasks)),
-        'taskReminders': await _rows(db.select(db.taskReminders)),
-        'grades': await _rows(db.select(db.grades)),
-        'pomodoroSessions': await _rows(db.select(db.pomodoroSessions)),
-        'xtraEvents': await _rows(db.select(db.xtraEvents)),
-        'classFiles': await _rows(db.select(db.classFiles)),
-        'yearFiles': await _rows(db.select(db.yearFiles)),
+        'academicYears': scans[0],
+        'classes': scans[1],
+        'scheduleItems': scans[2],
+        'scheduleExceptions': scans[3],
+        'holidays': scans[4],
+        'absences': scans[5],
+        'tasks': scans[6],
+        'subtasks': scans[7],
+        'taskReminders': scans[8],
+        'grades': scans[9],
+        'pomodoroSessions': scans[10],
+        'xtraEvents': scans[11],
+        'classFiles': scans[12],
+        'yearFiles': scans[13],
       };
-      final tombstones = await db.select(db.syncTombstones).get();
       // Exported metadata must not leak absolute device paths: store the
       // path relative to app storage (import ignores it anyway and copies
       // bytes locally). Legacy absolute rows keep working via the resolver.
@@ -218,10 +241,17 @@ class DataFolderService {
         ];
       }
 
+      // Capture blob sources before relativization rewrites storedPath:
+      // the exporter needs local absolute paths to copy bytes from.
+      final classBlobRows = _blobRefs(tables['classFiles']!);
+      final yearBlobRows = _blobRefs(tables['yearFiles']!);
       tables['classFiles'] = relativized(tables['classFiles']!);
       tables['yearFiles'] = relativized(tables['yearFiles']!);
       var files = 0;
       var rows = 0;
+      for (final entry in tables.entries) {
+        rows += entry.value.length;
+      }
       Future<void> writeJson(String name, Object value) async {
         final target = File('${dir.path}/$name');
         final tmp = File('${target.path}.tmp');
@@ -230,23 +260,19 @@ class DataFolderService {
         files++;
       }
 
-      for (final entry in tables.entries) {
-        await writeJson(tableFiles[entry.key]!, entry.value);
-        rows += entry.value.length;
-      }
+      // Table files write concurrently (blob sources were captured above,
+      // before path relativization, instead of re-selecting file tables).
+      await Future.wait([
+        for (final entry in tables.entries)
+          writeJson(tableFiles[entry.key]!, entry.value),
+      ]);
       final referencedBlobs = <String>{};
-      referencedBlobs.addAll(
-        await _exportBlobs(dir, [
-          for (final r in await db.select(db.classFiles).get())
-            (uuid: r.uuid, fileName: r.fileName, storedPath: r.storedPath),
-        ]),
-      );
-      referencedBlobs.addAll(
-        await _exportBlobs(dir, [
-          for (final r in await db.select(db.yearFiles).get())
-            (uuid: r.uuid, fileName: r.fileName, storedPath: r.storedPath),
-        ]),
-      );
+      for (final exported in await Future.wait([
+        _exportBlobs(dir, classBlobRows),
+        _exportBlobs(dir, yearBlobRows),
+      ])) {
+        referencedBlobs.addAll(exported);
+      }
       if (pruneBlobs) {
         await _pruneBlobs(dir, referencedBlobs);
       }
@@ -281,9 +307,24 @@ class DataFolderService {
     }
   }
 
+  /// Blob references from already-scanned file-table rows (local absolute
+  /// paths; call before path relativization for export).
+  List<({String uuid, String fileName, String storedPath})> _blobRefs(
+    List<Map<String, dynamic>> rows,
+  ) => [
+    for (final r in rows)
+      (
+        uuid: r['uuid'] as String? ?? '',
+        fileName: r['fileName'] as String? ?? '',
+        storedPath: r['storedPath'] as String? ?? '',
+      ),
+  ];
+
   /// Copies attachment blobs into `<dir>/files/`, named by stable uuid,
   /// and returns the referenced blob names. Missing local blobs are
-  /// skipped (metadata still syncs).
+  /// skipped (metadata still syncs). A blob whose target already has the
+  /// same size is left alone: attachment bytes are immutable per uuid
+  /// (edits create a new row), so this skips recopying every export.
   Future<Set<String>> _exportBlobs(
     Directory dir,
     List<({String uuid, String fileName, String storedPath})> rows,
@@ -292,11 +333,17 @@ class DataFolderService {
     if (!await blobsDir.exists()) await blobsDir.create(recursive: true);
     final referenced = <String>{};
     for (final r in rows) {
+      if (r.uuid.isEmpty) continue;
       final src = File(r.storedPath);
       if (!await src.exists()) continue;
       final name = blobNameFor(r.uuid, r.fileName);
       referenced.add(name);
-      await src.copy('${blobsDir.path}/$name');
+      final target = File('${blobsDir.path}/$name');
+      if (await target.exists()) {
+        final sizes = await Future.wait([src.length(), target.length()]);
+        if (sizes[0] == sizes[1]) continue;
+      }
+      await src.copy(target.path);
     }
     return referenced;
   }
@@ -449,6 +496,20 @@ class DataFolderService {
       await file.writeAsString(
         jsonEncode({'table': table, 'uuid': uuid, 'local': local, 'incoming': incoming}),
       );
+      // Bound growth: conflicts are rare, but drop files older than 30 days
+      // so the folder can't accumulate them forever.
+      try {
+        final cutoff = DateTime.now().subtract(const Duration(days: 30));
+        await for (final e in out.list()) {
+          if (e is File && e.path.endsWith('.json')) {
+            try {
+              if ((await e.stat()).modified.isBefore(cutoff)) {
+                await e.delete();
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
       return 1;
     } catch (_) {
       return 0;
@@ -526,19 +587,25 @@ class DataFolderService {
         for (final t in await db.select(db.syncTombstones).get())
           (t.tableKey, t.uuid): t.deletedAt,
       };
+      final freshTombs = <(String, String, int)>[];
       for (final tomb in incomingTombs) {
         final known = localTombs[(tomb.table, tomb.uuid)] ?? -1;
         if (tomb.at > known) {
           await recordTombstone(db, tomb.table, tomb.uuid, tomb.at);
           localTombs[(tomb.table, tomb.uuid)] = tomb.at;
+          freshTombs.add((tomb.table, tomb.uuid, tomb.at));
           adopted++;
         }
       }
 
-      // 2. Delete local rows covered by tombstones:
-      // only when the row wasn't modified after the delete.
-      for (final entry in localTombs.entries) {
-        if (await _deleteIfStale(entry.key.$1, entry.key.$2, entry.value)) {
+      // 2. Delete local rows covered by newly-adopted tombstones:
+      // only when the row wasn't modified after the delete. Tombstones
+      // adopted by an earlier import already swept their rows then; rows
+      // kept for being newer can only be removed by a newer tombstone,
+      // which arrives as fresh again. This keeps steady-state imports
+      // (no new deletes) at zero sweep selects.
+      for (final tomb in freshTombs) {
+        if (await _deleteIfStale(tomb.$1, tomb.$2, tomb.$3)) {
           deleted++;
         }
       }
@@ -817,19 +884,44 @@ class DataFolderService {
     final classMap = await localMap(() => db.select(db.classes).get());
     final itemMap = await localMap(() => db.select(db.scheduleItems).get());
     final taskMap = await localMap(() => db.select(db.tasks).get());
+    // Prefetched once so per-row merges below are map lookups instead
+    // of one SELECT per incoming row (steady-state imports are
+    // overwhelmingly already-known rows).
+    final exceptionMap =
+        await localMap(() => db.select(db.scheduleExceptions).get());
+    final holidayMap = await localMap(() => db.select(db.holidays).get());
+    final absenceMap = await localMap(() => db.select(db.absences).get());
+    final subtaskMap = await localMap(() => db.select(db.subtasks).get());
+    final reminderMap =
+        await localMap(() => db.select(db.taskReminders).get());
+    final gradeMap = await localMap(() => db.select(db.grades).get());
+    final pomodoroMap =
+        await localMap(() => db.select(db.pomodoroSessions).get());
+    final xtraMap = await localMap(() => db.select(db.xtraEvents).get());
 
-    int? fileLocalId(
-      List<Map<String, dynamic>> files,
+    final fileYears = listOf('academicYears');
+    final fileClasses = listOf('classes');
+    final fileTasks = listOf('tasks');
+    final fileItems = listOf('scheduleItems');
+
+    /// File row-id → uuid, built once per table so FK remaps below are
+    /// O(1) lookups instead of O(F) scans per incoming row.
+    Map<int, String> fileIdUuids(List<Map<String, dynamic>> files) => {
+          for (final m in files)
+            if (m['id'] is int && m['uuid'] is String)
+              (m['id'] as int): (m['uuid'] as String),
+        };
+    final yearUuids = fileIdUuids(fileYears);
+    final classUuids = fileIdUuids(fileClasses);
+    final taskUuids = fileIdUuids(fileTasks);
+    final itemUuids = fileIdUuids(fileItems);
+
+    int? remapFileId(
+      Map<int, String> uuids,
       Map<String, ({int id, int updatedAt})> local,
       int fileId,
     ) {
-      String? uuid;
-      for (final m in files) {
-        if (m['id'] == fileId) {
-          uuid = m['uuid'] as String?;
-          break;
-        }
-      }
+      final uuid = uuids[fileId];
       if (uuid == null || uuid.isEmpty) return null;
       return local[uuid]?.id;
     }
@@ -864,10 +956,6 @@ class DataFolderService {
       }
     }
 
-    final fileYears = listOf('academicYears');
-    final fileClasses = listOf('classes');
-    final fileTasks = listOf('tasks');
-
     // Classes (year FK).
     for (final m in fileClasses) {
       final row = parseRow(m, ClassesData.fromJson);
@@ -878,7 +966,7 @@ class DataFolderService {
       }
       final yearId = row.yearId == null
           ? null
-          : fileLocalId(fileYears, yearMap, row.yearId!);
+          : remapFileId(yearUuids, yearMap, row.yearId!);
       if (row.yearId != null && yearId == null) continue;
       final local = classMap[row.uuid];
       if (local == null) {
@@ -924,7 +1012,7 @@ class DataFolderService {
       }
       final classId = row.classId == null
           ? null
-          : fileLocalId(fileClasses, classMap, row.classId!);
+          : remapFileId(classUuids, classMap, row.classId!);
       if (row.classId != null && classId == null) continue;
       final local = taskMap[row.uuid];
       if (local == null) {
@@ -971,8 +1059,8 @@ class DataFolderService {
       if (!wonTasks.contains(uuid)) continue;
       final linkedFile = m['linkedExamId'];
       if (linkedFile == null) continue;
-      final linkedLocal = fileLocalId(
-        fileTasks,
+      final linkedLocal = remapFileId(
+        taskUuids,
         taskMap,
         (linkedFile as num).toInt(),
       );
@@ -991,7 +1079,7 @@ class DataFolderService {
           tombstoned('schedule_items', row.uuid, row.updatedAt)) {
         continue;
       }
-      final classId = fileLocalId(fileClasses, classMap, row.classId);
+      final classId = remapFileId(classUuids, classMap, row.classId);
       if (classId == null) continue;
       final local = itemMap[row.uuid];
       if (local == null) {
@@ -1028,8 +1116,6 @@ class DataFolderService {
       }
     }
 
-    final fileItems = listOf('scheduleItems');
-
     // Exceptions (slot FK).
     for (final m in listOf('scheduleExceptions')) {
       final row = parseRow(m, ScheduleException.fromJson);
@@ -1038,15 +1124,11 @@ class DataFolderService {
           tombstoned('schedule_exceptions', row.uuid, row.updatedAt)) {
         continue;
       }
-      final slotId = fileLocalId(fileItems, itemMap, row.scheduleItemId);
+      final slotId = remapFileId(itemUuids, itemMap, row.scheduleItemId);
       if (slotId == null) continue;
-      final existing =
-          await (db.select(db.scheduleExceptions)..where(
-                (t) => t.uuid.equals(row.uuid),
-              ))
-              .getSingleOrNull();
-      if (existing == null) {
-        await db
+      final local = exceptionMap[row.uuid];
+      if (local == null) {
+        final id = await db
             .into(db.scheduleExceptions)
             .insert(
               row.toCompanion(true).copyWith(
@@ -1054,20 +1136,29 @@ class DataFolderService {
                 scheduleItemId: Value(slotId),
               ),
             );
+        exceptionMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
-      } else if (row.updatedAt > existing.updatedAt) {
+      } else if (row.updatedAt > local.updatedAt) {
         await maybeConflict(
           'schedule_exceptions',
           row.uuid,
-          existing.updatedAt,
+          local.updatedAt,
           m,
-          () async => Map<String, dynamic>.from(existing.toJson()),
+          () async {
+            final existing = await (db.select(db.scheduleExceptions)
+                  ..where((t) => t.uuid.equals(row.uuid)))
+                .getSingleOrNull();
+            return existing == null
+                ? null
+                : Map<String, dynamic>.from(existing.toJson());
+          },
         );
         await db
             .update(db.scheduleExceptions)
             .replace(
-              row.copyWith(id: existing.id, scheduleItemId: slotId),
+              row.copyWith(id: local.id, scheduleItemId: slotId),
             );
+        exceptionMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
       }
     }
@@ -1080,19 +1171,25 @@ class DataFolderService {
           tombstoned('holidays', row.uuid, row.updatedAt)) {
         continue;
       }
-      final existing =
-          await (db.select(
-            db.holidays,
-          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
-      if (existing == null) {
-        await db
+      final local = holidayMap[row.uuid];
+      if (local == null) {
+        final id = await db
             .into(db.holidays)
             .insert(row.toCompanion(true).copyWith(id: const Value.absent()));
+        holidayMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
-      } else if (row.updatedAt > existing.updatedAt) {
-        await maybeConflict('holidays', row.uuid, existing.updatedAt, m,
-            () async => Map<String, dynamic>.from(existing.toJson()));
-        await db.update(db.holidays).replace(row.copyWith(id: existing.id));
+      } else if (row.updatedAt > local.updatedAt) {
+        await maybeConflict('holidays', row.uuid, local.updatedAt, m,
+            () async {
+          final existing = await (db.select(
+            db.holidays,
+          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
+          return existing == null
+              ? null
+              : Map<String, dynamic>.from(existing.toJson());
+        });
+        await db.update(db.holidays).replace(row.copyWith(id: local.id));
+        holidayMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
       }
     }
@@ -1105,14 +1202,11 @@ class DataFolderService {
           tombstoned('absences', row.uuid, row.updatedAt)) {
         continue;
       }
-      final classId = fileLocalId(fileClasses, classMap, row.classId);
+      final classId = remapFileId(classUuids, classMap, row.classId);
       if (classId == null) continue;
-      final existing =
-          await (db.select(
-            db.absences,
-          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
-      if (existing == null) {
-        await db
+      final local = absenceMap[row.uuid];
+      if (local == null) {
+        final id = await db
             .into(db.absences)
             .insert(
               row.toCompanion(true).copyWith(
@@ -1120,13 +1214,22 @@ class DataFolderService {
                 classId: Value(classId),
               ),
             );
+        absenceMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
-      } else if (row.updatedAt > existing.updatedAt) {
-        await maybeConflict('absences', row.uuid, existing.updatedAt, m,
-            () async => Map<String, dynamic>.from(existing.toJson()));
+      } else if (row.updatedAt > local.updatedAt) {
+        await maybeConflict('absences', row.uuid, local.updatedAt, m,
+            () async {
+          final existing = await (db.select(
+            db.absences,
+          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
+          return existing == null
+              ? null
+              : Map<String, dynamic>.from(existing.toJson());
+        });
         await db
             .update(db.absences)
-            .replace(row.copyWith(id: existing.id, classId: classId));
+            .replace(row.copyWith(id: local.id, classId: classId));
+        absenceMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
       }
     }
@@ -1139,14 +1242,11 @@ class DataFolderService {
           tombstoned('subtasks', row.uuid, row.updatedAt)) {
         continue;
       }
-      final taskId = fileLocalId(fileTasks, taskMap, row.taskId);
+      final taskId = remapFileId(taskUuids, taskMap, row.taskId);
       if (taskId == null) continue;
-      final existing =
-          await (db.select(
-            db.subtasks,
-          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
-      if (existing == null) {
-        await db
+      final local = subtaskMap[row.uuid];
+      if (local == null) {
+        final id = await db
             .into(db.subtasks)
             .insert(
               row.toCompanion(true).copyWith(
@@ -1154,13 +1254,22 @@ class DataFolderService {
                 taskId: Value(taskId),
               ),
             );
+        subtaskMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
-      } else if (row.updatedAt > existing.updatedAt) {
-        await maybeConflict('subtasks', row.uuid, existing.updatedAt, m,
-            () async => Map<String, dynamic>.from(existing.toJson()));
+      } else if (row.updatedAt > local.updatedAt) {
+        await maybeConflict('subtasks', row.uuid, local.updatedAt, m,
+            () async {
+          final existing = await (db.select(
+            db.subtasks,
+          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
+          return existing == null
+              ? null
+              : Map<String, dynamic>.from(existing.toJson());
+        });
         await db
             .update(db.subtasks)
-            .replace(row.copyWith(id: existing.id, taskId: taskId));
+            .replace(row.copyWith(id: local.id, taskId: taskId));
+        subtaskMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
       }
     }
@@ -1171,14 +1280,11 @@ class DataFolderService {
           tombstoned('task_reminders', row.uuid, row.updatedAt)) {
         continue;
       }
-      final taskId = fileLocalId(fileTasks, taskMap, row.taskId);
+      final taskId = remapFileId(taskUuids, taskMap, row.taskId);
       if (taskId == null) continue;
-      final existing =
-          await (db.select(
-            db.taskReminders,
-          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
-      if (existing == null) {
-        await db
+      final local = reminderMap[row.uuid];
+      if (local == null) {
+        final id = await db
             .into(db.taskReminders)
             .insert(
               row.toCompanion(true).copyWith(
@@ -1186,13 +1292,22 @@ class DataFolderService {
                 taskId: Value(taskId),
               ),
             );
+        reminderMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
-      } else if (row.updatedAt > existing.updatedAt) {
-        await maybeConflict('task_reminders', row.uuid, existing.updatedAt, m,
-            () async => Map<String, dynamic>.from(existing.toJson()));
+      } else if (row.updatedAt > local.updatedAt) {
+        await maybeConflict(
+            'task_reminders', row.uuid, local.updatedAt, m, () async {
+          final existing = await (db.select(
+            db.taskReminders,
+          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
+          return existing == null
+              ? null
+              : Map<String, dynamic>.from(existing.toJson());
+        });
         await db
             .update(db.taskReminders)
-            .replace(row.copyWith(id: existing.id, taskId: taskId));
+            .replace(row.copyWith(id: local.id, taskId: taskId));
+        reminderMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
       }
     }
@@ -1202,14 +1317,11 @@ class DataFolderService {
       if (row.uuid.isEmpty || tombstoned('grades', row.uuid, row.updatedAt)) {
         continue;
       }
-      final examId = fileLocalId(fileTasks, taskMap, row.examTaskId);
+      final examId = remapFileId(taskUuids, taskMap, row.examTaskId);
       if (examId == null) continue;
-      final existing =
-          await (db.select(
-            db.grades,
-          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
-      if (existing == null) {
-        await db
+      final local = gradeMap[row.uuid];
+      if (local == null) {
+        final id = await db
             .into(db.grades)
             .insert(
               row.toCompanion(true).copyWith(
@@ -1217,13 +1329,22 @@ class DataFolderService {
                 examTaskId: Value(examId),
               ),
             );
+        gradeMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
-      } else if (row.updatedAt > existing.updatedAt) {
-        await maybeConflict('grades', row.uuid, existing.updatedAt, m,
-            () async => Map<String, dynamic>.from(existing.toJson()));
+      } else if (row.updatedAt > local.updatedAt) {
+        await maybeConflict('grades', row.uuid, local.updatedAt, m,
+            () async {
+          final existing = await (db.select(
+            db.grades,
+          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
+          return existing == null
+              ? null
+              : Map<String, dynamic>.from(existing.toJson());
+        });
         await db
             .update(db.grades)
-            .replace(row.copyWith(id: existing.id, examTaskId: examId));
+            .replace(row.copyWith(id: local.id, examTaskId: examId));
+        gradeMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
       }
     }
@@ -1238,14 +1359,11 @@ class DataFolderService {
       }
       final taskId = row.taskId == null
           ? null
-          : fileLocalId(fileTasks, taskMap, row.taskId!);
+          : remapFileId(taskUuids, taskMap, row.taskId!);
       if (row.taskId != null && taskId == null) continue;
-      final existing =
-          await (db.select(
-            db.pomodoroSessions,
-          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
-      if (existing == null) {
-        await db
+      final local = pomodoroMap[row.uuid];
+      if (local == null) {
+        final id = await db
             .into(db.pomodoroSessions)
             .insert(
               row.toCompanion(true).copyWith(
@@ -1253,23 +1371,32 @@ class DataFolderService {
                 taskId: taskId == null ? const Value(null) : Value(taskId),
               ),
             );
+        pomodoroMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
-      } else if (row.updatedAt > existing.updatedAt) {
+      } else if (row.updatedAt > local.updatedAt) {
         await maybeConflict(
           'pomodoro_sessions',
           row.uuid,
-          existing.updatedAt,
+          local.updatedAt,
           m,
-          () async => Map<String, dynamic>.from(existing.toJson()),
+          () async {
+            final existing = await (db.select(
+              db.pomodoroSessions,
+            )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
+            return existing == null
+                ? null
+                : Map<String, dynamic>.from(existing.toJson());
+          },
         );
         await db
             .update(db.pomodoroSessions)
             .replace(
               row.copyWith(
-                id: existing.id,
+                id: local.id,
                 taskId: taskId == null ? const Value(null) : Value(taskId),
               ),
             );
+        pomodoroMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
       }
     }
@@ -1282,19 +1409,25 @@ class DataFolderService {
           tombstoned('xtra_events', row.uuid, row.updatedAt)) {
         continue;
       }
-      final existing =
-          await (db.select(
-            db.xtraEvents,
-          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
-      if (existing == null) {
-        await db
+      final local = xtraMap[row.uuid];
+      if (local == null) {
+        final id = await db
             .into(db.xtraEvents)
             .insert(row.toCompanion(true).copyWith(id: const Value.absent()));
+        xtraMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
-      } else if (row.updatedAt > existing.updatedAt) {
-        await maybeConflict('xtra_events', row.uuid, existing.updatedAt, m,
-            () async => Map<String, dynamic>.from(existing.toJson()));
-        await db.update(db.xtraEvents).replace(row.copyWith(id: existing.id));
+      } else if (row.updatedAt > local.updatedAt) {
+        await maybeConflict('xtra_events', row.uuid, local.updatedAt, m,
+            () async {
+          final existing = await (db.select(
+            db.xtraEvents,
+          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
+          return existing == null
+              ? null
+              : Map<String, dynamic>.from(existing.toJson());
+        });
+        await db.update(db.xtraEvents).replace(row.copyWith(id: local.id));
+        xtraMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
       }
     }
@@ -1303,7 +1436,7 @@ class DataFolderService {
     final classFilesMerged = await _mergeFileRows(
       dir: dir,
       fileMaps: listOf('classFiles'),
-      parentFiles: fileClasses,
+      parentUuids: classUuids,
       parentMap: classMap,
       tombTable: 'class_files',
       isTombstoned: tombstoned,
@@ -1337,7 +1470,7 @@ class DataFolderService {
     final yearFilesMerged = await _mergeFileRows(
       dir: dir,
       fileMaps: listOf('yearFiles'),
-      parentFiles: fileYears,
+      parentUuids: yearUuids,
       parentMap: yearMap,
       tombTable: 'year_files',
       isTombstoned: tombstoned,
@@ -1380,7 +1513,7 @@ class DataFolderService {
   Future<({int count, int conflicts, int skipped})> _mergeFileRows({
     required Directory dir,
     required List<Map<String, dynamic>> fileMaps,
-    required List<Map<String, dynamic>> parentFiles,
+    required Map<int, String> parentUuids,
     required Map<String, ({int id, int updatedAt})> parentMap,
     required String tombTable,
     required bool Function(String table, String uuid, int updatedAt)
@@ -1399,15 +1532,9 @@ class DataFolderService {
     required int Function(dynamic row) parentIdOf,
     required String scope,
   }) async {
-    // Local helper mirroring _mergeRows' file-id → local-id remap.
+    // File row-id → local-id via the prebuilt uuid map (O(1) per row).
     int? resolveParent(int fileId) {
-      String? uuid;
-      for (final m in parentFiles) {
-        if (m['id'] == fileId) {
-          uuid = m['uuid'] as String?;
-          break;
-        }
-      }
+      final uuid = parentUuids[fileId];
       if (uuid == null || uuid.isEmpty) return null;
       return parentMap[uuid]?.id;
     }

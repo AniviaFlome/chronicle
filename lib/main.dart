@@ -70,6 +70,12 @@ class StartupRunnerState extends ConsumerState<StartupRunner> {
     }
     if (!mounted) return;
     try {
+      await warmCalendarWeek(ProviderScope.containerOf(context));
+    } catch (e) {
+      logLoadFailure('Startup calendar warm', e);
+    }
+    if (!mounted) return;
+    try {
       await ref.read(folderSyncControllerProvider).start();
     } catch (e) {
       logLoadFailure('Startup folder sync', e);

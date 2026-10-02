@@ -1,11 +1,14 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/database.dart';
+import '../data/repositories.dart';
 import '../data/schedule_repository.dart';
 import '../data/tables.dart';
 import '../domain/schedule_models.dart' as engine;
 import '../l10n/l10n.dart';
+import '../providers.dart';
 import '../utils/time_format.dart';
 
 /// In-memory meeting-time data collected by [ScheduleSlotDialog].
@@ -60,7 +63,6 @@ class SlotDraft {
         cycleWeeks: Value(cycleWeeks),
         rotationDays: Value(rotationDays),
       );
-
 }
 
 /// Localized rotation summary for a [SlotDraft] (the model itself carries
@@ -84,7 +86,7 @@ String slotRotationLabel(AppLocalizations l10n, SlotDraft draft) =>
 ///
 /// Returns the collected [SlotDraft] on save, null on cancel. It never
 /// touches the database itself so it works for unsaved classes too.
-class ScheduleSlotDialog extends StatefulWidget {
+class ScheduleSlotDialog extends ConsumerStatefulWidget {
   final SlotDraft? initial;
 
   /// True when editing an existing slot (changes the title only).
@@ -109,10 +111,10 @@ class ScheduleSlotDialog extends StatefulWidget {
   });
 
   @override
-  State<ScheduleSlotDialog> createState() => _ScheduleSlotDialogState();
+  ConsumerState<ScheduleSlotDialog> createState() => _ScheduleSlotDialogState();
 }
 
-class _ScheduleSlotDialogState extends State<ScheduleSlotDialog> {
+class _ScheduleSlotDialogState extends ConsumerState<ScheduleSlotDialog> {
   int _dayOfWeek = 1;
   TimeOfDay _start = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _end = const TimeOfDay(hour: 10, minute: 0);
@@ -190,25 +192,36 @@ class _ScheduleSlotDialogState extends State<ScheduleSlotDialog> {
     });
   }
 
+  /// Applies a start-time preset chip: same auto-end behavior as picking
+  /// the time by hand.
+  void _applyStartPreset(int minutes) {
+    final autoEnd = widget.autoEndMinutes;
+    setState(() {
+      _start = TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60);
+      if (autoEnd != null) {
+        final m = (minutes + autoEnd).clamp(1, 1439);
+        _end = TimeOfDay(hour: m ~/ 60, minute: m % 60);
+      }
+    });
+  }
+
   void _save() {
     final startM = _start.hour * 60 + _start.minute;
     final endM = _end.hour * 60 + _end.minute;
     if (endM <= startM) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.endAfterStart)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(context.l10n.endAfterStart)));
       return;
     }
     if (_rotation == RotationKind.custom && _cycleWeeks.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.selectCycleWeek)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(context.l10n.selectCycleWeek)));
       return;
     }
     if (_rotation == RotationKind.dayRotation && _rotationDays.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.selectRotationDay)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.selectRotationDay)));
       return;
     }
     Navigator.of(context).pop(
@@ -245,13 +258,34 @@ class _ScheduleSlotDialogState extends State<ScheduleSlotDialog> {
                 initialValue: _dayOfWeek,
                 decoration: InputDecoration(labelText: context.l10n.dayLabel),
                 items: [
-                  DropdownMenuItem(value: 1, child: Text(fullWeekdayName(1, context.l10n.localeName))),
-                  DropdownMenuItem(value: 2, child: Text(fullWeekdayName(2, context.l10n.localeName))),
-                  DropdownMenuItem(value: 3, child: Text(fullWeekdayName(3, context.l10n.localeName))),
-                  DropdownMenuItem(value: 4, child: Text(fullWeekdayName(4, context.l10n.localeName))),
-                  DropdownMenuItem(value: 5, child: Text(fullWeekdayName(5, context.l10n.localeName))),
-                  DropdownMenuItem(value: 6, child: Text(fullWeekdayName(6, context.l10n.localeName))),
-                  DropdownMenuItem(value: 7, child: Text(fullWeekdayName(7, context.l10n.localeName))),
+                  DropdownMenuItem(
+                    value: 1,
+                    child: Text(fullWeekdayName(1, context.l10n.localeName)),
+                  ),
+                  DropdownMenuItem(
+                    value: 2,
+                    child: Text(fullWeekdayName(2, context.l10n.localeName)),
+                  ),
+                  DropdownMenuItem(
+                    value: 3,
+                    child: Text(fullWeekdayName(3, context.l10n.localeName)),
+                  ),
+                  DropdownMenuItem(
+                    value: 4,
+                    child: Text(fullWeekdayName(4, context.l10n.localeName)),
+                  ),
+                  DropdownMenuItem(
+                    value: 5,
+                    child: Text(fullWeekdayName(5, context.l10n.localeName)),
+                  ),
+                  DropdownMenuItem(
+                    value: 6,
+                    child: Text(fullWeekdayName(6, context.l10n.localeName)),
+                  ),
+                  DropdownMenuItem(
+                    value: 7,
+                    child: Text(fullWeekdayName(7, context.l10n.localeName)),
+                  ),
                 ],
                 onChanged: (v) => setState(() => _dayOfWeek = v!),
               ),
@@ -276,6 +310,40 @@ class _ScheduleSlotDialogState extends State<ScheduleSlotDialog> {
                 ],
               ),
               const SizedBox(height: 12),
+              // Customizable start-time presets (Settings → Schedule).
+              // The start/end fields stay for any other time.
+              Builder(
+                builder: (context) {
+                  final presets =
+                      ref.watch(slotTimePresetsProvider).value ??
+                      SettingsRepository.defaultSlotTimePresets;
+                  if (presets.isEmpty) return const SizedBox.shrink();
+                  final startM = _start.hour * 60 + _start.minute;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.l10n.slotStartPresets,
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          for (final p in presets)
+                            ChoiceChip(
+                              label: Text(hhmm(p)),
+                              selected: startM == p,
+                              onSelected: (_) => _applyStartPreset(p),
+                            ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _room,
                 decoration: InputDecoration(
@@ -286,7 +354,9 @@ class _ScheduleSlotDialogState extends State<ScheduleSlotDialog> {
               DropdownButtonFormField<RotationKind>(
                 initialValue: _rotation,
                 isExpanded: true,
-                decoration: InputDecoration(labelText: context.l10n.repeatsLabel),
+                decoration: InputDecoration(
+                  labelText: context.l10n.repeatsLabel,
+                ),
                 items: [
                   DropdownMenuItem(
                     value: RotationKind.weekly,
@@ -338,7 +408,10 @@ class _ScheduleSlotDialogState extends State<ScheduleSlotDialog> {
                   ),
                   items: [
                     for (final n in [2, 3, 4])
-                      DropdownMenuItem(value: n, child: Text(context.l10n.weeksCount(n))),
+                      DropdownMenuItem(
+                        value: n,
+                        child: Text(context.l10n.weeksCount(n)),
+                      ),
                   ],
                   onChanged: (v) => setState(() {
                     _cycleLength = v!;

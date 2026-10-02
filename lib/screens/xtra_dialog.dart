@@ -323,7 +323,7 @@ class XtraTile extends StatelessWidget {
               ),
               const Padding(
                 padding: EdgeInsets.only(right: 12),
-                child: Icon(Icons.sports_soccer_outlined),
+                child: Icon(Icons.event_outlined),
               ),
             ],
           ),

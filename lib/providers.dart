@@ -1,10 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/database.dart';
 import 'data/repositories.dart';
 import 'data/schedule_repository.dart';
 import 'data/tables.dart';
-import 'domain/grades.dart';
 import 'domain/schedule_models.dart' as engine;
 import 'domain/schedule_occurrence_engine.dart';
 import 'services/class_files.dart';
@@ -193,12 +193,10 @@ final xtraRangeProvider =
 
 /// Dashboard study statistics derived from completions and focus sessions.
 class StudyStats {
-  final int streakDays;
   final int completedThisWeek;
   final int focusMinutesThisWeek;
 
   const StudyStats({
-    required this.streakDays,
     required this.completedThisWeek,
     required this.focusMinutesThisWeek,
   });
@@ -209,25 +207,21 @@ final statsProvider = Provider<StudyStats>((ref) {
   final sessions = ref.watch(sessionsStreamProvider).value ?? const [];
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
-  final weekAgo = today.subtract(const Duration(days: 7));
+  final weekAgo = shiftDays(today, -7);
 
-  final activeDays = <DateTime>{};
   var completedThisWeek = 0;
   for (final t in tasks) {
     final doneAt = t.task.doneAt;
     if (doneAt == null) continue;
     final day = DateTime(doneAt.year, doneAt.month, doneAt.day);
-    activeDays.add(day);
     if (!day.isBefore(weekAgo)) completedThisWeek++;
   }
   var focusMinutes = 0;
   for (final s in sessions) {
     final day = DateTime(s.startedAt.year, s.startedAt.month, s.startedAt.day);
-    activeDays.add(day);
     if (!day.isBefore(weekAgo)) focusMinutes += s.workMinutes;
   }
   return StudyStats(
-    streakDays: currentStreak(activeDays, today),
     completedThisWeek: completedThisWeek,
     focusMinutesThisWeek: focusMinutes,
   );
@@ -267,19 +261,23 @@ final tasksStreamProvider = StreamProvider((ref) {
 /// Loads the occurrence engine once (re-created on invalidation).
 final engineProvider = FutureProvider<ScheduleOccurrenceEngine>((ref) async {
   final settings = ref.watch(settingsRepositoryProvider);
-  final anchor = await settings.weekABAnchor();
-  final weekStartDay = await settings.weekStartDay();
+  final anchorFuture = settings.weekABAnchor();
+  final weekStartDayFuture = settings.weekStartDay();
+  final anchor = await anchorFuture;
+  final weekStartDay = await weekStartDayFuture;
   final yearId = ref.watch(activeYearIdProvider).value;
   Set<int>? classIds;
   engine.DayRotationConfig? dayRotation;
   if (yearId != null) {
-    final all = await ref.watch(classRepositoryProvider).all();
+    final allFuture = ref.watch(classRepositoryProvider).all();
+    final yearFuture = ref.watch(activeYearProvider.future);
+    final all = await allFuture;
     // Classes without a year stay visible everywhere.
     classIds = {
       for (final c in all)
         if (c.yearId == null || c.yearId == yearId) c.id,
     };
-    final year = await ref.watch(activeYearProvider.future);
+    final year = await yearFuture;
     if (year != null) dayRotation = dayRotationFromYear(year);
   }
   return ref
@@ -302,6 +300,85 @@ final occurrencesProvider =
       final e = await ref.watch(engineProvider.future);
       return e.occurrences(rangeStart: start, rangeEnd: end);
     });
+
+/// The calendar week (start..start+6) containing [today] under
+/// [weekStartDay], using wall-clock shifts so DST transitions can't move
+/// the week. Mirrors `_CalendarScreenState._weekStart`.
+(DateTime, DateTime) calendarWeekRange(DateTime today, int weekStartDay) {
+  final day = DateTime(today.year, today.month, today.day);
+  final start = shiftDays(day, -((day.weekday - weekStartDay) % 7));
+  return (start, shiftDays(start, 6));
+}
+
+/// Pre-resolves every provider the calendar's single gate waits on so the
+/// first calendar paint already holds content — no empty-week flash
+/// followed by a pop-in. Called with the root container before `runApp`
+/// (see `main.dart`) and again post-frame from StartupRunner as backup;
+/// failures are swallowed (the calendar still loads on demand).
+///
+/// Warmed inputs: occurrences, Xtra events and classes for content;
+/// day-range/marker/fixed-grid settings plus week-start for geometry
+/// (fallbacks would reposition blocks); active year, holidays and
+/// absences for rotation labels and badges.
+Future<void> warmCalendarWeek(ProviderContainer container) async {
+  final settings = container.read(settingsRepositoryProvider);
+  final now = DateTime.now();
+  final (start, end) = calendarWeekRange(now, await settings.weekStartDay());
+  final occRange = (start, end);
+  final xtraRange = (isoFromDateTime(start), isoFromDateTime(end));
+  // Hold subscriptions while warming: awaiting `.future` alone does not
+  // retain slow or streaming providers in a listener-less container —
+  // the engine and xtra futures never complete without one (only
+  // widget-held subscriptions ever resolved them).
+  final keepAlive = [
+    container.listen(occurrencesProvider(occRange), (_, _) {}),
+    container.listen(classesByIdProvider, (_, _) {}),
+    container.listen(xtraRangeProvider(xtraRange), (_, _) {}),
+    container.listen(dayRangeProvider, (_, _) {}),
+    container.listen(gridMarkersModeProvider, (_, _) {}),
+    container.listen(fixedGridProvider, (_, _) {}),
+    container.listen(weekStartDayProvider, (_, _) {}),
+    container.listen(activeYearProvider, (_, _) {}),
+    container.listen(holidaysStreamProvider, (_, _) {}),
+    container.listen(allAbsencesStreamProvider, (_, _) {}),
+  ];
+  try {
+    // Independent inputs resolve concurrently: awaiting them one by one
+    // stacks every latency on the critical path.
+    final steps = <String, Future<void> Function()>{
+      'occurrences': () => container.read(occurrencesProvider(occRange).future),
+      'classes': () => container.read(classesByIdProvider.future),
+      'xtra': () => container.read(xtraRangeProvider(xtraRange).future),
+      'dayRange': () => container.read(dayRangeProvider.future),
+      'markers': () => container.read(gridMarkersModeProvider.future),
+      'fixed': () => container.read(fixedGridProvider.future),
+      'weekStartDay': () => container.read(weekStartDayProvider.future),
+      'activeYear': () => container.read(activeYearProvider.future),
+      'holidays': () => container.read(holidaysStreamProvider.future),
+      'absences': () => container.read(allAbsencesStreamProvider.future),
+    };
+    if (kDebugMode) {
+      final total = Stopwatch()..start();
+      await Future.wait(
+        steps.entries.map((e) async {
+          final step = Stopwatch()..start();
+          try {
+            await e.value();
+          } finally {
+            debugPrint('warm ${e.key}: ${step.elapsedMilliseconds}ms');
+          }
+        }),
+      );
+      debugPrint('warm total: ${total.elapsedMilliseconds}ms');
+    } else {
+      await Future.wait(steps.values.map((read) => read()));
+    }
+  } finally {
+    for (final sub in keepAlive) {
+      sub.close();
+    }
+  }
+}
 
 /// Room shown for an occurrence: slot room, else class room.
 final classesByIdProvider = FutureProvider<Map<int, ClassesData>>((ref) async {
@@ -383,6 +460,12 @@ final appLocaleProvider = FutureProvider<String?>((ref) async {
   return override == 'system' ? null : override;
 });
 
+/// Lesson-start presets offered as chips in the schedule slot editor.
+/// Customizable in Settings; defaults to hourly 08:00-18:00.
+final slotTimePresetsProvider = FutureProvider<List<int>>((ref) async {
+  return ref.watch(settingsRepositoryProvider).slotTimePresets();
+});
+
 /// Visible day range of the calendar grid, from settings in minutes
 /// (defaults 6:00-22:00). Supports custom minutes like 6:40.
 /// Guaranteed end > start (at least 60 min span).
@@ -411,8 +494,9 @@ class QuotaWarning {
 }
 
 /// Kind of an absence row; legacy null kinds count as theory.
-AbsenceKind kindOfAbsence(Absence a) =>
-    a.kind == AbsenceKind.practical ? AbsenceKind.practical : AbsenceKind.theory;
+AbsenceKind kindOfAbsence(Absence a) => a.kind == AbsenceKind.practical
+    ? AbsenceKind.practical
+    : AbsenceKind.theory;
 
 final quotaWarningsProvider = Provider<List<QuotaWarning>>((ref) {
   final classes =
@@ -433,7 +517,8 @@ final quotaWarningsProvider = Provider<List<QuotaWarning>>((ref) {
 });
 
 /// Palette used for new classes.
-const classColorPalette = [  0xFF4F6BED, // indigo
+const classColorPalette = [
+  0xFF4F6BED, // indigo
   0xFFE5484D, // red
   0xFFF76B15, // orange
   0xFFFFB224, // amber
@@ -484,9 +569,7 @@ class DataFolderStatus {
   });
 }
 
-final dataFolderStatusProvider = FutureProvider<DataFolderStatus>((
-  ref,
-) async {
+final dataFolderStatusProvider = FutureProvider<DataFolderStatus>((ref) async {
   final settings = ref.watch(settingsRepositoryProvider);
   bool? storageGranted;
   try {
@@ -494,13 +577,19 @@ final dataFolderStatusProvider = FutureProvider<DataFolderStatus>((
   } catch (_) {
     storageGranted = null;
   }
+  final folderFuture = settings.dataFolder();
+  final lastExportFuture = settings.dataLastExportAt();
+  final lastImportFuture = settings.dataLastImportAt();
+  final autoSyncFuture = settings.autoSync();
+  final syncErrorFuture = settings.dataSyncError();
+  final conflictsFuture = settings.dataLastConflicts();
   return DataFolderStatus(
-    folder: await settings.dataFolder(),
-    lastExportAt: await settings.dataLastExportAt(),
-    lastImportAt: await settings.dataLastImportAt(),
-    autoSync: await settings.autoSync(),
+    folder: await folderFuture,
+    lastExportAt: await lastExportFuture,
+    lastImportAt: await lastImportFuture,
+    autoSync: await autoSyncFuture,
     storageGranted: storageGranted,
-    syncError: await settings.dataSyncError(),
-    conflicts: await settings.dataLastConflicts(),
+    syncError: await syncErrorFuture,
+    conflicts: await conflictsFuture,
   );
 });
