@@ -10,6 +10,7 @@ Flutter student planner. NixOS-first repo; `flutter`/`dart` only exist inside `n
 - Version lives in `pubspec.yaml` (`versionName/versionCode`). Push tag `vX.Y.Z` to publish.
 - Android signing reads `CHRONICLE_KEYSTORE` (+`_PASSWORD`, `_ALIAS`, `_KEY_PASSWORD`) from env; without them builds fall back to debug keys. Upload keystore lives in `android/keystore/` (gitignored) — never commit it; CI restores it from `ANDROID_KEYSTORE_BASE64`.
 - `ci.yml` runs analyze + tests on push/PR. `release.yml` runs on tags: verify, signed universal APK + Linux tarball + AppImage + Flatpak, GitHub Release with `CHANGELOG.md` `[Unreleased]` notes.
+- Linux Flatpak (`packaging/flatpak/*.yml`): `type: dir` sources merge their *contents* into the module build dir — the `dest: stage` on the source is what makes the `stage/...` paths in `build-commands` exist.
 - Keep `CHANGELOG.md` `[Unreleased]` current; move entries under the version heading when tagging.
 
 ## Verify
