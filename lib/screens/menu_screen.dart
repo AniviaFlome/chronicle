@@ -66,8 +66,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       final settings = ref.read(settingsRepositoryProvider);
       provider ??= menuSources[await settings.menuProviderId()]?.create();
       final saved = await settings.menuLocation();
-      if (provider != null && provider.locations.containsKey(saved)) {
-        location = saved;
+      if (provider != null && provider.locations.isNotEmpty) {
+        // Unknown saved ids (e.g. '1' after switching Hacettepe → İTÜ,
+        // whose only location is 'genel') fall back to the provider's
+        // first location instead of a bogus cache key.
+        location = provider.locations.containsKey(saved)
+            ? saved
+            : provider.locations.keys.first;
       }
     } catch (e) {
       logLoadFailure('Load menu source', e);
@@ -94,15 +99,22 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     if (!refresh) {
       final cached = await repo.cachedDay(provider.id, _location, iso);
       if (!mounted || gen != _loadGen) return;
-      if (cached != null && provider.isCacheValid(cached.day)) {
+      if (cached != null) {
         final age = DateTime.now().millisecondsSinceEpoch - cached.fetchedAt;
+        // Rows in a stale format (rejected by isCacheValid) still show
+        // while the refetch runs — they beat an error view, and the
+        // refetch replaces them on success.
+        final stale =
+            age > cacheTtl.inMilliseconds ||
+            !provider.isCacheValid(cached.day);
         setState(() {
           _day = cached.day;
-          _stale = age > cacheTtl.inMilliseconds;
+          _stale = stale;
           _loading = false;
           _error = null;
+          _syncMealToDay(cached.day);
         });
-        if (!_stale) return;
+        if (!stale) return;
       } else {
         setState(() {
           _loading = true;
@@ -112,16 +124,19 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     }
     try {
       final day = await provider.fetchDay(_date, _location);
-      await repo.storeDay(provider.id, _location, iso, day);
+      // All-empty days ("not yet published") are never cached: the kitchen
+      // may publish later, and a cached empty would serve stale emptiness
+      // until the TTL expires instead of refetching.
+      if (day.meals.any((m) => m.dishes.isNotEmpty)) {
+        await repo.storeDay(provider.id, _location, iso, day);
+      }
       if (!mounted || gen != _loadGen) return;
       setState(() {
         _day = day;
         _stale = false;
         _loading = false;
         _error = null;
-        if (day.meals.every((m) => m.kind != _meal) && day.meals.isNotEmpty) {
-          _meal = day.meals.first.kind;
-        }
+        _syncMealToDay(day);
       });
     } catch (e) {
       logLoadFailure('Menu fetch', e);
@@ -172,6 +187,27 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       logLoadFailure('Save menu location', e);
     }
     await _load();
+  }
+
+  /// Keeps the meal tab pointing at something servable after a load: the
+  /// previous selection wins when it still has dishes, otherwise the first
+  /// meal with dishes (e.g. breakfast-only days default to breakfast
+  /// instead of an empty lunch tab), otherwise the first meal.
+  void _syncMealToDay(MenuDay day) {
+    if (day.meals.isEmpty) return;
+    for (final m in day.meals) {
+      if (m.kind == _meal) {
+        if (m.dishes.isNotEmpty) return;
+        break;
+      }
+    }
+    for (final m in day.meals) {
+      if (m.dishes.isNotEmpty) {
+        _meal = m.kind;
+        return;
+      }
+    }
+    _meal = day.meals.first.kind;
   }
 
   String _mealLabel(String kind) {
@@ -277,29 +313,15 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 ),
               ],
             ),
-            if (!isToday)
-              Center(
-                child: TextButton.icon(
-                  onPressed: _goToday,
-                  icon: const Icon(Icons.today_outlined, size: 18),
-                  label: Text(context.l10n.navToday),
-                ),
-              ),
             const SizedBox(height: 8),
-            // Campus picker: full-width column so the Beytepe/Sıhhiye
-            // segments get proper touch targets and never squeeze against
-            // the label on narrow Android phones. Scrolls instead of
+            // Location picker: full-width column so the segments get proper
+            // touch targets on narrow Android phones. Scrolls instead of
             // overflowing when the labels are wider than the screen.
-            // Single-location providers (Itu) have nothing to pick.
+            // Single-location providers have nothing to pick.
             if (provider.locations.length > 1)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  context.l10n.campusLabel,
-                  style: theme.textTheme.labelLarge,
-                ),
-                const SizedBox(height: 8),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: SegmentedButton<String>(

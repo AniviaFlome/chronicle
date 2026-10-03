@@ -75,20 +75,32 @@ class HacettepeMenuProvider implements MenuProvider {
       'location_id': locationId,
     });
     late final String body;
-    try {
-      final response = await _client
-          .get(uri, headers: {'Accept': 'text/html'})
-          .timeout(const Duration(seconds: 20));
-      if (response.statusCode != 200) {
-        throw MenuFetchException('HTTP ${response.statusCode}');
+    MenuFetchException? lastError;
+    // Single host, so transient 500s/timeouts get retries with backoff
+    // instead of failing the whole day on one bad response.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        await Future.delayed(Duration(milliseconds: 500 * attempt));
       }
-      body = response.body;
-    } on MenuFetchException {
-      rethrow;
-    } catch (e) {
-      throw MenuFetchException('Network error: $e');
+      try {
+        final response = await _client
+            .get(uri, headers: menuHttpHeaders)
+            .timeout(const Duration(seconds: 12));
+        if (response.statusCode != 200) {
+          lastError = MenuFetchException('HTTP ${response.statusCode}');
+          continue;
+        }
+        body = decodeMenuBody(response);
+        return parseDay(body, date, locationId);
+      } on MenuFetchException {
+        // Tab structure missing: the markup changed, not the network.
+        // Retrying won't help.
+        rethrow;
+      } catch (e) {
+        lastError = MenuFetchException('Network error: $e');
+      }
     }
-    return parseDay(body, date, locationId);
+    throw lastError ?? const MenuFetchException('Network error');
   }
 
   /// Parses a day page. Public for tests (fixture HTML, no network).
@@ -97,6 +109,13 @@ class HacettepeMenuProvider implements MenuProvider {
     const meals = ['sabah', 'ogle', 'aksam', 'vegan'];
     if (meals.every((id) => doc.getElementById(id) == null)) {
       throw const MenuFetchException('Unexpected page structure');
+    }
+    // The sections also embed a `.weekly-view` with other days' menus;
+    // strip it so its cards can never leak into this day when the
+    // `.daily-view` wrapper is absent (the parser falls back to the
+    // whole section then).
+    for (final weekly in doc.querySelectorAll('.weekly-view')) {
+      weekly.remove();
     }
     final legend = <String, String>{};
     final parsed = <ServedMeal>[];

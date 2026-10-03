@@ -17,11 +17,15 @@ void main() async {
   await NotificationService.instance.init();
   // Open the database before the first frame so saved view prefs are
   // available synchronously: screens must not flash the default view and
-  // switch once an async load completes.
+  // switch once an async load completes. The absence limit rides along
+  // so its Settings field builds with text on frame one (no delayed
+  // fill, hence no fill animation).
   final db = AppDatabase();
   final settings = SettingsRepository(db);
   final calendarView = await settings.calendarView();
   final absencesView = await settings.absencesView();
+  final calendarOrientation = await settings.calendarOrientation();
+  final defaultLimit = await settings.defaultMaxAbsences();
   await applyPortraitLock(await settings.portraitLock());
   runApp(
     ProviderScope(
@@ -29,6 +33,11 @@ void main() async {
         appDatabaseProvider.overrideWithValue(db),
         calendarViewSeedProvider.overrideWithValue(calendarView),
         absencesViewSeedProvider.overrideWithValue(absencesView),
+        calendarOrientationSeedProvider.overrideWithValue(calendarOrientation),
+        defaultLimitSeedProvider.overrideWithValue((
+          ready: true,
+          limit: defaultLimit,
+        )),
       ],
       child: const StartupRunner(child: ChronicleApp()),
     ),

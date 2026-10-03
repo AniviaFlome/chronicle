@@ -2,6 +2,61 @@
 
 ## [Unreleased]
 
+### Added
+- Calendar time grid is a slot grid in fixed-rhythm mode: each lesson is
+  one uniform row labeled with its own time range (08:40–09:30), breaks
+  take no space, and classes span whole rows — like a school timetable.
+  Class blocks are softly rounded with hairline borders and small gaps.
+  Off-rhythm classes are absorbed into the rows they touch. Class-times
+  mode keeps the exact-time layout.
+  Grid times follow the app locale: Turkish shows 08.40, English 08:40.
+- Calendar day layout setting (Settings → Day layout): stack the 7 days
+  vertically instead of the horizontal strip, in both list and time-grid
+  views. The vertical layout scrolls as one column with full-width days.
+- Calendar time-grid gutter follows the markers mode (Settings → Markers):
+  with class times it labels the week's actual lesson start/end minutes
+  (e.g. 08:40, 09:30) instead of whole hours; with a fixed rhythm it
+  labels the configured slot boundaries, preferring lesson starts when
+  two marks sit too close together (e.g. 08:40 wins over 08:30). Whole
+  hours stay the fallback when there is nothing to mark, and close
+  labels collapse so they never overlap.
+- ITU dining menu: separate vegan menu alongside the standard one, via
+  the Genel/Vegan switch on the menu page. Weekend lunch hours are
+  12:00 - 14:00 per the official SKS dining-hours table (dinner
+  unchanged); stale cached rows with weekday hours refetch.
+- Course catalog lookup: enter a course code in the class editor and
+  fetch its details. ITU (public OBS data) fills name, instructor,
+  room/building and notes (credits, ECTS, language), then lets you pick
+  a section to create the weekly slots. Section end times follow ITU's
+  display convention (11:29 prints as 11:30), buildings resolve to full
+  names, and the picked section appends its method, quota and
+  prerequisites to notes. Typing a CRN explains that CRN lookup isn't
+  supported instead of reporting "not found".
+
+### Fixed
+- Calendar (Android): swipe vertically past the top/bottom edge of the
+  week to flip to the previous/next week. The day strip also fills the
+  viewport on light weeks so the gesture works over empty areas too.
+  The pull is a bit calmer now (160px past the edge instead of 120px),
+  and the time-grid hour gutter is narrower (38px). The grid now
+  stretches exactly to out-of-range classes instead of adding a
+  30-minute padding past a custom day start/end.
+- Dining menu reliability (ITU + Hacettepe): unpublished days now show
+  "no menu published" instead of a load error; stale-format cache keeps
+  showing while the refetch runs; Hacettepe retries transient failures
+  and no longer mixes other days' weekly cards into the day; ITU detail
+  links resolve against the serving host and fetch with browser headers,
+  charset sniffing, tighter timeouts and smaller enrichment batches.
+- Dining menu page: removed the extra Today button (it shifted the
+  layout); the date button itself jumps back to today. Empty meal tabs
+  fall back to the first meal with dishes, and unpublished days are
+  never cached so a later publish is picked up.
+- Settings: the default-absence-limit and Hacettepe program fields no
+  longer visibly fill in after the page opens — the absence limit is
+  preloaded before startup so its row renders with the saved value on
+  the first frame, and the program row stays hidden until its saved
+  values finish loading. No mid-screen label animation or layout shift.
+
 ## [1.5.0] - 2026-10-02
 
 ### Added

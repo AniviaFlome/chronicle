@@ -30,12 +30,19 @@ Future<void> bootApp(WidgetTester tester, AppDatabase db) async {
       'list';
   final absencesView =
       await tester.runAsync(() => settings.absencesView()) ?? 'grid';
+  final defaultLimit = await tester.runAsync(
+    () => settings.defaultMaxAbsences(),
+  );
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
         calendarViewSeedProvider.overrideWithValue(calendarView),
         absencesViewSeedProvider.overrideWithValue(absencesView),
+        defaultLimitSeedProvider.overrideWithValue((
+          ready: true,
+          limit: defaultLimit,
+        )),
       ],
       child: const StartupRunner(child: ChronicleApp()),
     ),

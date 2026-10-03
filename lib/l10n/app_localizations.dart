@@ -140,6 +140,60 @@ abstract class AppLocalizations {
   /// **'Copy'**
   String get copy;
 
+  /// No description provided for @courseCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Course code'**
+  String get courseCodeLabel;
+
+  /// No description provided for @courseCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. MAT 103E'**
+  String get courseCodeHint;
+
+  /// No description provided for @fetchCatalogButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch details'**
+  String get fetchCatalogButton;
+
+  /// No description provided for @catalogFetching.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetching course details…'**
+  String get catalogFetching;
+
+  /// No description provided for @catalogNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Course not found in the catalog'**
+  String get catalogNotFound;
+
+  /// No description provided for @catalogCrnHint.
+  ///
+  /// In en, this message translates to:
+  /// **'CRN lookup isn\'t supported — enter the course code (e.g. MAT 103), then pick the CRN in the section list'**
+  String get catalogCrnHint;
+
+  /// No description provided for @catalogSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a section'**
+  String get catalogSectionTitle;
+
+  /// No description provided for @catalogSlotsSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} weekly slots from the catalog'**
+  String catalogSlotsSummary(Object count);
+
+  /// No description provided for @catalogClearSlots.
+  ///
+  /// In en, this message translates to:
+  /// **'Use manual times instead'**
+  String get catalogClearSlots;
+
   /// No description provided for @errorAddSlot.
   ///
   /// In en, this message translates to:
@@ -299,7 +353,7 @@ abstract class AppLocalizations {
   /// No description provided for @menuSourceItuName.
   ///
   /// In en, this message translates to:
-  /// **'Itu'**
+  /// **'ITU'**
   String get menuSourceItuName;
 
   /// No description provided for @allergensTitle.
@@ -2113,6 +2167,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Grid time labels'**
   String get gridTimeLabels;
+
+  /// No description provided for @calendarLayout.
+  ///
+  /// In en, this message translates to:
+  /// **'Day layout'**
+  String get calendarLayout;
+
+  /// No description provided for @layoutHorizontal.
+  ///
+  /// In en, this message translates to:
+  /// **'Horizontal'**
+  String get layoutHorizontal;
+
+  /// No description provided for @layoutVertical.
+  ///
+  /// In en, this message translates to:
+  /// **'Vertical'**
+  String get layoutVertical;
 
   /// No description provided for @modeClassTimes.
   ///

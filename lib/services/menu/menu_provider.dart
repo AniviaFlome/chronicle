@@ -1,4 +1,35 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 import 'package:meta/meta.dart';
+
+/// Browser-like headers for dining-hall fetches. Both ITU and Hacettepe
+/// intermittently misbehave for non-browser clients, so every menu GET
+/// carries a real User-Agent.
+const menuHttpHeaders = {
+  'Accept':
+      'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'tr-TR,tr;q=0.9,en;q=0.8',
+  'User-Agent':
+      'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36',
+};
+
+/// Decodes a menu page body. Both publishers declare `charset=utf-8`, but
+/// when the header omits it Dart's [http] package falls back to latin-1 and
+/// Turkish text garbles (breaking selectors and dish names), so sniff
+/// UTF-8 first and only then fall back to the package default.
+String decodeMenuBody(http.Response response) {
+  final contentType = response.headers['content-type'] ?? '';
+  if (!contentType.toLowerCase().contains('charset=')) {
+    try {
+      return const Utf8Decoder().convert(response.bodyBytes);
+    } catch (_) {
+      return response.body;
+    }
+  }
+  return response.body;
+}
 
 /// A single dish on a dining-hall menu.
 @immutable

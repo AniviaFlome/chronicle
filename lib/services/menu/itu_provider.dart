@@ -9,9 +9,10 @@ import 'menu_provider.dart';
 /// Display only: dishes, kcal, allergens, service hours. No login, no voting.
 ///
 /// Reads the AJAX menu partial
-/// (`yemek-menu.aspx?tip={itu-ogle-yemegi-genel|itu-aksam-yemegi-genel}&&value=DD-MM-YYYY`)
+/// (`yemek-menu.aspx?tip={itu-ogle|aksam-yemegi-{genel|vegan}}&&value=DD-MM-YYYY`)
 /// served by the `bilgiekrani`/`bidb` hosts (the same path on `sks.itu.edu.tr`
-/// 500s). ITU publishes a single `genel` menu with lunch and dinner only.
+/// 500s). ITU publishes a standard (`genel`) menu plus a separate `vegan`
+/// menu, each with lunch and dinner.
 /// Dish rows link per-dish nutrition (`besin-degerleri.aspx?yemek=ID`) and
 /// allergen (`alerjen-detay.aspx?yemek=ID`) pages; a missing allergen link
 /// means no allergens. Allergen pages carry full-text descriptions, so codes
@@ -36,20 +37,41 @@ class ItuMenuProvider implements MenuProvider {
   /// Hosts serving the menu partial, in preference order.
   static const _hosts = ['bilgiekrani.itu.edu.tr', 'bidb.itu.edu.tr'];
 
-  static const _tips = {
-    'ogle': 'itu-ogle-yemegi-genel',
-    'aksam': 'itu-aksam-yemegi-genel',
-  };
+  /// Meal tip per location and kind. ITU publishes the standard menu
+  /// (`genel`) plus a separate vegan menu with its own meat-free main
+  /// dish; both share the same page markup. Unknown locations fall back
+  /// to the standard menu.
+  static String _tipFor(String locationId, String kind) {
+    final menu = locationId == 'vegan' ? 'vegan' : 'genel';
+    return 'itu-$kind-yemegi-$menu';
+  }
 
   static const _serviceHours = {
     'ogle': '11:30 - 14:00',
     'aksam': '17:00 - 19:30',
   };
 
+  /// Weekend lunch window (Sat/Sun). Per the official SKS dining-hours
+  /// table (sks.itu.edu.tr/yemek-saatleri) the student halls serve lunch
+  /// 12:00 - 14:00 on weekends and official holidays; dinner is unchanged.
+  /// Official holidays can't be detected locally, so only weekends shift.
+  static const _weekendLunchHours = '12:00 - 14:00';
+
+  static bool _isWeekend(DateTime date) =>
+      date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
+
+  static String _hoursFor(String kind, DateTime date) {
+    if (kind == 'ogle' && _isWeekend(date)) return _weekendLunchHours;
+    return _serviceHours[kind] ?? '';
+  }
+
   static final RegExp _wordPattern = RegExp(r'[a-zçğöşüıiâîû]+');
   static final RegExp _kcalPattern = RegExp(r'[\d.]+,\d+|\d+');
 
   /// Turkish keyword → synthesized allergen code, checked in order.
+  /// Specific multi-word phrases must precede their substrings
+  /// ('sert kabuklu' before 'kabuklu'), or tree nuts would match the
+  /// fish/shellfish code.
   static const _allergenKeywords = [
     ('gluten', 'G'),
     ('yumurta', 'Y'),
@@ -58,6 +80,7 @@ class ItuMenuProvider implements MenuProvider {
     ('laktoz', 'S'),
     ('balık', 'B'),
     ('balik', 'B'),
+    ('sert kabuklu', 'F'),
     ('kabuklu', 'B'),
     ('soya', 'Sy'),
     ('susam', 'Sm'),
@@ -67,7 +90,6 @@ class ItuMenuProvider implements MenuProvider {
     ('fistik', 'F'),
     ('ceviz', 'F'),
     ('badem', 'F'),
-    ('sert kabuklu', 'F'),
     ('kuruyemiş', 'F'),
     ('kereviz', 'K'),
     ('hardal', 'H'),
@@ -89,15 +111,29 @@ class ItuMenuProvider implements MenuProvider {
   String get displayName => 'Itu';
 
   @override
-  Map<String, String> get locations => const {'genel': 'Genel'};
+  Map<String, String> get locations => const {
+    'genel': 'Genel',
+    'vegan': 'Vegan',
+  };
 
   /// Rejects days stored before dish-name normalization: any cased
   /// ALL-CAPS dish name means the row predates [titleCaseTr] and must
-  /// refetch instead of showing until the cache TTL expires.
+  /// refetch instead of showing until the cache TTL expires. Weekend
+  /// lunch rows stored before the hours override carry weekday hours
+  /// and must refetch too.
   @override
-  bool isCacheValid(MenuDay day) => !day.meals.any(
-    (m) => m.dishes.any((d) => _isAllCaps(d.name)),
-  );
+  bool isCacheValid(MenuDay day) {
+    if (day.meals.any((m) => m.dishes.any((d) => _isAllCaps(d.name)))) {
+      return false;
+    }
+    if (!_isWeekend(day.date)) return true;
+    return !day.meals.any(
+      (m) =>
+          m.kind == 'ogle' &&
+          m.serviceHours.isNotEmpty &&
+          m.serviceHours != _weekendLunchHours,
+    );
+  }
 
   static bool _isAllCaps(String s) =>
       s != s.toLowerCase() && s == s.toUpperCase();
@@ -124,28 +160,34 @@ class ItuMenuProvider implements MenuProvider {
   @override
   Future<MenuDay> fetchDay(DateTime date, String locationId) async {
     final value = dateParam(date);
-    late final List<String> bodies;
+    final menu = locationId == 'vegan' ? 'vegan' : 'genel';
+    late final List<({String body, Uri baseUri})> pages;
     try {
-      bodies = await Future.wait([
-        for (final kind in _tips.keys) _getMealPage(kind, value),
-      ]).timeout(const Duration(seconds: 40));
+      // Lunch and dinner fetch independently: one slow/unpublished kind
+      // must not fail the other. Each kind already falls back across
+      // hosts internally.
+      pages = await Future.wait([
+        _getMealPage('ogle', value, menu),
+        _getMealPage('aksam', value, menu),
+      ]).timeout(const Duration(seconds: 45));
     } on MenuFetchException {
       rethrow;
     } catch (e) {
       throw MenuFetchException('Network error: $e');
     }
     return parseDay(
-      bodies[0],
-      bodies[1],
+      pages[0].body,
+      pages[1].body,
       date,
-      locationId,
+      menu,
+      baseUris: [pages[0].baseUri, pages[1].baseUri],
       fetchDetail: (uri) async {
         try {
           final response = await _client
-              .get(uri, headers: {'Accept': 'text/html'})
-              .timeout(const Duration(seconds: 15));
+              .get(uri, headers: menuHttpHeaders)
+              .timeout(const Duration(seconds: 10));
           if (response.statusCode != 200) return null;
-          return response.body;
+          return decodeMenuBody(response);
         } catch (_) {
           return null;
         }
@@ -153,8 +195,14 @@ class ItuMenuProvider implements MenuProvider {
     );
   }
 
-  Future<String> _getMealPage(String kind, String value) async {
-    final tip = _tips[kind]!;
+  /// Fetches one meal page, trying each host in order. Returns the body
+  /// plus the winning host as base URI so relative detail links resolve.
+  Future<({String body, Uri baseUri})> _getMealPage(
+    String kind,
+    String value,
+    String menu,
+  ) async {
+    final tip = _tipFor(menu, kind);
     MenuFetchException? lastError;
     for (final host in _hosts) {
       // Double && mirrors the site's own form action; servers ignore the
@@ -162,13 +210,13 @@ class ItuMenuProvider implements MenuProvider {
       final uri = Uri.parse('https://$host$_menuPath?tip=$tip&&value=$value');
       try {
         final response = await _client
-            .get(uri, headers: {'Accept': 'text/html'})
-            .timeout(const Duration(seconds: 20));
+            .get(uri, headers: menuHttpHeaders)
+            .timeout(const Duration(seconds: 12));
         if (response.statusCode != 200) {
           lastError = MenuFetchException('HTTP ${response.statusCode}');
           continue;
         }
-        return response.body;
+        return (body: decodeMenuBody(response), baseUri: uri);
       } catch (e) {
         lastError = MenuFetchException('Network error: $e');
       }
@@ -178,34 +226,53 @@ class ItuMenuProvider implements MenuProvider {
 
   /// Parses a lunch + dinner page pair. Public for tests (fixture HTML, no
   /// network unless [fetchDetail] is given for kcal/allergen enrichment).
+  /// [baseUris] (lunch, dinner) resolve relative detail links; absolute
+  /// links — what the site serves today — need no base.
+  ///
+  /// A day with no published menu (`#pnlYemekYok`, "Yemek bilgisi henüz
+  /// girilmemiştir") returns a day with empty meals so the UI shows
+  /// "no menu published" instead of a network-error view. Only a page with
+  /// neither a menu table nor the unpublished marker throws.
   Future<MenuDay> parseDay(
     String ogleHtml,
     String aksamHtml,
     DateTime date,
     String locationId, {
+    List<Uri>? baseUris,
     Future<String?> Function(Uri uri)? fetchDetail,
   }) async {
     final legend = <String, String>{};
     final meals = <ServedMeal>[];
     final pages = {'ogle': ogleHtml, 'aksam': aksamHtml};
+    var unknownKinds = 0;
+    var i = 0;
     for (final entry in pages.entries) {
       // One unpublished meal must not drop the other; a day with
       // nothing at all still throws below.
       try {
         meals.add(
-          await _parseMeal(entry.value, entry.key, legend, fetchDetail),
+          await _parseMeal(
+            entry.value,
+            entry.key,
+            date,
+            legend,
+            fetchDetail,
+            baseUris != null && i < baseUris.length ? baseUris[i] : null,
+          ),
         );
       } on MenuFetchException {
+        unknownKinds++;
         meals.add(
           ServedMeal(
             kind: entry.key,
-            serviceHours: _serviceHours[entry.key] ?? '',
+            serviceHours: _hoursFor(entry.key, date),
             dishes: const [],
           ),
         );
       }
+      i++;
     }
-    if (meals.every((m) => m.dishes.isEmpty)) {
+    if (meals.every((m) => m.dishes.isEmpty) && unknownKinds == meals.length) {
       throw const MenuFetchException('Unexpected page structure');
     }
     return MenuDay(
@@ -220,12 +287,23 @@ class ItuMenuProvider implements MenuProvider {
   Future<ServedMeal> _parseMeal(
     String html,
     String kind,
+    DateTime date,
     Map<String, String> legend,
-    Future<String?> Function(Uri uri)? fetchDetail,
-  ) async {
+    Future<String?> Function(Uri uri)? fetchDetail, [
+    Uri? baseUri,
+  ]) async {
     final doc = html_parser.parse(html);
     final table = doc.querySelector('#pnlYemekMenu table');
     if (table == null) {
+      // Unpublished day ("Yemek bilgisi henüz girilmemiştir"): a known
+      // empty state, not a parse failure.
+      if (doc.querySelector('#pnlYemekYok') != null) {
+        return ServedMeal(
+          kind: kind,
+          serviceHours: _hoursFor(kind, date),
+          dishes: const [],
+        );
+      }
       throw const MenuFetchException('Unexpected page structure');
     }
     final partials = <_PartialDish>[];
@@ -242,14 +320,16 @@ class ItuMenuProvider implements MenuProvider {
         _PartialDish(
           name: titleCaseTr(name),
           category: titleCaseTr(category),
-          nutritionUri: _href(nutritionLink),
-          allergenUri: _href(allergenLink),
+          nutritionUri: _href(nutritionLink, baseUri),
+          allergenUri: _href(allergenLink, baseUri),
         ),
       );
     }
-    // Bound concurrency: dishes enrich in small batches so a 20-dish day
-    // opens ~12 detail sockets at a time instead of 40+ at once.
-    const batchSize = 6;
+    // Bound concurrency: dishes enrich in small batches so a 6-dish day
+    // opens ~6 detail sockets at a time instead of 12+. Enrichment stays
+    // best-effort — a throttled detail host delays kcal/allergens, never
+    // the dish list itself.
+    const batchSize = 3;
     final dishes = <MenuDish>[];
     for (var i = 0; i < partials.length; i += batchSize) {
       final batch = partials.skip(i).take(batchSize);
@@ -269,16 +349,26 @@ class ItuMenuProvider implements MenuProvider {
     }
     return ServedMeal(
       kind: kind,
-      serviceHours: _serviceHours[kind] ?? '',
+      serviceHours: _hoursFor(kind, date),
       totalKcal: known ? totalKcal : null,
       dishes: dishes,
     );
   }
 
-  static Uri? _href(Element? link) {
+  /// Resolves a detail link, tolerating the relative hrefs the site has
+  /// served in the past. Absolute links (today's markup) pass through.
+  static Uri? _href(Element? link, [Uri? baseUri]) {
     final href = link?.attributes['href']?.trim();
     if (href == null || href.isEmpty) return null;
-    return Uri.tryParse(href);
+    final parsed = Uri.tryParse(href);
+    if (parsed == null) return null;
+    if (parsed.hasScheme || parsed.host.isNotEmpty) return parsed;
+    if (baseUri == null) return parsed;
+    try {
+      return baseUri.resolveUri(parsed);
+    } catch (_) {
+      return parsed;
+    }
   }
 
   /// Maps a full-text allergen description to a synthesized code, recording

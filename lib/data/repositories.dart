@@ -887,6 +887,17 @@ class SettingsRepository {
 
   Future<void> setCalendarView(String value) => set(calendarViewKey, value);
 
+  static const calendarOrientationKey = 'calendar_orientation';
+
+  /// 'horizontal' or 'vertical'. Defaults to 'horizontal'.
+  Future<String> calendarOrientation() async =>
+      (await get(calendarOrientationKey)) == 'vertical'
+          ? 'vertical'
+          : 'horizontal';
+
+  Future<void> setCalendarOrientation(String value) =>
+      set(calendarOrientationKey, value);
+
   static const defaultMaxAbsencesKey = 'default_max_absences';
 
   /// Default absence limit applied to newly created classes. Null means

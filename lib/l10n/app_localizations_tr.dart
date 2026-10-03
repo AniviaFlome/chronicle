@@ -31,6 +31,36 @@ class AppLocalizationsTr extends AppLocalizations {
   String get copy => 'Kopyala';
 
   @override
+  String get courseCodeLabel => 'Ders kodu';
+
+  @override
+  String get courseCodeHint => 'örn. MAT 103E';
+
+  @override
+  String get fetchCatalogButton => 'Detayları getir';
+
+  @override
+  String get catalogFetching => 'Ders detayları alınıyor…';
+
+  @override
+  String get catalogNotFound => 'Ders katalogda bulunamadı';
+
+  @override
+  String get catalogCrnHint =>
+      'CRN ile arama desteklenmiyor — ders kodunu girin (ör. MAT 103), ardından CRN\'i bölüm listesinden seçin';
+
+  @override
+  String get catalogSectionTitle => 'Şube seçin';
+
+  @override
+  String catalogSlotsSummary(Object count) {
+    return 'Katalogdan $count haftalık ders saati';
+  }
+
+  @override
+  String get catalogClearSlots => 'Manuel saat kullan';
+
+  @override
   String get errorAddSlot => 'Ders saati eklenemedi';
 
   @override
@@ -111,7 +141,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get menuSourceNone => 'Yok';
 
   @override
-  String get menuSourceItuName => 'İtü';
+  String get menuSourceItuName => 'İTÜ';
 
   @override
   String get allergensTitle => 'Alerjenler';
@@ -1158,6 +1188,15 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get gridTimeLabels => 'Izgara zaman etiketleri';
+
+  @override
+  String get calendarLayout => 'Gün düzeni';
+
+  @override
+  String get layoutHorizontal => 'Yatay';
+
+  @override
+  String get layoutVertical => 'Dikey';
 
   @override
   String get modeClassTimes => 'Ders saatleri';

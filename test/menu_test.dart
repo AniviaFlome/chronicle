@@ -330,6 +330,49 @@ void main() {
       );
     });
 
+    test('transient failures retry before throwing', () async {
+      var calls = 0;
+      final provider = HacettepeMenuProvider(
+        MockClient((_) async {
+          calls++;
+          if (calls < 3) return http.Response('boom', 500);
+          return http.Response.bytes(
+            utf8.encode(_fixture),
+            200,
+            headers: {'content-type': 'text/html; charset=utf-8'},
+          );
+        }),
+      );
+      final day = await provider.fetchDay(DateTime(2026, 9, 21), '1');
+      expect(calls, 3);
+      expect(day.meals, isNotEmpty);
+    });
+
+    test('weekly-view cards never leak into the day', () {
+      final html =
+          '$_fixture<section id="aksam" class="tab-content">'
+          '<div class="daily-view"><div class="empty-state"></div></div>'
+          '<div class="weekly-view"><div class="menu-card-wrapper">'
+          '<div class="menu-card" data-id="9" data-title="Leaked Dish" '
+          'data-cal="100" data-category="ANAYEMEK"></div>'
+          '</div></div></section>';
+      final day = HacettepeMenuProvider().parseDay(
+        html,
+        DateTime(2026, 9, 21),
+        '1',
+      );
+      expect(
+        day.meals.expand((m) => m.dishes).map((d) => d.name),
+        isNot(contains('Leaked Dish')),
+      );
+    });
+
+    test('decodeMenuBody sniffs utf-8 without a declared charset', () {
+      final bytes = utf8.encode('Çorba');
+      final response = http.Response.bytes(bytes, 200);
+      expect(decodeMenuBody(response), 'Çorba');
+    });
+
     test('weekends override lunch and vegan hours', () {
       // The site publishes weekday hours on Saturdays; the halls serve
       // 12:00 - 13:30 for lunch and vegan.
@@ -412,10 +455,10 @@ void main() {
       expect(ItuMenuProvider.dateParam(DateTime(2026, 9, 5)), '05-09-2026');
     });
 
-    test('registry name is localized (Itu / İtü)', () {
+    test('registry name is localized (ITU / İTÜ)', () {
       expect(ItuMenuProvider().displayName, 'Itu');
-      expect(menuSources['itu']?.name(AppLocalizationsEn()), 'Itu');
-      expect(menuSources['itu']?.name(AppLocalizationsTr()), 'İtü');
+      expect(menuSources['itu']?.name(AppLocalizationsEn()), 'ITU');
+      expect(menuSources['itu']?.name(AppLocalizationsTr()), 'İTÜ');
     });
 
     test('title-cases ALL-CAPS Turkish dish names', () {
@@ -523,6 +566,24 @@ void main() {
       expect(legend, {'X': 'Gizli baharat karışımı'});
     });
 
+    test('tree nuts match F, not the fish/shellfish code', () {
+      final legend = <String, String>{};
+      expect(
+        ItuMenuProvider.allergenCode(
+          'Sert kabuklu meyveler ve ürünleri',
+          legend,
+        ),
+        'F',
+      );
+      expect(
+        ItuMenuProvider.allergenCode(
+          'Kabuklu deniz ürünleri ve ürünleri',
+          legend,
+        ),
+        'B',
+      );
+    });
+
     test('parses Turkish decimal comma kcal', () {
       expect(
         ItuMenuProvider.parseKcal(
@@ -541,7 +602,7 @@ void main() {
       ]);
     });
 
-    test('both pages without tables throw instead of emptying', () {
+    test('both pages without tables or markers throw instead of emptying', () {
       expect(
         ItuMenuProvider().parseDay(
           '<html><body>redesign</body></html>',
@@ -551,6 +612,131 @@ void main() {
         ),
         throwsA(isA<MenuFetchException>()),
       );
+    });
+
+    test('unpublished days return empty meals instead of throwing', () async {
+      // Mirrors the live unpublished page: no menu table, just the
+      // #pnlYemekYok "not yet entered" marker.
+      const yok =
+          '<div id="pnlYemekMenu"></div><div id="pnlYemekYok">'
+          '<p class="dining-menu__text">Yemek bilgisi henüz '
+          'girilmemiştir.</p></div>';
+      final day = await ItuMenuProvider().parseDay(
+        yok,
+        yok,
+        DateTime(2027, 1, 1),
+        'genel',
+      );
+      expect(day.meals.map((m) => m.kind), ['ogle', 'aksam']);
+      expect(day.meals.every((m) => m.dishes.isEmpty), isTrue);
+    });
+
+    test('published lunch survives an unpublished dinner', () async {
+      const yok = '<div id="pnlYemekYok"><p>Yemek bilgisi henüz '
+          'girilmemiştir.</p></div>';
+      final day = await ItuMenuProvider().parseDay(
+        _ituOgleFixture,
+        yok,
+        DateTime(2026, 9, 30),
+        'genel',
+      );
+      expect(day.meals.first.dishes, isNotEmpty);
+      expect(day.meals.last.dishes, isEmpty);
+      expect(day.meals.last.serviceHours, '17:00 - 19:30');
+    });
+
+    test('weekend lunch uses the official 12:00 - 14:00 window', () async {
+      // 2026-10-03 is a Saturday. Per sks.itu.edu.tr/yemek-saatleri the
+      // student halls serve lunch 12:00 - 14:00 on weekends; dinner stays
+      // 17:00 - 19:30.
+      final day = await ItuMenuProvider().parseDay(
+        _ituOgleFixture,
+        _ituOgleFixture,
+        DateTime(2026, 10, 3),
+        'genel',
+      );
+      expect(
+        day.meals.firstWhere((m) => m.kind == 'ogle').serviceHours,
+        '12:00 - 14:00',
+      );
+      expect(
+        day.meals.firstWhere((m) => m.kind == 'aksam').serviceHours,
+        '17:00 - 19:30',
+      );
+    });
+
+    test('weekend rows with weekday lunch hours fail cache validation', () {
+      MenuDay ituDay(DateTime date, String hours) => MenuDay(
+        date: date,
+        locationId: 'genel',
+        locationName: 'Genel',
+        meals: [
+          ServedMeal(
+            kind: 'ogle',
+            serviceHours: hours,
+            dishes: const [MenuDish(name: 'Çorba', category: 'Çorba')],
+          ),
+        ],
+      );
+      expect(
+        ItuMenuProvider().isCacheValid(
+          ituDay(DateTime(2026, 10, 3), '11:30 - 14:00'), // Saturday
+        ),
+        isFalse,
+      );
+      expect(
+        ItuMenuProvider().isCacheValid(
+          ituDay(DateTime(2026, 10, 3), '12:00 - 14:00'),
+        ),
+        isTrue,
+      );
+      expect(
+        ItuMenuProvider().isCacheValid(
+          ituDay(DateTime(2026, 9, 30), '11:30 - 14:00'), // Wednesday
+        ),
+        isTrue,
+      );
+    });
+
+    test('relative detail links resolve against the serving host', () async {
+      final relative = _ituOgleEnrichFixture
+          .replaceAll(
+            'https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/'
+            'besin-degerleri.aspx?yemek=294',
+            'besin-degerleri.aspx?yemek=294',
+          )
+          .replaceAll(
+            'https://bidb.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/'
+            'alerjen-detay.aspx?yemek=294',
+            'alerjen-detay.aspx?yemek=294',
+          );
+      Uri? seenNutrition;
+      Future<String?> details(Uri uri) async {
+        if (uri.path.contains('besin-degerleri')) {
+          seenNutrition = uri;
+          return _ituNutritionFixture;
+        }
+        if (uri.path.contains('alerjen-detay')) return _ituAllergenFixture;
+        return null;
+      }
+
+      final day = await ItuMenuProvider().parseDay(
+        relative,
+        _ituEmptyMealFixture,
+        DateTime(2026, 9, 30),
+        'genel',
+        baseUris: [
+          Uri.parse(
+            'https://bilgiekrani.itu.edu.tr/ExternalPages/sks/yemek-menu-v2/'
+            'uzerinde-calisilan/yemek-menu.aspx',
+          ),
+        ],
+        fetchDetail: details,
+      );
+      final lunch = day.meals.firstWhere((m) => m.kind == 'ogle');
+      expect(lunch.dishes.single.kcal, 114);
+      expect(lunch.dishes.single.allergens, ['Y', 'G', 'S']);
+      expect(seenNutrition?.host, 'bilgiekrani.itu.edu.tr');
     });
 
     test('fetchDay hits both tips with the dated value', () async {
@@ -578,6 +764,61 @@ void main() {
         containsAll(['itu-ogle-yemegi-genel', 'itu-aksam-yemegi-genel']),
       );
       expect(menuHits.first.queryParameters['value'], '30-09-2026');
+    });
+
+    test('fetchDay with the vegan location requests vegan tips', () async {
+      final seen = <Uri>[];
+      final provider = ItuMenuProvider(
+        MockClient((request) async {
+          seen.add(request.url);
+          return http.Response.bytes(
+            utf8.encode(_ituOgleFixture),
+            200,
+            headers: {'content-type': 'text/html; charset=utf-8'},
+          );
+        }),
+      );
+      final day = await provider.fetchDay(DateTime(2026, 9, 30), 'vegan');
+      final menuHits = [
+        for (final u in seen)
+          if (u.path.endsWith('yemek-menu.aspx')) u,
+      ];
+      expect(menuHits, hasLength(2));
+      expect(
+        menuHits.map((u) => u.queryParameters['tip']),
+        containsAll(['itu-ogle-yemegi-vegan', 'itu-aksam-yemegi-vegan']),
+      );
+      expect(day.locationId, 'vegan');
+      expect(day.locationName, 'Vegan');
+    });
+
+    test('fetchDay with an unknown location falls back to genel', () async {
+      final seen = <Uri>[];
+      final provider = ItuMenuProvider(
+        MockClient((request) async {
+          seen.add(request.url);
+          return http.Response.bytes(
+            utf8.encode(_ituOgleFixture),
+            200,
+            headers: {'content-type': 'text/html; charset=utf-8'},
+          );
+        }),
+      );
+      final day = await provider.fetchDay(DateTime(2026, 9, 30), 'bogus');
+      expect(
+        seen
+            .where((u) => u.path.endsWith('yemek-menu.aspx'))
+            .map((u) => u.queryParameters['tip']),
+        containsAll(['itu-ogle-yemegi-genel', 'itu-aksam-yemegi-genel']),
+      );
+      expect(day.locationId, 'genel');
+    });
+
+    test('itu locations list genel and vegan', () {
+      expect(ItuMenuProvider().locations, {
+        'genel': 'Genel',
+        'vegan': 'Vegan',
+      });
     });
 
     test('fetchDay falls back to the second host', () async {
@@ -918,9 +1159,8 @@ void main() {
       expect(find.text('Mantı'), findsOneWidget);
     });
 
-    testWidgets('date label never claims a non-today day is today', (
-      tester,
-    ) async {      final db = AppDatabase(NativeDatabase.memory());
+    testWidgets('no extra Today button shifts the layout', (tester) async {
+      final db = AppDatabase(NativeDatabase.memory());
       addTearDown(() => db.close());
       final gated = _GatedFakeMenuProvider();
       await tester.pumpWidget(
@@ -943,17 +1183,87 @@ void main() {
           '${d.day.toString().padLeft(2, '0')}';
       // On today: date button shows the iso only, no extra Today button.
       expect(find.text(iso(today)), findsOneWidget);
-      expect(find.textContaining('·'), findsNothing);
-      // Move to tomorrow: date updates and a jump-back Today button appears.
+      expect(find.text('Today'), findsNothing);
+      // Move to tomorrow: date updates, still no Today button pushing
+      // content down — tapping the date itself jumps back to today.
       await tester.tap(find.byTooltip('Next day'));
       await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
       await tester.pump();
       final tomorrow = DateTime(today.year, today.month, today.day + 1);
-      expect(find.text(iso(tomorrow)), findsOneWidget);
-      expect(find.text('Today'), findsOneWidget);
+      final todayIso = iso(today);
+      final nextIso = iso(tomorrow);
+      expect(find.text(nextIso), findsOneWidget);
+      expect(find.text('Today'), findsNothing);
+      await tester.tap(find.text(nextIso));
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+      await tester.pump();
+      gated.gates[todayIso]!.complete(gated.dayFor(todayIso));
+      await tester.pumpAndSettle();
+      expect(find.text('Dish $todayIso'), findsOneWidget);
+      expect(find.text('Dish $nextIso'), findsNothing);
     });
 
-    testWidgets('campus switch fits a narrow phone screen', (tester) async {
+    testWidgets('stale-format cache shows while the refetch runs', (
+      tester,
+    ) async {
+      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(() => db.close());
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final iso =
+          '${today.year.toString().padLeft(4, '0')}-'
+          '${today.month.toString().padLeft(2, '0')}-'
+          '${today.day.toString().padLeft(2, '0')}';
+      // Pre-normalization ALL-CAPS row: invalid per isCacheValid, but must
+      // still render (stale) instead of an error view while refetching.
+      await MenuCacheRepository(db).storeDay(
+        'itu',
+        'genel',
+        iso,
+        MenuDay(
+          date: today,
+          locationId: 'genel',
+          locationName: 'Genel',
+          meals: const [
+            ServedMeal(
+              kind: 'ogle',
+              serviceHours: '11:30 - 14:00',
+              dishes: [MenuDish(name: 'TUTMAÇ ÇORBASI', category: 'Çorba')],
+            ),
+          ],
+        ),
+      );
+      final gate = Completer<void>();
+      final provider = ItuMenuProvider(
+        MockClient((_) async {
+          await gate.future;
+          return http.Response.bytes(
+            utf8.encode(_ituOgleFixture),
+            200,
+            headers: {'content-type': 'text/html; charset=utf-8'},
+          );
+        }),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MenuScreen(provider: provider),
+          ),
+        ),
+      );
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+      await tester.pump();
+      expect(find.text('TUTMAÇ ÇORBASI'), findsOneWidget);
+      gate.complete();
+      await tester.pumpAndSettle();
+      // Refetch replaced the stale row with the normalized dish.
+      expect(find.text('Tutmaç Çorbası'), findsOneWidget);
+    });
+
+    testWidgets('location switch fits a narrow phone screen', (tester) async {
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);

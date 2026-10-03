@@ -29,6 +29,13 @@ String hhmm(int minutes) {
   return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
 }
 
+/// Locale-aware [hhmm]: Turkish uses a dot separator (08.40),
+/// everything else keeps the colon (08:40). Padding is unchanged.
+String hhmmLocale(int minutes, String locale) {
+  final base = hhmm(minutes);
+  return locale.toLowerCase().startsWith('tr') ? base.replaceAll(':', '.') : base;
+}
+
 /// Parses "HH:mm" into minutes-from-midnight; null on bad input.
 int? parseHHmm(String s) {
   final parts = s.split(':');

@@ -69,6 +69,18 @@ final settingsRepositoryProvider = Provider(
 /// View seeds preloaded in main() and overridden with saved values.
 final calendarViewSeedProvider = Provider<String>((ref) => 'list');
 final absencesViewSeedProvider = Provider<String>((ref) => 'grid');
+final calendarOrientationSeedProvider = Provider<String>(
+  (ref) => 'horizontal',
+);
+
+/// Default-absence-limit seed preloaded in main(). The record separates
+/// "loaded, no value set" (ready: true, limit: null → the field stays
+/// empty) from "not loaded yet" (ready: false → the field hides until
+/// the async load lands). Seeded text on frame one means no delayed
+/// fill — and therefore no fill animation — is possible.
+final defaultLimitSeedProvider = Provider<({bool ready, int? limit})>(
+  (ref) => (ready: false, limit: null),
+);
 
 class CalendarViewNotifier extends Notifier<String> {
   @override
@@ -84,11 +96,22 @@ class AbsencesViewNotifier extends Notifier<String> {
   void set(String view) => state = view;
 }
 
+class CalendarOrientationNotifier extends Notifier<String> {
+  @override
+  String build() => ref.watch(calendarOrientationSeedProvider);
+
+  void set(String orientation) => state = orientation;
+}
+
 /// Notifiers keep the in-memory view in sync with settings.
 final initialCalendarViewProvider =
     NotifierProvider<CalendarViewNotifier, String>(CalendarViewNotifier.new);
 final initialAbsencesViewProvider =
     NotifierProvider<AbsencesViewNotifier, String>(AbsencesViewNotifier.new);
+final initialCalendarOrientationProvider =
+    NotifierProvider<CalendarOrientationNotifier, String>(
+      CalendarOrientationNotifier.new,
+    );
 
 final reminderSchedulerProvider = Provider(
   (ref) => ReminderScheduler(

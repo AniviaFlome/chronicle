@@ -31,6 +31,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get copy => 'Copy';
 
   @override
+  String get courseCodeLabel => 'Course code';
+
+  @override
+  String get courseCodeHint => 'e.g. MAT 103E';
+
+  @override
+  String get fetchCatalogButton => 'Fetch details';
+
+  @override
+  String get catalogFetching => 'Fetching course details…';
+
+  @override
+  String get catalogNotFound => 'Course not found in the catalog';
+
+  @override
+  String get catalogCrnHint =>
+      'CRN lookup isn\'t supported — enter the course code (e.g. MAT 103), then pick the CRN in the section list';
+
+  @override
+  String get catalogSectionTitle => 'Pick a section';
+
+  @override
+  String catalogSlotsSummary(Object count) {
+    return '$count weekly slots from the catalog';
+  }
+
+  @override
+  String get catalogClearSlots => 'Use manual times instead';
+
+  @override
   String get errorAddSlot => 'Could not add time slot';
 
   @override
@@ -111,7 +141,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuSourceNone => 'None';
 
   @override
-  String get menuSourceItuName => 'Itu';
+  String get menuSourceItuName => 'ITU';
 
   @override
   String get allergensTitle => 'Allergens';
@@ -1181,6 +1211,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gridTimeLabels => 'Grid time labels';
+
+  @override
+  String get calendarLayout => 'Day layout';
+
+  @override
+  String get layoutHorizontal => 'Horizontal';
+
+  @override
+  String get layoutVertical => 'Vertical';
 
   @override
   String get modeClassTimes => 'Class times';

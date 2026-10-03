@@ -51,16 +51,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   bool _portraitLock = false;
   String _localeOverride = 'system';
   String _menuProviderId = '';
+  String _calendarOrientation = 'horizontal';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _seedDefaultLimit();
     _loadDefaultLimit();
     _loadScheduleDefaults();
     _loadLocale();
     _loadPortraitLock();
     _loadMenuProvider();
+    _loadCalendarOrientation();
+  }
+
+  Future<void> _loadCalendarOrientation() async {
+    try {
+      final value = await ref
+          .read(settingsRepositoryProvider)
+          .calendarOrientation();
+      if (!mounted) return;
+      setState(() => _calendarOrientation = value);
+      ref.read(initialCalendarOrientationProvider.notifier).set(value);
+    } catch (e) {
+      logLoadFailure('Load calendar layout', e);
+    }
+  }
+
+  Future<void> _setCalendarOrientation(String value) async {
+    setState(() => _calendarOrientation = value);
+    ref.read(initialCalendarOrientationProvider.notifier).set(value);
+    await _saveSetting(
+      () => ref.read(settingsRepositoryProvider).setCalendarOrientation(value),
+      (m) => context.l10n.couldNotSaveSetting(m),
+    );
   }
 
   Future<void> _loadPortraitLock() async {
@@ -125,6 +150,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       }),
       (m) => context.l10n.couldNotSaveSetting(m),
     );
+  }
+
+  /// Seeds the absence-limit field synchronously when main() preloaded
+  /// the value: the row builds with its text on frame one, so no delayed
+  /// fill (and no fill animation) can occur. The async load below still
+  /// refreshes it afterwards with identical values.
+  void _seedDefaultLimit() {
+    final seed = ref.read(defaultLimitSeedProvider);
+    if (!seed.ready) return;
+    if (seed.limit != null) _defaultLimit.text = seed.limit.toString();
+    _defaultLimitLoaded = true;
   }
 
   Future<void> _loadDefaultLimit() async {
@@ -808,49 +844,62 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             icon: Icons.event_busy_outlined,
             title: context.l10n.navAbsences,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                child: Form(
-                  key: _defaultLimitFormKey,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _defaultLimit,
-                          enabled: _defaultLimitLoaded,
-                          decoration: InputDecoration(
-                            labelText: context.l10n.defaultAbsenceLimit,
-                            helperText: context.l10n.prefilledHint,
-                            helperMaxLines: 2,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 14,
+              // Hidden until the saved value loads, keeping its layout slot:
+              // the row appears once, already correct — no mid-screen
+              // label/value fill-in animation, no layout shift.
+              Visibility(
+                visible: _defaultLimitLoaded,
+                maintainSize: true,
+                maintainState: true,
+                maintainAnimation: true,
+                child: Padding(
+                  // Rebuilt fresh once loaded so the pre-filled value
+                  // renders with its label already floated: the maintained
+                  // subtree would otherwise replay the float animation.
+                  key: ValueKey('default-limit-$_defaultLimitLoaded'),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                  child: Form(
+                    key: _defaultLimitFormKey,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _defaultLimit,
+                            enabled: _defaultLimitLoaded,
+                            decoration: InputDecoration(
+                              labelText: context.l10n.defaultAbsenceLimit,
+                              helperText: context.l10n.prefilledHint,
+                              helperMaxLines: 2,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 14,
+                              ),
                             ),
+                            keyboardType: TextInputType.number,
+                            validator: (value) {
+                              final text = value?.trim() ?? '';
+                              if (text.isEmpty) return null;
+                              final limit = int.tryParse(text);
+                              return limit == null || limit < 0
+                                  ? context.l10n.enterNonNegative
+                                  : null;
+                            },
+                            onFieldSubmitted: (_) => _saveDefaultLimit(),
                           ),
-                          keyboardType: TextInputType.number,
-                          validator: (value) {
-                            final text = value?.trim() ?? '';
-                            if (text.isEmpty) return null;
-                            final limit = int.tryParse(text);
-                            return limit == null || limit < 0
-                                ? context.l10n.enterNonNegative
-                                : null;
-                          },
-                          onFieldSubmitted: (_) => _saveDefaultLimit(),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: FilledButton(
-                          onPressed: _savingDefaultLimit
-                              ? null
-                              : _saveDefaultLimit,
-                          child: Text(context.l10n.save),
+                        const SizedBox(width: 16),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: FilledButton(
+                            onPressed: _savingDefaultLimit
+                                ? null
+                                : _saveDefaultLimit,
+                            child: Text(context.l10n.save),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -966,6 +1015,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             icon: Icons.calendar_month_outlined,
             title: context.l10n.navCalendar,
             children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: DropdownButtonFormField<String>(
+                  initialValue: _calendarOrientation,
+                  decoration: InputDecoration(
+                    labelText: context.l10n.calendarLayout,
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'horizontal',
+                      child: Text(context.l10n.layoutHorizontal),
+                    ),
+                    DropdownMenuItem(
+                      value: 'vertical',
+                      child: Text(context.l10n.layoutVertical),
+                    ),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) _setCalendarOrientation(v);
+                  },
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: _DayRangePicker(),

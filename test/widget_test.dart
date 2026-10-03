@@ -802,6 +802,236 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
+  testWidgets('Vertical edge pull flips the calendar week', (tester) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: CalendarScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    String title() => tester
+        .widget<Text>(
+          find.descendant(
+            of: find.byType(AppBar),
+            matching: find.byType(Text),
+          ),
+        )
+        .data!;
+    // A context inside the week body but above its scrollables, below
+    // the edge-pull listener (dispatching from a day column trips a
+    // stale Scrollbar listener node in the test tree).
+    final bodyContext = tester.element(find.byType(IndexedStack).first);
+    FixedScrollMetrics metrics() => FixedScrollMetrics(
+      minScrollExtent: 0,
+      maxScrollExtent: 0,
+      pixels: 0,
+      viewportDimension: 600,
+      axisDirection: AxisDirection.down,
+      devicePixelRatio: 1,
+    );
+    // Synthetic edge pull: finger-held overscroll past the bottom edge.
+    // (Widget-test drags can't drive nested scrollables to overscroll,
+    // so the gesture's notification contract is exercised directly.)
+    void pull(double overscroll) {
+      OverscrollNotification(
+        metrics: metrics(),
+        context: bodyContext,
+        overscroll: overscroll,
+        dragDetails: DragUpdateDetails(
+          globalPosition: Offset.zero,
+          localPosition: Offset.zero,
+        ),
+      ).dispatch(bodyContext);
+    }
+
+    void liftFinger() {
+      ScrollEndNotification(metrics: metrics(), context: bodyContext)
+          .dispatch(bodyContext);
+    }
+
+    final first = title();
+    // Past the bottom edge (swipe up) flips to next week; a second pull
+    // without lifting does not skip another week.
+    pull(200);
+    await tester.pumpAndSettle();
+    final next = title();
+    expect(next, isNot(first));
+    pull(200);
+    await tester.pumpAndSettle();
+    expect(title(), next);
+    // After lifting, another pull flips again; past the top edge
+    // (swipe down) flips back.
+    liftFinger();
+    pull(200);
+    await tester.pumpAndSettle();
+    expect(title(), isNot(next));
+    liftFinger();
+    pull(-200);
+    await tester.pumpAndSettle();
+    expect(title(), next);
+    liftFinger();
+    pull(-200);
+    await tester.pumpAndSettle();
+    expect(title(), first);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Vertical orientation stacks list days full-width', (tester) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          calendarOrientationSeedProvider.overrideWithValue('vertical'),
+        ],
+        child: const MaterialApp(home: CalendarScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Empty days render one '—' placeholder each: all 7 stacked in one
+    // vertical column (same horizontal center, spread down the page).
+    expect(find.text('—'), findsNWidgets(7));
+    final centers = [
+      for (var i = 0; i < 7; i++) tester.getCenter(find.text('—').at(i)),
+    ];
+    for (final c in centers) {
+      expect(c.dx, moreOrLessEquals(400, epsilon: 1));
+    }
+    expect(centers.last.dy, greaterThan(centers.first.dy + 500));
+    // The horizontal day strip is gone entirely.
+    final horizontals = tester
+        .widgetList<SingleChildScrollView>(find.byType(SingleChildScrollView))
+        .where((s) => s.scrollDirection == Axis.horizontal);
+    expect(horizontals, isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Vertical orientation stacks grid days', (tester) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          calendarViewSeedProvider.overrideWithValue('grid'),
+          calendarOrientationSeedProvider.overrideWithValue('vertical'),
+        ],
+        child: const MaterialApp(home: CalendarScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Hour labels repeat in every stacked day section.
+    expect(find.text('09:00'), findsWidgets);
+    // All 7 weekday headers share one left edge, stacked down the page.
+    final lefts = [
+      for (final d in const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
+        tester.getTopLeft(find.text(d)),
+    ];
+    for (final p in lefts) {
+      expect(p.dx, moreOrLessEquals(lefts.first.dx, epsilon: 1));
+    }
+    expect(lefts.last.dy, greaterThan(lefts.first.dy + 500));
+    // No horizontal scrollers remain (no sticky header, no day strip).
+    final horizontals = tester
+        .widgetList<SingleChildScrollView>(find.byType(SingleChildScrollView))
+        .where((s) => s.scrollDirection == Axis.horizontal);
+    expect(horizontals, isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Edge pull below the threshold does not flip the week', (
+    tester,
+  ) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: CalendarScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    String title() => tester
+        .widget<Text>(
+          find.descendant(
+            of: find.byType(AppBar),
+            matching: find.byType(Text),
+          ),
+        )
+        .data!;
+    final bodyContext = tester.element(find.byType(IndexedStack).first);
+    FixedScrollMetrics metrics() => FixedScrollMetrics(
+      minScrollExtent: 0,
+      maxScrollExtent: 0,
+      pixels: 0,
+      viewportDimension: 600,
+      axisDirection: AxisDirection.down,
+      devicePixelRatio: 1,
+    );
+    void pull(double overscroll) {
+      OverscrollNotification(
+        metrics: metrics(),
+        context: bodyContext,
+        overscroll: overscroll,
+        dragDetails: DragUpdateDetails(
+          globalPosition: Offset.zero,
+          localPosition: Offset.zero,
+        ),
+      ).dispatch(bodyContext);
+    }
+
+    void liftFinger() {
+      ScrollEndNotification(metrics: metrics(), context: bodyContext)
+          .dispatch(bodyContext);
+    }
+
+    final first = title();
+    // 100px is under the 160px threshold: no flip.
+    pull(100);
+    await tester.pumpAndSettle();
+    expect(title(), first);
+    liftFinger();
+    // Past the threshold still flips as before.
+    pull(200);
+    await tester.pumpAndSettle();
+    expect(title(), isNot(first));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Hour gutter holds at narrow width with large text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          calendarViewSeedProvider.overrideWithValue('grid'),
+        ],
+        child: const MaterialApp(home: CalendarScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('09:00'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
   testWidgets('Tasks screen sections seeded tasks', (tester) async {
     tester.view.physicalSize = const Size(800, 1400);
     tester.view.devicePixelRatio = 1.0;
@@ -1411,6 +1641,70 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
+  testWidgets('Absence limit shows seeded value on the first frame', (
+    tester,
+  ) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          defaultLimitSeedProvider.overrideWithValue((
+            ready: true,
+            limit: 4,
+          )),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const SettingsScreen(),
+        ),
+      ),
+    );
+    // Exactly one frame: the async settings read cannot have completed,
+    // so anything visible here came from the seed, not a delayed fill.
+    await tester.pump();
+    // Row already flipped (key) with text in place: no delayed fill, so
+    // no fill animation is possible.
+    expect(find.byKey(const ValueKey('default-limit-true')), findsOneWidget);
+    final fields = tester.widgetList<TextFormField>(find.byType(TextFormField));
+    expect(fields.where((f) => f.controller?.text == '4'), hasLength(1));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Absence limit seed without a value shows an empty row', (
+    tester,
+  ) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          defaultLimitSeedProvider.overrideWithValue((
+            ready: true,
+            limit: null,
+          )),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const SettingsScreen(),
+        ),
+      ),
+    );
+    // Exactly one frame: the row is already visible (loaded), with no
+    // text — the "loaded, no value set" branch of the seed.
+    await tester.pump();
+    expect(find.byKey(const ValueKey('default-limit-true')), findsOneWidget);
+    final fields = tester.widgetList<TextFormField>(find.byType(TextFormField));
+    expect(fields.where((f) => f.controller?.text == '4'), isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
   testWidgets('Error dialog shows selectable details', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -1513,12 +1807,83 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Time grid view'));
     await tester.pumpAndSettle();
-    // Classic grid labels hours only; fixed boundaries shape the range
-    // and break shading, not the gutter labels.
-    expect(find.text('14:00'), findsWidgets);
-    expect(find.text('15:00'), findsWidgets);
-    expect(find.text('15:10'), findsNothing);
-    expect(find.text('16:10'), findsNothing);
+    // Slot grid: one two-line range label per lesson row; breaks take
+    // no space. The 09:00 class stretches the range down, so the span
+    // before the first slot becomes its own absorbed row.
+    expect(find.text('09:00\n14:00'), findsWidgets);
+    expect(find.text('14:00\n15:00'), findsWidgets);
+    expect(find.text('15:10\n16:10'), findsWidgets);
+    expect(find.text('16:10\n17:00'), findsWidgets);
+    expect(find.text('09:00'), findsNothing);
+    expect(find.text('15:00'), findsNothing);
+    final closing = db.close();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await closing;
+  });
+
+  testWidgets('Calendar grid labels lesson starts like the sheet', (
+    tester,
+  ) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.runAsync(() async {
+      final settings = SettingsRepository(db);
+      await settings.setGridMarkersMode('fixed');
+      await settings.setDayStartMinutes(8 * 60 + 40);
+      await settings.setGridFixedLesson(50);
+      await settings.setGridFixedBreak(10);
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: CalendarScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Time grid view'));
+    await tester.pumpAndSettle();
+    // Sheet rhythm: each row is one lesson carrying its own time
+    // range; breaks take no space and get no label.
+    expect(find.text('08:40\n09:30'), findsWidgets);
+    expect(find.text('09:30'), findsNothing);
+    expect(find.text('09:40\n10:30'), findsWidgets);
+    expect(find.text('10:30'), findsNothing);
+    expect(find.text('10:40\n11:30'), findsWidgets);
+    final closing = db.close();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await closing;
+  });
+
+  testWidgets('Calendar grid uses dot separator in Turkish locale', (
+    tester,
+  ) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.runAsync(() async {
+      final settings = SettingsRepository(db);
+      await settings.setGridMarkersMode('fixed');
+      await settings.setDayStartMinutes(8 * 60 + 40);
+      await settings.setGridFixedLesson(50);
+      await settings.setGridFixedBreak(10);
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          locale: const Locale('tr'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const CalendarScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Zaman ızgarası görünümü'));
+    await tester.pumpAndSettle();
+    // Turkish time separator is the dot: 08.40, not 08:40.
+    expect(find.text('08.40\n09.30'), findsWidgets);
+    expect(find.text('08:40'), findsNothing);
+    expect(find.text('09.40\n10.30'), findsWidgets);
     final closing = db.close();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
@@ -1729,17 +2094,19 @@ void main() {
     await tester.tap(find.byTooltip('Time grid view'));
     await tester.pumpAndSettle();
     await pumpForAsync(tester);
-    // Default 60/10 rhythm from 06:00 shapes the range and breaks;
-    // the classic gutter labels hours only.
-    expect(find.text('06:00'), findsWidgets);
-    expect(find.text('07:00'), findsWidgets);
-    expect(find.text('07:10'), findsNothing);
+    // Slot grid: each lesson row carries its own time range. The
+    // 09:40–10:30 class fills the 09:30–10:30 row.
+    expect(find.text('06:00\n07:00'), findsWidgets);
+    expect(find.text('07:00'), findsNothing);
+    expect(find.text('07:10\n08:10'), findsWidgets);
+    expect(find.text('09:30\n10:30'), findsWidgets);
+    expect(find.text('Physics'), findsWidgets);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());
   });
 
-  testWidgets('Grid labels hours instead of class times', (tester) async {
+  testWidgets('Grid labels class slot boundaries', (tester) async {
     final db = AppDatabase(NativeDatabase.memory());
     await tester.runAsync(() async {
       final repo = ClassRepository(db);
@@ -1765,12 +2132,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Time grid view'));
     await tester.pumpAndSettle();
-    // Classic grid: hourly gutter labels; class start/end times are not
-    // gutter labels (they show inside the blocks instead).
-    expect(find.text('09:00'), findsWidgets);
-    expect(find.text('10:00'), findsWidgets);
-    expect(find.text('09:40'), findsNothing);
-    expect(find.text('10:30'), findsNothing);
+    // Class-times mode: the gutter marks the week's lesson start/end
+    // minutes, replacing the whole hours between the range edges.
+    expect(find.text('06:00'), findsWidgets);
+    expect(find.text('09:40'), findsWidgets);
+    expect(find.text('10:30'), findsWidgets);
+    expect(find.text('22:00'), findsWidgets);
+    expect(find.text('09:00'), findsNothing);
+    expect(find.text('10:00'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());
@@ -1939,7 +2308,7 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
-  testWidgets('Fixed grid draws boundaries and shaded breaks', (tester) async {
+  testWidgets('Fixed grid renders slot rows without break boxes', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -1962,21 +2331,20 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    // Generated boundaries shape the range and break shading; the
-    // classic gutter labels hours only: 12:00, 13:00, 14:00.
-    expect(find.text('12:00'), findsWidgets);
-    expect(find.text('13:00'), findsWidgets);
-    expect(find.text('14:00'), findsWidgets);
-    expect(find.text('12:45'), findsNothing);
-    expect(find.text('12:55'), findsNothing);
-    expect(find.text('13:40'), findsNothing);
-    // One shaded break box per gap per day column (1 gap x 7 days).
+    // Slot grid: lesson rows carry their own time ranges; the tail past
+    // the last boundary becomes its own row. Breaks take no space, so
+    // no shaded boxes. 13:00 is mid-lesson, not a mark.
+    expect(find.text('12:00\n12:45'), findsWidgets);
+    expect(find.text('12:55\n13:40'), findsWidgets);
+    expect(find.text('13:40\n14:00'), findsWidgets);
+    expect(find.text('13:00'), findsNothing);
+    // No shaded break boxes in slot mode (was: 1 gap x 7 days).
     final breaks = find.byWidgetPredicate(
       (w) =>
           w.key is ValueKey &&
           (w.key as ValueKey).value.toString().startsWith('break_'),
     );
-    expect(breaks, findsNWidgets(7));
+    expect(breaks, findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());
@@ -2479,6 +2847,49 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Class 7'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
+
+  testWidgets('Calendar grid extends to fit without extra padding', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.runAsync(() async {
+      // Custom day bounds 09:00-17:00 with one class starting at 08:00:
+      // the grid stretches exactly to 08:00, not 07:30.
+      final settings = SettingsRepository(db);
+      await settings.setDayStartMinutes(540);
+      await settings.setDayEndMinutes(1020);
+      await ClassRepository(db).createClassWithSlots(
+        ClassesCompanion.insert(name: 'Early class', colorValue: 0xFF4F6BED),
+        [
+          ScheduleItemsCompanion.insert(
+            classId: 0,
+            dayOfWeek: 1,
+            startMinutes: 480,
+            endMinutes: 530,
+            rotation: RotationKind.weekly,
+          ),
+        ],
+      );
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: CalendarScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Time grid view'));
+    await tester.pumpAndSettle();
+    expect(find.text('08:00'), findsWidgets);
+    expect(find.text('07:30'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();

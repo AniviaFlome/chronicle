@@ -7,6 +7,8 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../data/database.dart';
 import '../l10n/l10n.dart';
 import '../providers.dart';
+import '../services/course_catalog/course_catalog.dart';
+import '../services/course_catalog/itu_obs.dart';
 import '../theme.dart';
 import '../utils/time_format.dart';
 import '../utils/ui_feedback.dart';
@@ -36,10 +38,19 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
   late final TextEditingController _notes;
   late final TextEditingController _maxAbsences;
   late final TextEditingController _reminder;
+  late final TextEditingController _courseCode;
   late int _color;
   bool _active = true;
   int? _yearId;
   bool _busy = false;
+
+  bool _catalogBusy = false;
+  String? _catalogError;
+
+  /// Weekly slots taken from a picked catalog section. Only used when
+  /// creating the class; while non-empty the manual meets-on/time
+  /// controls are hidden and _save persists these instead.
+  List<SlotDraft> _catalogSlots = const [];
 
   /// Weekdays (1 = Monday .. 7 = Sunday) the class meets on. Only used when
   /// creating the class; afterwards meeting times are managed per slot.
@@ -66,6 +77,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
     _reminder = TextEditingController(
       text: e?.reminderMinutes?.toString() ?? '',
     );
+    _courseCode = TextEditingController();
     _color = e?.colorValue ?? classColorPalette.first;
     _active = e?.active ?? true;
     _yearId = e?.yearId;
@@ -105,6 +117,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
     _notes.dispose();
     _maxAbsences.dispose();
     _reminder.dispose();
+    _courseCode.dispose();
     super.dispose();
   }
 
@@ -172,13 +185,167 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
     if (picked != null && mounted) setState(() => _color = picked.toARGB32());
   }
 
+  /// Looks up the typed course code in the ITU catalog and fills the
+  /// form. Results with sections open a section picker on new classes;
+  /// the picked section also supplies the weekly slots.
+  Future<void> _fetchCatalog() async {
+    if (_catalogBusy) return;
+    setState(() {
+      _catalogBusy = true;
+      _catalogError = null;
+    });
+    try {
+      final result = await ItuObsCatalog().lookup(_courseCode.text);
+      if (!mounted) return;
+      _applyCourse(result.course);
+      CourseSection? picked;
+      if (widget.existing == null && result.sections.isNotEmpty) {
+        picked = await _pickSection(result.sections);
+        if (!mounted) return;
+      }
+      if (picked != null) _applySection(picked);
+    } catch (e) {
+      logLoadFailure('Fetch course details', e);
+      if (mounted) {
+        setState(
+          () => _catalogError = e is CourseLookupException &&
+                  e.failure == CourseLookupFailure.crnNotSupported
+              ? context.l10n.catalogCrnHint
+              : context.l10n.catalogNotFound,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _catalogBusy = false);
+    }
+  }
+
+  /// Fills empty fields from a catalog course; never overwrites what the
+  /// user already typed. Catalog facts append to notes (once per code).
+  void _applyCourse(CatalogCourse course) {
+    final l10n = context.l10n;
+    final name = l10n.localeName.startsWith('tr')
+        ? course.name
+        : (course.nameAlt ?? course.name);
+    final facts = [
+      course.code,
+      if (course.credits != null) 'Kredi: ${_trimNum(course.credits!)}',
+      if (course.ects != null) 'AKTS: ${_trimNum(course.ects!)}',
+      if (course.language != null) course.language!,
+      if (course.department != null) course.department!,
+      if (course.type != null) course.type!,
+    ].join(' · ');
+    setState(() {
+      if (_name.text.trim().isEmpty) _name.text = name;
+      if (facts.isNotEmpty && !_notes.text.contains(course.code)) {
+        _notes.text = _notes.text.trim().isEmpty
+            ? facts
+            : '${_notes.text.trim()}\n$facts';
+      }
+      _catalogError = null;
+    });
+  }
+
+  String _trimNum(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+
+  void _applySection(CourseSection section) {
+    final facts = [
+      'CRN ${section.crn}',
+      if (section.method != null) section.method!,
+      if (section.quota != null)
+        'Kontenjan: ${section.quota}'
+        '${section.enrolled != null ? ' · Yazılan: ${section.enrolled}' : ''}',
+      if (section.prerequisites != null)
+        'Önşart: ${section.prerequisites}',
+    ].join(' · ');
+    setState(() {
+      if (_teacher.text.trim().isEmpty && section.instructor.isNotEmpty) {
+        _teacher.text = section.instructor;
+      }
+      if (_room.text.trim().isEmpty && section.room.isNotEmpty) {
+        _room.text = section.room;
+      }
+      if (_building.text.trim().isEmpty && section.building.isNotEmpty) {
+        _building.text = section.building;
+      }
+      if (facts.isNotEmpty && !_notes.text.contains('CRN ${section.crn}')) {
+        _notes.text = _notes.text.trim().isEmpty
+            ? facts
+            : '${_notes.text.trim()}\n$facts';
+      }
+      _catalogSlots = [
+        for (final s in section.slots)
+          SlotDraft(
+            dayOfWeek: s.weekday,
+            startMinutes: s.startMinutes,
+            endMinutes: s.endMinutes,
+            room: s.room.isEmpty ? null : s.room,
+          ),
+      ];
+    });
+  }
+
+  String _fmtMinutes(int m) =>
+      TimeOfDay(hour: m ~/ 60, minute: m % 60).format(context);
+
+  /// Lets the user choose one of the course's weekly sections (ITU).
+  Future<CourseSection?> _pickSection(List<CourseSection> sections) {
+    final l10n = context.l10n;
+    final rows = [
+      for (final s in sections)
+        (
+          title: s.instructor.isEmpty ? s.code : s.instructor,
+          subtitle: [
+            [
+              for (final slot in s.slots)
+                '${shortWeekdayName(slot.weekday, l10n.localeName)} '
+                    '${_fmtMinutes(slot.startMinutes)}–'
+                    '${_fmtMinutes(slot.endMinutes)}',
+            ].join(', '),
+            [
+              if (s.room.isNotEmpty) s.room,
+              'CRN ${s.crn}',
+            ].join(' · '),
+          ].join('\n'),
+        ),
+    ];
+    return showDialog<CourseSection>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(l10n.catalogSectionTitle),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: sections.length,
+            itemBuilder: (_, i) => ListTile(
+              title: Text(rows[i].title),
+              subtitle: Text(rows[i].subtitle),
+              onTap: () => Navigator.of(c).pop(sections[i]),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(),
+            child: Text(l10n.cancel),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _save() async {
     if (_busy || !_formKey.currentState!.validate()) return;
     final repo = ref.read(classRepositoryProvider);
 
-    // Meeting times for a new class: one weekly slot per selected weekday.
+    // Meeting times for a new class: catalog section slots win when the
+    // user picked one, otherwise one weekly slot per selected weekday.
     List<SlotDraft> newSlots = const [];
     if (widget.existing == null) {
+      if (_catalogSlots.isNotEmpty) {
+        newSlots = _catalogSlots;
+      } else {
       if (_days.isEmpty) {
         showErrorSnack(context, context.l10n.selectWeekday);
         return;
@@ -197,6 +364,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
         for (final d in _days.toList()..sort())
           SlotDraft(dayOfWeek: d, startMinutes: startM, endMinutes: endM),
       ];
+      }
     }
 
     final entry = ClassesCompanion.insert(
@@ -338,6 +506,70 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
                       : null,
               autofocus: widget.existing == null,
             ),
+            ...[
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _courseCode,
+                      decoration: InputDecoration(
+                        labelText: context.l10n.courseCodeLabel,
+                        hintText: context.l10n.courseCodeHint,
+                      ),
+                      textCapitalization: TextCapitalization.characters,
+                      onFieldSubmitted: (_) => _fetchCatalog(),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: _catalogBusy ? null : _fetchCatalog,
+                    icon: _catalogBusy
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cloud_download_outlined),
+                    label: Text(
+                      _catalogBusy
+                          ? context.l10n.catalogFetching
+                          : context.l10n.fetchCatalogButton,
+                    ),
+                  ),
+                ],
+              ),
+              if (_catalogError != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _catalogError!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ],
+              if (widget.existing == null && _catalogSlots.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        context.l10n.catalogSlotsSummary(_catalogSlots.length),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          setState(() => _catalogSlots = const []),
+                      child: Text(context.l10n.catalogClearSlots),
+                    ),
+                  ],
+                ),
+              ],
+            ],
             const SizedBox(height: 12),
             Text(context.l10n.colorLabel, style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 4),
@@ -419,7 +651,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            if (widget.existing == null) ...[
+            if (widget.existing == null && _catalogSlots.isEmpty) ...[
               Text(context.l10n.meetsOn, style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: 4),
               Wrap(
