@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-03
+
 ### Added
 - Calendar time grid is a slot grid in fixed-rhythm mode: each lesson is
   one uniform row labeled with its own time range (08:40–09:30), breaks
