@@ -8,9 +8,7 @@ Cross-platform student planner: class schedules, absences, tasks and exams, a fo
 
 Catppuccin Mocha with the Mauve accent.
 
-| Today | Calendar | Classes | Tasks | Absences | Menu | Settings |
-| --- | --- | --- | --- | --- | --- | --- |
-| ![Today on phone](assets/screenshots/mobile/today.png) | ![Calendar on phone](assets/screenshots/mobile/calendar.png) | ![Classes on phone](assets/screenshots/mobile/classes.png) | ![Tasks on phone](assets/screenshots/mobile/tasks.png) | ![Absences on phone](assets/screenshots/mobile/absences.png) | ![Menu on phone](assets/screenshots/mobile/menu.png) | ![Settings on phone](assets/screenshots/mobile/settings.png) |
+![Phone screenshots: Today, Calendar, Classes, Tasks, Absences, Menu, Settings](assets/screenshots/mobile/all.png)
 
 ## Install
 
