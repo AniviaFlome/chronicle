@@ -323,6 +323,15 @@ class XtraEvents extends Table {
   IntColumn get colorValue =>
       integer().withDefault(const Constant(0xFF30A46C))();
 
+  /// Repeat rule. Null = one-off event. Repeats expand at read time in
+  /// [XtraRepository.watchRange]/[XtraRepository.range]; copies share the
+  /// series id, so edits and deletes apply to the whole series.
+  TextColumn get repeatKind => textEnum<RepeatKind>().nullable()();
+
+  /// ISO date: stop generating repeats after this day. Null = forever
+  /// (capped in practice by the expansion window).
+  TextColumn get repeatUntil => text().nullable()();
+
   /// Stable cross-device identity for folder sync (Syncthing transport).
   /// '' only transiently for pre-v6 rows until the v6 migration backfills.
   TextColumn get uuid => text().withDefault(const Constant(''))();

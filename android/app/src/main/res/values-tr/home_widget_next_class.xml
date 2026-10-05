@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_widget_next_class_label">Sonraki ders</string>
+    <string name="home_widget_next_class_description">Bugünkü mevcut veya sonraki dersi gösterir.</string>
+    <string name="home_widget_next_class_t_fb138ae6">Sonraki ders</string>
+</resources>

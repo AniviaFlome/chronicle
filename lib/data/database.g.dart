@@ -7101,6 +7101,26 @@ class $XtraEventsTable extends XtraEvents
     requiredDuringInsert: false,
     defaultValue: const Constant(0xFF30A46C),
   );
+  @override
+  late final GeneratedColumnWithTypeConverter<RepeatKind?, String> repeatKind =
+      GeneratedColumn<String>(
+        'repeat_kind',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      ).withConverter<RepeatKind?>($XtraEventsTable.$converterrepeatKindn);
+  static const VerificationMeta _repeatUntilMeta = const VerificationMeta(
+    'repeatUntil',
+  );
+  @override
+  late final GeneratedColumn<String> repeatUntil = GeneratedColumn<String>(
+    'repeat_until',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
   @override
   late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
@@ -7133,6 +7153,8 @@ class $XtraEventsTable extends XtraEvents
     location,
     notes,
     colorValue,
+    repeatKind,
+    repeatUntil,
     uuid,
     updatedAt,
   ];
@@ -7200,6 +7222,15 @@ class $XtraEventsTable extends XtraEvents
         colorValue.isAcceptableOrUnknown(data['color_value']!, _colorValueMeta),
       );
     }
+    if (data.containsKey('repeat_until')) {
+      context.handle(
+        _repeatUntilMeta,
+        repeatUntil.isAcceptableOrUnknown(
+          data['repeat_until']!,
+          _repeatUntilMeta,
+        ),
+      );
+    }
     if (data.containsKey('uuid')) {
       context.handle(
         _uuidMeta,
@@ -7253,6 +7284,16 @@ class $XtraEventsTable extends XtraEvents
         DriftSqlType.int,
         data['${effectivePrefix}color_value'],
       )!,
+      repeatKind: $XtraEventsTable.$converterrepeatKindn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}repeat_kind'],
+        ),
+      ),
+      repeatUntil: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_until'],
+      ),
       uuid: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}uuid'],
@@ -7268,6 +7309,11 @@ class $XtraEventsTable extends XtraEvents
   $XtraEventsTable createAlias(String alias) {
     return $XtraEventsTable(attachedDatabase, alias);
   }
+
+  static JsonTypeConverter2<RepeatKind, String, String> $converterrepeatKind =
+      const EnumNameConverter<RepeatKind>(RepeatKind.values);
+  static JsonTypeConverter2<RepeatKind?, String?, String?>
+  $converterrepeatKindn = JsonTypeConverter2.asNullable($converterrepeatKind);
 }
 
 class XtraEvent extends DataClass implements Insertable<XtraEvent> {
@@ -7281,6 +7327,15 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
   final String? location;
   final String? notes;
   final int colorValue;
+
+  /// Repeat rule. Null = one-off event. Repeats expand at read time in
+  /// [XtraRepository.watchRange]/[XtraRepository.range]; copies share the
+  /// series id, so edits and deletes apply to the whole series.
+  final RepeatKind? repeatKind;
+
+  /// ISO date: stop generating repeats after this day. Null = forever
+  /// (capped in practice by the expansion window).
+  final String? repeatUntil;
 
   /// Stable cross-device identity for folder sync (Syncthing transport).
   /// '' only transiently for pre-v6 rows until the v6 migration backfills.
@@ -7298,6 +7353,8 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
     this.location,
     this.notes,
     required this.colorValue,
+    this.repeatKind,
+    this.repeatUntil,
     required this.uuid,
     required this.updatedAt,
   });
@@ -7320,6 +7377,14 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
       map['notes'] = Variable<String>(notes);
     }
     map['color_value'] = Variable<int>(colorValue);
+    if (!nullToAbsent || repeatKind != null) {
+      map['repeat_kind'] = Variable<String>(
+        $XtraEventsTable.$converterrepeatKindn.toSql(repeatKind),
+      );
+    }
+    if (!nullToAbsent || repeatUntil != null) {
+      map['repeat_until'] = Variable<String>(repeatUntil);
+    }
     map['uuid'] = Variable<String>(uuid);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -7343,6 +7408,12 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
           ? const Value.absent()
           : Value(notes),
       colorValue: Value(colorValue),
+      repeatKind: repeatKind == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatKind),
+      repeatUntil: repeatUntil == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatUntil),
       uuid: Value(uuid),
       updatedAt: Value(updatedAt),
     );
@@ -7362,6 +7433,10 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
       location: serializer.fromJson<String?>(json['location']),
       notes: serializer.fromJson<String?>(json['notes']),
       colorValue: serializer.fromJson<int>(json['colorValue']),
+      repeatKind: $XtraEventsTable.$converterrepeatKindn.fromJson(
+        serializer.fromJson<String?>(json['repeatKind']),
+      ),
+      repeatUntil: serializer.fromJson<String?>(json['repeatUntil']),
       uuid: serializer.fromJson<String>(json['uuid']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -7378,6 +7453,10 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
       'location': serializer.toJson<String?>(location),
       'notes': serializer.toJson<String?>(notes),
       'colorValue': serializer.toJson<int>(colorValue),
+      'repeatKind': serializer.toJson<String?>(
+        $XtraEventsTable.$converterrepeatKindn.toJson(repeatKind),
+      ),
+      'repeatUntil': serializer.toJson<String?>(repeatUntil),
       'uuid': serializer.toJson<String>(uuid),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -7392,6 +7471,8 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
     Value<String?> location = const Value.absent(),
     Value<String?> notes = const Value.absent(),
     int? colorValue,
+    Value<RepeatKind?> repeatKind = const Value.absent(),
+    Value<String?> repeatUntil = const Value.absent(),
     String? uuid,
     int? updatedAt,
   }) => XtraEvent(
@@ -7403,6 +7484,8 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
     location: location.present ? location.value : this.location,
     notes: notes.present ? notes.value : this.notes,
     colorValue: colorValue ?? this.colorValue,
+    repeatKind: repeatKind.present ? repeatKind.value : this.repeatKind,
+    repeatUntil: repeatUntil.present ? repeatUntil.value : this.repeatUntil,
     uuid: uuid ?? this.uuid,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -7422,6 +7505,12 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
       colorValue: data.colorValue.present
           ? data.colorValue.value
           : this.colorValue,
+      repeatKind: data.repeatKind.present
+          ? data.repeatKind.value
+          : this.repeatKind,
+      repeatUntil: data.repeatUntil.present
+          ? data.repeatUntil.value
+          : this.repeatUntil,
       uuid: data.uuid.present ? data.uuid.value : this.uuid,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -7438,6 +7527,8 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
           ..write('location: $location, ')
           ..write('notes: $notes, ')
           ..write('colorValue: $colorValue, ')
+          ..write('repeatKind: $repeatKind, ')
+          ..write('repeatUntil: $repeatUntil, ')
           ..write('uuid: $uuid, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -7454,6 +7545,8 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
     location,
     notes,
     colorValue,
+    repeatKind,
+    repeatUntil,
     uuid,
     updatedAt,
   );
@@ -7469,6 +7562,8 @@ class XtraEvent extends DataClass implements Insertable<XtraEvent> {
           other.location == this.location &&
           other.notes == this.notes &&
           other.colorValue == this.colorValue &&
+          other.repeatKind == this.repeatKind &&
+          other.repeatUntil == this.repeatUntil &&
           other.uuid == this.uuid &&
           other.updatedAt == this.updatedAt);
 }
@@ -7482,6 +7577,8 @@ class XtraEventsCompanion extends UpdateCompanion<XtraEvent> {
   final Value<String?> location;
   final Value<String?> notes;
   final Value<int> colorValue;
+  final Value<RepeatKind?> repeatKind;
+  final Value<String?> repeatUntil;
   final Value<String> uuid;
   final Value<int> updatedAt;
   const XtraEventsCompanion({
@@ -7493,6 +7590,8 @@ class XtraEventsCompanion extends UpdateCompanion<XtraEvent> {
     this.location = const Value.absent(),
     this.notes = const Value.absent(),
     this.colorValue = const Value.absent(),
+    this.repeatKind = const Value.absent(),
+    this.repeatUntil = const Value.absent(),
     this.uuid = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -7505,6 +7604,8 @@ class XtraEventsCompanion extends UpdateCompanion<XtraEvent> {
     this.location = const Value.absent(),
     this.notes = const Value.absent(),
     this.colorValue = const Value.absent(),
+    this.repeatKind = const Value.absent(),
+    this.repeatUntil = const Value.absent(),
     this.uuid = const Value.absent(),
     this.updatedAt = const Value.absent(),
   }) : title = Value(title),
@@ -7518,6 +7619,8 @@ class XtraEventsCompanion extends UpdateCompanion<XtraEvent> {
     Expression<String>? location,
     Expression<String>? notes,
     Expression<int>? colorValue,
+    Expression<String>? repeatKind,
+    Expression<String>? repeatUntil,
     Expression<String>? uuid,
     Expression<int>? updatedAt,
   }) {
@@ -7530,6 +7633,8 @@ class XtraEventsCompanion extends UpdateCompanion<XtraEvent> {
       if (location != null) 'location': location,
       if (notes != null) 'notes': notes,
       if (colorValue != null) 'color_value': colorValue,
+      if (repeatKind != null) 'repeat_kind': repeatKind,
+      if (repeatUntil != null) 'repeat_until': repeatUntil,
       if (uuid != null) 'uuid': uuid,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -7544,6 +7649,8 @@ class XtraEventsCompanion extends UpdateCompanion<XtraEvent> {
     Value<String?>? location,
     Value<String?>? notes,
     Value<int>? colorValue,
+    Value<RepeatKind?>? repeatKind,
+    Value<String?>? repeatUntil,
     Value<String>? uuid,
     Value<int>? updatedAt,
   }) {
@@ -7556,6 +7663,8 @@ class XtraEventsCompanion extends UpdateCompanion<XtraEvent> {
       location: location ?? this.location,
       notes: notes ?? this.notes,
       colorValue: colorValue ?? this.colorValue,
+      repeatKind: repeatKind ?? this.repeatKind,
+      repeatUntil: repeatUntil ?? this.repeatUntil,
       uuid: uuid ?? this.uuid,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -7588,6 +7697,14 @@ class XtraEventsCompanion extends UpdateCompanion<XtraEvent> {
     if (colorValue.present) {
       map['color_value'] = Variable<int>(colorValue.value);
     }
+    if (repeatKind.present) {
+      map['repeat_kind'] = Variable<String>(
+        $XtraEventsTable.$converterrepeatKindn.toSql(repeatKind.value),
+      );
+    }
+    if (repeatUntil.present) {
+      map['repeat_until'] = Variable<String>(repeatUntil.value);
+    }
     if (uuid.present) {
       map['uuid'] = Variable<String>(uuid.value);
     }
@@ -7608,6 +7725,8 @@ class XtraEventsCompanion extends UpdateCompanion<XtraEvent> {
           ..write('location: $location, ')
           ..write('notes: $notes, ')
           ..write('colorValue: $colorValue, ')
+          ..write('repeatKind: $repeatKind, ')
+          ..write('repeatUntil: $repeatUntil, ')
           ..write('uuid: $uuid, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -15244,6 +15363,8 @@ typedef $$XtraEventsTableCreateCompanionBuilder = XtraEventsCompanion Function({
   Value<String?> location,
   Value<String?> notes,
   Value<int> colorValue,
+  Value<RepeatKind?> repeatKind,
+  Value<String?> repeatUntil,
   Value<String> uuid,
   Value<int> updatedAt,
 });
@@ -15256,6 +15377,8 @@ typedef $$XtraEventsTableUpdateCompanionBuilder = XtraEventsCompanion Function({
   Value<String?> location,
   Value<String?> notes,
   Value<int> colorValue,
+  Value<RepeatKind?> repeatKind,
+  Value<String?> repeatUntil,
   Value<String> uuid,
   Value<int> updatedAt,
 });
@@ -15306,6 +15429,17 @@ class $$XtraEventsTableFilterComposer
 
   ColumnFilters<int> get colorValue => $composableBuilder(
     column: $table.colorValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<RepeatKind?, RepeatKind, String>
+  get repeatKind => $composableBuilder(
+    column: $table.repeatKind,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<String> get repeatUntil => $composableBuilder(
+    column: $table.repeatUntil,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15369,6 +15503,16 @@ class $$XtraEventsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get repeatKind => $composableBuilder(
+    column: $table.repeatKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get repeatUntil => $composableBuilder(
+    column: $table.repeatUntil,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get uuid => $composableBuilder(
     column: $table.uuid,
     builder: (column) => ColumnOrderings(column),
@@ -15419,6 +15563,17 @@ class $$XtraEventsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumnWithTypeConverter<RepeatKind?, String> get repeatKind =>
+      $composableBuilder(
+        column: $table.repeatKind,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<String> get repeatUntil => $composableBuilder(
+    column: $table.repeatUntil,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get uuid =>
       $composableBuilder(column: $table.uuid, builder: (column) => column);
 
@@ -15465,6 +15620,8 @@ class $$XtraEventsTableTableManager
                 Value<String?> location = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<int> colorValue = const Value.absent(),
+                Value<RepeatKind?> repeatKind = const Value.absent(),
+                Value<String?> repeatUntil = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
               }) => XtraEventsCompanion(
@@ -15476,6 +15633,8 @@ class $$XtraEventsTableTableManager
                 location: location,
                 notes: notes,
                 colorValue: colorValue,
+                repeatKind: repeatKind,
+                repeatUntil: repeatUntil,
                 uuid: uuid,
                 updatedAt: updatedAt,
               ),
@@ -15489,6 +15648,8 @@ class $$XtraEventsTableTableManager
                 Value<String?> location = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<int> colorValue = const Value.absent(),
+                Value<RepeatKind?> repeatKind = const Value.absent(),
+                Value<String?> repeatUntil = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
               }) => XtraEventsCompanion.insert(
@@ -15500,6 +15661,8 @@ class $$XtraEventsTableTableManager
                 location: location,
                 notes: notes,
                 colorValue: colorValue,
+                repeatKind: repeatKind,
+                repeatUntil: repeatUntil,
                 uuid: uuid,
                 updatedAt: updatedAt,
               ),

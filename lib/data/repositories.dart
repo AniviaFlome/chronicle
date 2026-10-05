@@ -750,25 +750,73 @@ class XtraRepository {
   XtraRepository(this.db);
 
   Stream<List<XtraEvent>> watchRange(String fromIso, String toIso) =>
-      (db.select(db.xtraEvents)
-            ..where(
-              (e) =>
-                  e.date.isBiggerOrEqualValue(fromIso) &
-                  e.date.isSmallerOrEqualValue(toIso),
-            )
-            ..orderBy([
-              (e) => OrderingTerm.asc(e.date),
-              (e) => OrderingTerm.asc(e.startMinutes),
-            ]))
-          .watch();
-
-  Future<List<XtraEvent>> range(String fromIso, String toIso) =>
       (db.select(db.xtraEvents)..where(
             (e) =>
-                e.date.isBiggerOrEqualValue(fromIso) &
-                e.date.isSmallerOrEqualValue(toIso),
+                ((e.date.isBiggerOrEqualValue(fromIso) &
+                        e.date.isSmallerOrEqualValue(toIso)) |
+                    e.repeatKind.isNotNull()),
           ))
-          .get();
+          .watch()
+          .map((rows) => expandXtraRepeats(rows, fromIso, toIso));
+
+  Future<List<XtraEvent>> range(String fromIso, String toIso) async {
+    final rows =
+        await (db.select(db.xtraEvents)..where(
+              (e) =>
+                  ((e.date.isBiggerOrEqualValue(fromIso) &
+                          e.date.isSmallerOrEqualValue(toIso)) |
+                      e.repeatKind.isNotNull()),
+            ))
+            .get();
+    return expandXtraRepeats(rows, fromIso, toIso);
+  }
+
+  /// Expands repeating Xtra series into per-day copies within
+  /// [fromIso]–[toIso]. Copies share the series id, so edits and deletes
+  /// apply to the whole series. One-off rows pass through only when their
+  /// date is in range.
+  static List<XtraEvent> expandXtraRepeats(
+    List<XtraEvent> rows,
+    String fromIso,
+    String toIso,
+  ) {
+    final out = <XtraEvent>[];
+    for (final row in rows) {
+      final anchor = DateTime.tryParse(row.date);
+      final kind = row.repeatKind;
+      if (kind == null || anchor == null) {
+        if (row.date.compareTo(fromIso) >= 0 &&
+            row.date.compareTo(toIso) <= 0) {
+          out.add(row);
+        }
+        continue;
+      }
+      var d = DateTime(anchor.year, anchor.month, anchor.day);
+      // ~10 years of daily occurrences; the loop also breaks at the
+      // range end or repeatUntil, so monthly/weekly series stop much
+      // earlier. Keeps pathological forever-daily anchors bounded.
+      var guard = 0;
+      while (guard++ < 3700) {
+        final iso = isoFromDateTime(d);
+        if (row.repeatUntil != null && iso.compareTo(row.repeatUntil!) > 0) {
+          break;
+        }
+        if (iso.compareTo(toIso) > 0) break;
+        if (iso.compareTo(fromIso) >= 0) out.add(row.copyWith(date: iso));
+        d = switch (kind) {
+          // Wall-clock steps (see TaskRepository.nextRepeatDate).
+          RepeatKind.daily => shiftDays(d, 1),
+          RepeatKind.weekly => shiftDays(d, 7),
+          RepeatKind.monthly => DateTime(d.year, d.month + 1, d.day),
+        };
+      }
+    }
+    out.sort((a, b) {
+      final d = a.date.compareTo(b.date);
+      return d != 0 ? d : (a.startMinutes ?? 0).compareTo(b.startMinutes ?? 0);
+    });
+    return out;
+  }
 
   Future<int> create(XtraEventsCompanion entry) => db
       .into(db.xtraEvents)
@@ -1269,6 +1317,18 @@ class SettingsRepository {
 
   Future<void> setAutoSync(bool value) =>
       set(autoSyncKey, value ? 'true' : 'false');
+
+  static const syncSettingsKey = 'sync_settings';
+
+  /// Whether app settings ride along in the data folder (opt-in, default
+  /// off). Only an allowlist of portable keys syncs (see
+  /// [DataFolderService.syncedSettingKeys]); device-specific keys (folder
+  /// path, sync markers, this toggle itself) never leave the device.
+  Future<bool> syncSettings() async =>
+      (await get(syncSettingsKey)) == 'true';
+
+  Future<void> setSyncSettings(bool value) =>
+      set(syncSettingsKey, value ? 'true' : 'false');
 }
 
 class MenuCacheRepository {

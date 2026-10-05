@@ -2450,6 +2450,18 @@ abstract class AppLocalizations {
   /// **'Export changes and import updates automatically'**
   String get autoSyncHint;
 
+  /// No description provided for @syncSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync settings'**
+  String get syncSettingsTitle;
+
+  /// No description provided for @syncSettingsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Include appearance and calendar settings in exports and imports'**
+  String get syncSettingsHint;
+
   /// No description provided for @syncError.
   ///
   /// In en, this message translates to:

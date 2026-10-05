@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static picker preview for the Due tasks (compact) widget (hand-written:
+     re-add android:previewLayout to due_tasks_compact_home_widget.xml after
+     any CLI regen). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="#1C1B1F">
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Due tasks · 3"
+        android:textSize="12sp"
+        android:textColor="#D0BCFF" />
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="! Submit lab report · 2026-10-06"
+        android:textSize="14sp"
+        android:textColor="#E6E1E5" />
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Read chapter 4 · 2026-10-07"
+        android:textSize="14sp"
+        android:textColor="#E6E1E5" />
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Problem set 5 · 2026-10-09"
+        android:textSize="14sp"
+        android:textColor="#E6E1E5" />
+</LinearLayout>

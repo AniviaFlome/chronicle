@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_widget_next_class_label">Next class</string>
+    <string name="home_widget_next_class_description">Shows the current or next class today.</string>
+    <string name="home_widget_next_class_t_fb138ae6">Next class</string>
+</resources>

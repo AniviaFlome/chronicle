@@ -239,6 +239,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     rotationLabel: rotationLabel,
                   );
                 }
+                // Day layout is mobile-only: non-mobile platforms always
+                // render the horizontal strip, even if a synced/phone-saved
+                // 'vertical' value lingers. defaultTargetPlatform (not
+                // Platform.isAndroid) keeps widget tests exercising both.
+                final savedOrientation = ref.watch(
+                  initialCalendarOrientationProvider,
+                );
+                final mobile =
+                    defaultTargetPlatform == TargetPlatform.android ||
+                    defaultTargetPlatform == TargetPlatform.iOS;
                 return _WeekBody(
                   start: start,
                   end: end,
@@ -248,7 +258,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   absenceKeys: absenceKeys,
                   rotationLabel: rotationLabel,
                   view: _view,
-                  orientation: ref.watch(initialCalendarOrientationProvider),
+                  orientation: mobile ? savedOrientation : 'horizontal',
                   listCtrl: _listCtrl,
                   gridCtrl: _gridCtrl,
                   listVertCtrl: _listVertCtrl,

@@ -34,7 +34,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   static QueryExecutor _openConnection() {
     return driftDatabase(name: 'chronicle');
@@ -187,6 +187,12 @@ class AppDatabase extends _$AppDatabase {
         await _addColumnIfMissing(m, yearFiles, yearFiles.uuid);
         await _addColumnIfMissing(m, yearFiles, yearFiles.updatedAt);
         await _backfillSyncColumns(m);
+      }
+      if (from < 11) {
+        // Xtra event repetition: nullable rule columns, no backfill
+        // needed (null = one-off, preserving old behavior).
+        await _addColumnIfMissing(m, xtraEvents, xtraEvents.repeatKind);
+        await _addColumnIfMissing(m, xtraEvents, xtraEvents.repeatUntil);
       }
     },
     beforeOpen: (_) => customStatement('PRAGMA foreign_keys = ON'),

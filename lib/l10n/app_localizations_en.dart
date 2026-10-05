@@ -1399,6 +1399,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get autoSyncHint => 'Export changes and import updates automatically';
 
   @override
+  String get syncSettingsTitle => 'Sync settings';
+
+  @override
+  String get syncSettingsHint =>
+      'Include appearance and calendar settings in exports and imports';
+
+  @override
   String syncError(Object error) {
     return 'Sync error: $error';
   }

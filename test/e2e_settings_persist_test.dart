@@ -29,6 +29,9 @@ void main() {
         // Catalog source defaults to none; pick ITU here.
         expect(await settings.catalogSource(), '');
         await settings.setCatalogSource('itu');
+        // Settings sync defaults to off; opt in here.
+        expect(await settings.syncSettings(), isFalse);
+        await settings.setSyncSettings(true);
       });
       await tester.runAsync(() => db.close());
 
@@ -39,7 +42,11 @@ void main() {
         await tester.runAsync(() => settings2.startCalendarOnToday()),
         isFalse,
       );
-      expect(await tester.runAsync(() => settings2.catalogSource()), 'itu');      expect(
+      expect(await tester.runAsync(() => settings2.catalogSource()), 'itu');
+      expect(
+        await tester.runAsync(() => settings2.syncSettings()),
+        isTrue,
+      );      expect(
         await tester.runAsync(() => settings2.dayStartMinutes()),
         480,
       );

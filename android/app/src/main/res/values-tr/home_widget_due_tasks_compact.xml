@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_widget_due_tasks_compact_label">Yaklaşan Görevler</string>
+    <string name="home_widget_due_tasks_compact_description">Yaklaşan 3 açık görevi gösterir.</string>
+    <string name="home_widget_due_tasks_compact_t_5c236a5d">Vadesi gelen yok</string>
+</resources>

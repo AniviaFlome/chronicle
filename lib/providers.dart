@@ -582,6 +582,7 @@ class DataFolderStatus {
   final int? lastExportAt;
   final int? lastImportAt;
   final bool autoSync;
+  final bool syncSettings;
   final String? syncError;
   final int conflicts;
 
@@ -594,6 +595,7 @@ class DataFolderStatus {
     required this.lastExportAt,
     required this.lastImportAt,
     required this.autoSync,
+    required this.syncSettings,
     required this.storageGranted,
     this.syncError,
     this.conflicts = 0,
@@ -612,6 +614,7 @@ final dataFolderStatusProvider = FutureProvider<DataFolderStatus>((ref) async {
   final lastExportFuture = settings.dataLastExportAt();
   final lastImportFuture = settings.dataLastImportAt();
   final autoSyncFuture = settings.autoSync();
+  final syncSettingsFuture = settings.syncSettings();
   final syncErrorFuture = settings.dataSyncError();
   final conflictsFuture = settings.dataLastConflicts();
   return DataFolderStatus(
@@ -619,6 +622,7 @@ final dataFolderStatusProvider = FutureProvider<DataFolderStatus>((ref) async {
     lastExportAt: await lastExportFuture,
     lastImportAt: await lastImportFuture,
     autoSync: await autoSyncFuture,
+    syncSettings: await syncSettingsFuture,
     storageGranted: storageGranted,
     syncError: await syncErrorFuture,
     conflicts: await conflictsFuture,

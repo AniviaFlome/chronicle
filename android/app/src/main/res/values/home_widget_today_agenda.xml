@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_widget_today_agenda_label">Today’s classes</string>
+    <string name="home_widget_today_agenda_description">Lists today’s classes.</string>
+    <string name="home_widget_today_agenda_t_26612293">No classes today</string>
+</resources>

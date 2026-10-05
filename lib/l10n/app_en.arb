@@ -840,6 +840,8 @@
   },
   "autoSyncTitle": "Auto-sync",
   "autoSyncHint": "Export changes and import updates automatically",
+  "syncSettingsTitle": "Sync settings",
+  "syncSettingsHint": "Include appearance and calendar settings in exports and imports",
   "syncError": "Sync error: {error}",
   "@syncError": {
     "placeholders": {

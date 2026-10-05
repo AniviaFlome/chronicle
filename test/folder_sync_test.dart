@@ -180,4 +180,99 @@ void main() {
       }
     });
   });
+
+  testWidgets('settings snapshot exports only when opted in', (tester) async {
+    await tester.runAsync(() async {
+      final folder = await Directory.systemTemp.createTemp('fs-set-exp');
+      final base = await Directory.systemTemp.createTemp('fs-set-exp-st');
+      final db = AppDatabase(NativeDatabase.memory());
+      try {
+        final repo = SettingsRepository(db);
+        await repo.setDataFolder(folder.path);
+        await repo.setAppTheme('nord');
+        // Opted out (default): no settings file at all.
+        await DataFolderService(db, null, base).exportData();
+        expect(File('${folder.path}/settings.json').existsSync(), isFalse);
+        // Opted in: snapshot carries the allowlisted key.
+        await repo.setSyncSettings(true);
+        await DataFolderService(db, null, base).exportData();
+        final snap = File('${folder.path}/settings.json').readAsStringSync();
+        expect(snap, contains('nord'));
+        expect(snap, contains('app_theme'));
+      } finally {
+        await db.close();
+        await folder.delete(recursive: true);
+        await base.delete(recursive: true);
+      }
+    });
+  });
+
+  testWidgets('settings snapshot imports allowlisted keys only', (tester) async {
+    await tester.runAsync(() async {
+      final folder = await Directory.systemTemp.createTemp('fs-set-im');
+      final baseA = await Directory.systemTemp.createTemp('fs-set-im-a');
+      final baseB = await Directory.systemTemp.createTemp('fs-set-im-b');
+      final dbA = AppDatabase(NativeDatabase.memory());
+      final dbB = AppDatabase(NativeDatabase.memory());
+      try {
+        final repoA = SettingsRepository(dbA);
+        await repoA.setDataFolder(folder.path);
+        await repoA.setSyncSettings(true);
+        await repoA.setAppTheme('dracula');
+        await DataFolderService(dbA, null, baseA).exportData();
+        // Smuggle a device-specific key and an unknown key into the file:
+        // neither may apply on the peer.
+        final file = File('${folder.path}/settings.json');
+        file.writeAsStringSync(
+          file.readAsStringSync().replaceFirst(
+            '"app_theme"',
+            '"auto_sync": "true", "evil": "x", "app_theme"',
+          ),
+        );
+        final repoB = SettingsRepository(dbB);
+        await repoB.setDataFolder(folder.path);
+        await repoB.setSyncSettings(true);
+        await repoB.setAutoSync(false);
+        await DataFolderService(dbB, null, baseB).importData();
+        expect(await repoB.appTheme(), 'dracula');
+        expect(await repoB.autoSync(), isFalse);
+        expect(await repoB.get('evil'), isNull);
+      } finally {
+        await dbA.close();
+        await dbB.close();
+        await folder.delete(recursive: true);
+        await baseA.delete(recursive: true);
+        await baseB.delete(recursive: true);
+      }
+    });
+  });
+
+  testWidgets('settings snapshot ignored when opted out', (tester) async {
+    await tester.runAsync(() async {
+      final folder = await Directory.systemTemp.createTemp('fs-set-off');
+      final baseA = await Directory.systemTemp.createTemp('fs-set-off-a');
+      final baseB = await Directory.systemTemp.createTemp('fs-set-off-b');
+      final dbA = AppDatabase(NativeDatabase.memory());
+      final dbB = AppDatabase(NativeDatabase.memory());
+      try {
+        final repoA = SettingsRepository(dbA);
+        await repoA.setDataFolder(folder.path);
+        await repoA.setSyncSettings(true);
+        await repoA.setAppTheme('nord');
+        await DataFolderService(dbA, null, baseA).exportData();
+        final repoB = SettingsRepository(dbB);
+        await repoB.setDataFolder(folder.path);
+        await repoB.setAppTheme('default');
+        // Opted out (default): the peer snapshot is left alone.
+        await DataFolderService(dbB, null, baseB).importData();
+        expect(await repoB.appTheme(), 'default');
+      } finally {
+        await dbA.close();
+        await dbB.close();
+        await folder.delete(recursive: true);
+        await baseA.delete(recursive: true);
+        await baseB.delete(recursive: true);
+      }
+    });
+  });
 }

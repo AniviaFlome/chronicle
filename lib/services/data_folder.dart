@@ -31,6 +31,11 @@ class DataFolderService {
   static const manifestFile = 'manifest.json';
   static const tombstonesFile = 'tombstones.json';
 
+  /// Portable app settings snapshot (opt-in via `sync_settings`).
+  /// File-level last-writer-wins: the settings table has no per-row
+  /// updatedAt, so keys merge as one snapshot gated by the manifest.
+  static const settingsFile = 'settings.json';
+
   /// Subdirectory holding attachment content blobs, named
   /// `<stem>_<shortid>.<ext>` (human-readable, collision-free).
   static const filesDir = 'files';
@@ -284,6 +289,17 @@ class DataFolderService {
             'deletedAt': t.deletedAt,
           },
       ]);
+      // Opt-in settings snapshot: portable keys only, skipped entirely
+      // when the toggle is off (a stale file from an earlier opt-in is
+      // left for peers that still have it on).
+      if (await settings.syncSettings()) {
+        final snap = <String, String>{};
+        for (final key in syncedSettingKeys) {
+          final value = await settings.get(key);
+          if (value != null) snap[key] = value;
+        }
+        await writeJson(settingsFile, {'settings': snap});
+      }
       final exportedAt = DateTime.now().millisecondsSinceEpoch;
       await writeJson(manifestFile, {
         'app': appTag,
@@ -410,6 +426,24 @@ class DataFolderService {
       final tombs = await _readJsonList(dir, tombstonesFile) ?? const [];
       final lastImportBefore = await settings.dataLastImportAt() ?? 0;
       final merged = await _mergeData(dir, tables, tombs, lastImportBefore);
+      // Opt-in settings snapshot: applied only when this device also
+      // opted in. Unknown keys and non-string values are ignored so
+      // newer peers can't smuggle bookkeeping keys in.
+      if (await settings.syncSettings()) {
+        final snap = await _readJson(dir, settingsFile);
+        final incoming = snap?['settings'];
+        if (incoming is Map) {
+          for (final entry in incoming.entries) {
+            final key = entry.key;
+            final value = entry.value;
+            if (key is String &&
+                value is String &&
+                syncedSettingKeys.contains(key)) {
+              await settings.set(key, value);
+            }
+          }
+        }
+      }
       await settings.setDataLastImportAt(
         DateTime.now().millisecondsSinceEpoch,
       );
@@ -460,6 +494,7 @@ class DataFolderService {
       if (await newer('${dir.path}/$name')) return true;
     }
     if (await newer('${dir.path}/$tombstonesFile')) return true;
+    if (await newer('${dir.path}/$settingsFile')) return true;
     final blobsDir = Directory('${dir.path}/$filesDir');
     try {
       if (await blobsDir.exists()) {
@@ -645,6 +680,38 @@ class DataFolderService {
     'xtra_events',
     'class_files',
     'year_files',
+  };
+
+  /// Settings keys allowed into [settingsFile]. Portable appearance,
+  /// calendar, scheduling-default, focus and menu/catalog-source keys
+  /// only. Never here: the data folder path, sync bookkeeping markers
+  /// (`data_last_*`, `data_sync_error`), the sync toggles themselves
+  /// (`auto_sync`, `sync_settings`), device-specific locks
+  /// (`portrait_lock`), the active year, and legacy hour keys (minutes
+  /// keys are canonical).
+  static const syncedSettingKeys = {
+    SettingsRepository.appThemeKey,
+    SettingsRepository.accentColorKey,
+    SettingsRepository.localeOverrideKey,
+    SettingsRepository.calendarViewKey,
+    SettingsRepository.calendarOrientationKey,
+    SettingsRepository.calendarStartTodayKey,
+    SettingsRepository.dayStartMinutesKey,
+    SettingsRepository.dayEndMinutesKey,
+    SettingsRepository.gridMarkersModeKey,
+    SettingsRepository.gridFixedLessonKey,
+    SettingsRepository.gridFixedBreakKey,
+    SettingsRepository.defaultMaxAbsencesKey,
+    SettingsRepository.defaultStartMinutesKey,
+    SettingsRepository.defaultDurationMinutesKey,
+    SettingsRepository.defaultClassReminderKey,
+    SettingsRepository.autoEndTimeKey,
+    SettingsRepository.slotTimePresetsKey,
+    SettingsRepository.focusWorkMinutesKey,
+    SettingsRepository.focusBreakMinutesKey,
+    SettingsRepository.menuProviderKey,
+    SettingsRepository.menuLocationKey,
+    SettingsRepository.catalogSourceKey,
   };
 
   /// Deletes the local row with [uuid] in [tableKey] when its updatedAt is

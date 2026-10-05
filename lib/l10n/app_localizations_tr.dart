@@ -1371,6 +1371,13 @@ class AppLocalizationsTr extends AppLocalizations {
       'Değişiklikleri dışa, güncellemeleri içe otomatik aktar';
 
   @override
+  String get syncSettingsTitle => 'Ayarları eşitle';
+
+  @override
+  String get syncSettingsHint =>
+      'Görünüm ve takvim ayarlarını dışa/içe aktarmaya dahil et';
+
+  @override
   String syncError(Object error) {
     return 'Eşitleme hatası: $error';
   }

@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static picker preview for the Today's agenda widget, C5 look (hand-written:
+      re-add android:previewLayout to today_agenda_home_widget.xml after any
+      CLI regen. NOTE: no bare <View> elements — RemoteViews forbids them;
+      the divider is an ImageView, same as the Next-class preview fix). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="#1C1B1F">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="S&#10;4"
+            android:textSize="11sp"
+            android:gravity="center"
+            android:textColor="#CAC4D0" />
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="M&#10;5"
+            android:textSize="11sp"
+            android:gravity="center"
+            android:textStyle="bold"
+            android:textColor="#D0BCFF" />
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="T&#10;6"
+            android:textSize="11sp"
+            android:gravity="center"
+            android:textColor="#CAC4D0" />
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="W&#10;7"
+            android:textSize="11sp"
+            android:gravity="center"
+            android:textColor="#CAC4D0" />
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="T&#10;8"
+            android:textSize="11sp"
+            android:gravity="center"
+            android:textColor="#CAC4D0" />
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="F&#10;9"
+            android:textSize="11sp"
+            android:gravity="center"
+            android:textColor="#CAC4D0" />
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="S&#10;10"
+            android:textSize="11sp"
+            android:gravity="center"
+            android:textColor="#CAC4D0" />
+    </LinearLayout>
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="#2A2D37" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="72dp"
+            android:layout_height="wrap_content"
+            android:text="08:40"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#D0BCFF" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Mathematics · Room 101"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="72dp"
+            android:layout_height="wrap_content"
+            android:text="10:20"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#D0BCFF" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Physics"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="72dp"
+            android:layout_height="wrap_content"
+            android:text="13:00"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#D0BCFF" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Chemistry lab · Lab 2"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
+</LinearLayout>

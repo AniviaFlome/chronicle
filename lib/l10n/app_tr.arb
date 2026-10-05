@@ -454,6 +454,8 @@
   "couldNotAccessFile": "Seçilen dosya okunamadı. Sistem dosya seçici erişimi reddetti — tekrar deneyin.",
   "autoSyncTitle": "Otomatik eşitleme",
   "autoSyncHint": "Değişiklikleri dışa, güncellemeleri içe otomatik aktar",
+  "syncSettingsTitle": "Ayarları eşitle",
+  "syncSettingsHint": "Görünüm ve takvim ayarlarını dışa/içe aktarmaya dahil et",
   "syncError": "Eşitleme hatası: {error}",
   "@syncError": {
     "placeholders": {

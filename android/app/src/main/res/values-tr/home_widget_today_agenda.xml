@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_widget_today_agenda_label">Bugünkü dersler</string>
+    <string name="home_widget_today_agenda_description">Bugünkü dersleri listeler.</string>
+    <string name="home_widget_today_agenda_t_26612293">Bugün ders yok</string>
+</resources>

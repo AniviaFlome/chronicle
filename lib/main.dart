@@ -8,6 +8,7 @@ import 'app.dart';
 import 'data/database.dart';
 import 'data/repositories.dart';
 import 'providers.dart';
+import 'services/home_widgets.dart';
 import 'services/notifications.dart';
 import 'utils/ui_feedback.dart';
 
@@ -60,11 +61,35 @@ class StartupRunner extends ConsumerStatefulWidget {
   ConsumerState<StartupRunner> createState() => StartupRunnerState();
 }
 
-class StartupRunnerState extends ConsumerState<StartupRunner> {
+class StartupRunnerState extends ConsumerState<StartupRunner>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _runStartupTasks());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-push widget data on resume: theme code follows the system
+    // brightness + in-memory theme mode, both of which can change while
+    // backgrounded with no Settings save to trigger a push.
+    if (state == AppLifecycleState.resumed) {
+      () async {
+        try {
+          await refreshHomeWidgets(ProviderScope.containerOf(context));
+        } catch (e) {
+          logLoadFailure('Resume home widgets', e);
+        }
+      }();
+    }
   }
 
   Future<void> _runStartupTasks() async {
@@ -88,6 +113,12 @@ class StartupRunnerState extends ConsumerState<StartupRunner> {
       await ref.read(folderSyncControllerProvider).start();
     } catch (e) {
       logLoadFailure('Startup folder sync', e);
+    }
+    if (!mounted) return;
+    try {
+      await refreshHomeWidgets(ProviderScope.containerOf(context));
+    } catch (e) {
+      logLoadFailure('Startup home widgets', e);
     }
   }
 

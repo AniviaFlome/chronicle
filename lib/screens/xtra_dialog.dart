@@ -3,10 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/database.dart';
+import '../data/tables.dart';
 import '../providers.dart';
 import '../theme.dart';
 import '../l10n/l10n.dart';
 import '../utils/time_format.dart';
+
+String _repeatLabel(AppLocalizations l10n, RepeatKind? kind) =>
+    switch (kind) {
+      null => l10n.repeatNever,
+      RepeatKind.daily => l10n.repeatDaily,
+      RepeatKind.weekly => l10n.repeatWeekly,
+      RepeatKind.monthly => l10n.repeatMonthly,
+    };
 
 /// Add/edit dialog for one Xtra event. Returns true when saved.
 Future<bool> showXtraDialog(
@@ -38,6 +47,8 @@ class _XtraDialogState extends ConsumerState<_XtraDialog> {
   DateTime? _date;
   TimeOfDay? _start;
   TimeOfDay? _end;
+  RepeatKind? _repeat;
+  DateTime? _repeatUntil;
   bool _busy = false;
   final _formKey = GlobalKey<FormState>();
 
@@ -59,6 +70,10 @@ class _XtraDialogState extends ConsumerState<_XtraDialog> {
     if (e?.endMinutes != null) {
       _end = TimeOfDay(hour: e!.endMinutes! ~/ 60, minute: e.endMinutes! % 60);
     }
+    _repeat = e?.repeatKind;
+    _repeatUntil = e?.repeatUntil == null
+        ? null
+        : DateTime.tryParse(e!.repeatUntil!);
   }
 
   @override
@@ -114,6 +129,12 @@ class _XtraDialogState extends ConsumerState<_XtraDialog> {
             endMinutes: Value(endM),
             location: Value(text(_location.text)),
             notes: Value(text(_notes.text)),
+            repeatKind: Value(_repeat),
+            repeatUntil: Value(
+              _repeat == null || _repeatUntil == null
+                  ? null
+                  : isoFromDateTime(_repeatUntil!),
+            ),
           ),
         );
       } else {
@@ -125,6 +146,12 @@ class _XtraDialogState extends ConsumerState<_XtraDialog> {
             endMinutes: Value(endM),
             location: Value(text(_location.text)),
             notes: Value(text(_notes.text)),
+            repeatKind: Value(_repeat),
+            repeatUntil: Value(
+              _repeat == null || _repeatUntil == null
+                  ? null
+                  : isoFromDateTime(_repeatUntil!),
+            ),
           ),
         );
         if (!updated) throw StateError('Event no longer exists');
@@ -248,6 +275,63 @@ class _XtraDialogState extends ConsumerState<_XtraDialog> {
                   decoration: InputDecoration(labelText: context.l10n.notesLabel),
                   maxLines: 2,
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<RepeatKind?>(
+                        initialValue: _repeat,
+                        decoration: InputDecoration(
+                          labelText: context.l10n.repeatsLabel,
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: null,
+                            child: Text(context.l10n.repeatNever),
+                          ),
+                          for (final r in RepeatKind.values)
+                            DropdownMenuItem(
+                              value: r,
+                              child: Text(_repeatLabel(context.l10n, r)),
+                            ),
+                        ],
+                        onChanged: (v) => setState(() {
+                          _repeat = v;
+                          if (v == null) _repeatUntil = null;
+                        }),
+                      ),
+                    ),
+                    if (_repeat != null) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: context.l10n.repeatUntilLabel,
+                          ),
+                          child: InkWell(
+                            onTap: () async {
+                              final now = DateTime.now();
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _repeatUntil ?? now,
+                                firstDate: DateTime(now.year - 2),
+                                lastDate: DateTime(now.year + 5),
+                              );
+                              if (picked != null && mounted) {
+                                setState(() => _repeatUntil = picked);
+                              }
+                            },
+                            child: Text(
+                              _repeatUntil == null
+                                  ? context.l10n.foreverLabel
+                                  : isoFromDateTime(_repeatUntil!),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -320,10 +404,6 @@ class XtraTile extends StatelessWidget {
                     ],
                   ),
                 ),
-              ),
-              const Padding(
-                padding: EdgeInsets.only(right: 12),
-                child: Icon(Icons.event_outlined),
               ),
             ],
           ),

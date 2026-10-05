@@ -2,7 +2,38 @@
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-06
+
 ### Added
+- Android home-screen widgets (three providers): Next class (2×2, the
+  upcoming class with a live countdown and a "Then …" lookahead, swaps
+  automatically), Today's agenda (default 2×2, grows to a wide card when
+  resized: 7-day rail with circled today, divider, today's rows plus
+  dimmed upcoming classes as filler), Due tasks (2×2, top open tasks
+  with due dates, overdue first). They refresh when the app starts and
+  follow the app theme and accent live (change it in Settings and the
+  widgets re-render); the picker shows proper preview cards. All three
+  share one look: small accent header, bold title, gray details.
+- Settings sync opt-in (Settings → Data, "Sync settings", default off):
+  the data folder gains a settings.json snapshot with the portable
+  app settings (appearance, calendar, reminders, menu/catalog source…
+  — never device paths, sync markers or toggles), applied on import
+  only when the folder copy is newer.
+- Events can repeat: the event editor has a Repeats row (daily, weekly
+  or monthly) with an optional repeat-until date, so birthdays and
+  weekly meetings show up on the calendar without re-creating them.
+- Day layout (Settings → Calendar) is a mobile-only option now: desktop
+  builds always use the horizontal strip.
+
+### Fixed
+- Tapping a home-screen widget no longer lands on a "Page Not Found"
+  screen — it opens the app dashboard.
+- The Next-class widget looks ahead up to a week when today has no more
+  classes left, instead of showing an empty state.
+- The widget picker shows a proper preview card for each home-screen
+  widget instead of a blank box.
+- Event tiles created from the calendar page no longer show a redundant
+  calendar icon.
 - Course-catalog source setting (Settings → Course catalog, default
   None): the class editor's "Fetch details" button only appears once a
   source is picked, so only ITU students who opt in hit the ITU catalog.

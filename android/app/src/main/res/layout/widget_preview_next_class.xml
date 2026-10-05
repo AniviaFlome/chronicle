@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static picker preview for the Next class widget (hand-written: re-add
+     android:previewLayout to next_class_home_widget.xml after any CLI regen). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="#1C1B1F">
+    <ImageView
+        android:layout_width="6dp"
+        android:layout_height="match_parent"
+        android:background="#4F6BED" />
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:padding="12dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Next class"
+            android:textSize="12sp"
+            android:textColor="#D0BCFF" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Mathematics"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="08:40 – 09:30 · Room 101 · in 47 min"
+            android:textSize="12sp"
+            android:textColor="#CAC4D0" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Then Physics · 10:20"
+            android:textSize="12sp"
+            android:textColor="#D0BCFF" />
+    </LinearLayout>
+</LinearLayout>

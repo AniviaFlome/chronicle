@@ -91,6 +91,14 @@ List<_NavItem> _navItems(AppLocalizations l10n) => [
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
+    // Widget taps arrive as glance-action: deep links (the Glance
+    // widgets use actionStartActivity). They carry no in-app location,
+    // so send them to the dashboard instead of the error screen.
+    redirect: (context, state) =>
+        state.uri.scheme == 'glance-action' ? '/' : null,
+    // Belt and braces: never show the red "Page Not Found" screen for
+    // any other unroutable location either — fall back to the dashboard.
+    errorBuilder: (_, _) => const DashboardScreen(),
     routes: [
       ShellRoute(
         builder: (context, state, child) => _Shell(child: child),

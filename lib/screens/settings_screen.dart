@@ -20,6 +20,7 @@ import '../theme.dart';
 import '../services/bilsis.dart';
 import '../services/bilsis_pdf.dart';
 import '../services/course_catalog/course_catalog.dart';
+import '../services/home_widgets.dart';
 import '../services/ical.dart';
 import '../services/menu/menu_sources.dart';
 import '../services/storage_access.dart';
@@ -856,7 +857,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             children: [
               RadioGroup<ThemeMode>(
                 groupValue: themeMode,
-                onChanged: (v) => ref.read(themeModeProvider.notifier).set(v!),
+                onChanged: (v) async {
+                  ref.read(themeModeProvider.notifier).set(v!);
+                  await refreshHomeWidgets(ProviderScope.containerOf(context));
+                },
                 child: Column(
                   children: [
                     RadioListTile<ThemeMode>(
@@ -1065,28 +1069,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             icon: Icons.calendar_month_outlined,
             title: context.l10n.navCalendar,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: DropdownButtonFormField<String>(
-                  initialValue: _calendarOrientation,
-                  decoration: InputDecoration(
-                    labelText: context.l10n.calendarLayout,
+              // Day layout is a mobile-only option: the vertical stack
+              // exists for narrow phone screens, not desktop windows.
+              if (Platform.isAndroid || Platform.isIOS)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _calendarOrientation,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.calendarLayout,
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: 'horizontal',
+                        child: Text(context.l10n.layoutHorizontal),
+                      ),
+                      DropdownMenuItem(
+                        value: 'vertical',
+                        child: Text(context.l10n.layoutVertical),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) _setCalendarOrientation(v);
+                    },
                   ),
-                  items: [
-                    DropdownMenuItem(
-                      value: 'horizontal',
-                      child: Text(context.l10n.layoutHorizontal),
-                    ),
-                    DropdownMenuItem(
-                      value: 'vertical',
-                      child: Text(context.l10n.layoutVertical),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) _setCalendarOrientation(v);
-                  },
                 ),
-              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: _DayRangePicker(),
@@ -1261,6 +1268,7 @@ class _DataFolderTiles extends ConsumerWidget {
     final exported = status.value?.lastExportAt;
     final imported = status.value?.lastImportAt;
     final autoSync = status.value?.autoSync ?? true;
+    final syncSettings = status.value?.syncSettings ?? false;
     final syncError = status.value?.syncError;
     final conflicts = status.value?.conflicts ?? 0;
     final storageGranted = status.value?.storageGranted;
@@ -1377,6 +1385,30 @@ class _DataFolderTiles extends ConsumerWidget {
                   }
                 },
         ),
+        SwitchListTile(
+          secondary: const Icon(Icons.settings_outlined),
+          title: Text(context.l10n.syncSettingsTitle),
+          subtitle: Text(context.l10n.syncSettingsHint),
+          value: syncSettings,
+          onChanged: busy
+              ? null
+              : (v) async {
+                  try {
+                    await ref
+                        .read(settingsRepositoryProvider)
+                        .setSyncSettings(v);
+                    ref.invalidate(dataFolderStatusProvider);
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(context.l10n.couldNotSaveSetting('$e')),
+                        ),
+                      );
+                    }
+                  }
+                },
+        ),
       ],
     );
   }
@@ -1440,9 +1472,11 @@ class _ThemePicker extends ConsumerWidget {
     final theme = Theme.of(context);
 
     Future<void> selectTheme(String id) async {
+      final container = ProviderScope.containerOf(context);
       try {
         await ref.read(settingsRepositoryProvider).setAppTheme(id);
         ref.invalidate(appThemeProvider);
+        await refreshHomeWidgets(container);
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1453,9 +1487,11 @@ class _ThemePicker extends ConsumerWidget {
     }
 
     Future<void> selectAccent(int value) async {
+      final container = ProviderScope.containerOf(context);
       try {
         await ref.read(settingsRepositoryProvider).setAccentColor(value);
         ref.invalidate(accentColorProvider);
+        await refreshHomeWidgets(container);
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
