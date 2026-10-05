@@ -26,6 +26,9 @@ void main() {
         // Start-on-today defaults to true; opt out here.
         expect(await settings.startCalendarOnToday(), isTrue);
         await settings.setStartCalendarOnToday(false);
+        // Catalog source defaults to none; pick ITU here.
+        expect(await settings.catalogSource(), '');
+        await settings.setCatalogSource('itu');
       });
       await tester.runAsync(() => db.close());
 
@@ -35,7 +38,8 @@ void main() {
       expect(
         await tester.runAsync(() => settings2.startCalendarOnToday()),
         isFalse,
-      );      expect(
+      );
+      expect(await tester.runAsync(() => settings2.catalogSource()), 'itu');      expect(
         await tester.runAsync(() => settings2.dayStartMinutes()),
         480,
       );

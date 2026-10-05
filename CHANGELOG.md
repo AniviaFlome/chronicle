@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- Course-catalog source setting (Settings → Course catalog, default
+  None): the class editor's "Fetch details" button only appears once a
+  source is picked, so only ITU students who opt in hit the ITU catalog.
+  No source is selected by default; existing users pick ITU once.
+
 ## [1.7.0] - 2026-10-05
 
 ### Added
