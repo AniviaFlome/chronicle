@@ -701,6 +701,8 @@
   "calendarLayout": "Day layout",
   "layoutHorizontal": "Horizontal",
   "layoutVertical": "Vertical",
+  "startOnTodayTitle": "Start on today",
+  "startOnTodayHint": "Scroll the week to today when opening the calendar",
   "modeClassTimes": "Class times",
   "modeFixed": "Fixed time",
   "lessonMinLabel": "Lesson (min)",

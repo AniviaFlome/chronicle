@@ -361,6 +361,7 @@ Future<void> warmCalendarWeek(ProviderContainer container) async {
     container.listen(gridMarkersModeProvider, (_, _) {}),
     container.listen(fixedGridProvider, (_, _) {}),
     container.listen(weekStartDayProvider, (_, _) {}),
+    container.listen(calendarStartTodayProvider, (_, _) {}),
     container.listen(activeYearProvider, (_, _) {}),
     container.listen(holidaysStreamProvider, (_, _) {}),
     container.listen(allAbsencesStreamProvider, (_, _) {}),
@@ -376,6 +377,7 @@ Future<void> warmCalendarWeek(ProviderContainer container) async {
       'markers': () => container.read(gridMarkersModeProvider.future),
       'fixed': () => container.read(fixedGridProvider.future),
       'weekStartDay': () => container.read(weekStartDayProvider.future),
+      'startToday': () => container.read(calendarStartTodayProvider.future),
       'activeYear': () => container.read(activeYearProvider.future),
       'holidays': () => container.read(holidaysStreamProvider.future),
       'absences': () => container.read(allAbsencesStreamProvider.future),
@@ -428,6 +430,12 @@ final absenceOnDateProvider = StreamProvider.family<Absence?, (int, String)>((
 /// First day of week as ISO weekday (1 = Monday .. 7 = Sunday).
 final weekStartDayProvider = FutureProvider<int>((ref) async {
   return ref.watch(settingsRepositoryProvider).weekStartDay();
+});
+
+/// Whether the calendar scrolls the week to today on open.
+/// Defaults to true.
+final calendarStartTodayProvider = FutureProvider<bool>((ref) async {
+  return ref.watch(settingsRepositoryProvider).startCalendarOnToday();
 });
 
 /// Selected app theme id ('default' or 'catppuccin').

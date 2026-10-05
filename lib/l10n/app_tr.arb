@@ -388,6 +388,8 @@
   "calendarLayout": "Gün düzeni",
   "layoutHorizontal": "Yatay",
   "layoutVertical": "Dikey",
+  "startOnTodayTitle": "Bugünden başla",
+  "startOnTodayHint": "Takvim açıldığında haftayı bugüne kaydır",
   "modeClassTimes": "Ders saatleri",
   "modeFixed": "Sabit saat",
   "lessonMinLabel": "Ders (dk)",

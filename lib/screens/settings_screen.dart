@@ -52,6 +52,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   String _localeOverride = 'system';
   String _menuProviderId = '';
   String _calendarOrientation = 'horizontal';
+  bool _startCalendarOnToday = true;
 
   @override
   void initState() {
@@ -64,6 +65,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     _loadPortraitLock();
     _loadMenuProvider();
     _loadCalendarOrientation();
+    _loadStartCalendarOnToday();
   }
 
   Future<void> _loadCalendarOrientation() async {
@@ -84,6 +86,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     ref.read(initialCalendarOrientationProvider.notifier).set(value);
     await _saveSetting(
       () => ref.read(settingsRepositoryProvider).setCalendarOrientation(value),
+      (m) => context.l10n.couldNotSaveSetting(m),
+    );
+  }
+
+  Future<void> _loadStartCalendarOnToday() async {
+    try {
+      final value = await ref
+          .read(settingsRepositoryProvider)
+          .startCalendarOnToday();
+      if (!mounted) return;
+      setState(() => _startCalendarOnToday = value);
+    } catch (e) {
+      logLoadFailure('Load start calendar on today', e);
+    }
+  }
+
+  Future<void> _toggleStartCalendarOnToday(bool value) async {
+    setState(() => _startCalendarOnToday = value);
+    await _saveSetting(
+      () => ref
+          .read(settingsRepositoryProvider)
+          .setStartCalendarOnToday(value)
+          .then((_) {
+            ref.invalidate(calendarStartTodayProvider);
+          }),
       (m) => context.l10n.couldNotSaveSetting(m),
     );
   }
@@ -1044,6 +1071,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
                 child: _GridMarkersPicker(),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.today_outlined),
+                title: Text(context.l10n.startOnTodayTitle),
+                subtitle: Text(context.l10n.startOnTodayHint),
+                value: _startCalendarOnToday,
+                onChanged: _toggleStartCalendarOnToday,
               ),
             ],
           ),

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -94,9 +93,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final theme = Theme.of(context);
 
     // Narrow phones show slimmer day columns. The today auto-scroll below
-    // is Android-only: desktop windows keep the full week in view.
+    // runs on narrow Android layouts only: wider windows keep the full
+    // week in view. defaultTargetPlatform (not Platform.isAndroid) so
+    // widget tests, which run on the Android test platform, exercise the
+    // auto-scroll path at phone widths.
     final compactDays =
-        Platform.isAndroid && MediaQuery.of(context).size.width < 600;
+        defaultTargetPlatform == TargetPlatform.android &&
+        MediaQuery.of(context).size.width < 600;
     final listDayWidth =
         compactDays ? _dayColumnWidthCompact : _dayColumnWidth;
     final gridDayWidth =
@@ -191,6 +194,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 final dayRange = ref.watch(dayRangeProvider);
                 final markersMode = ref.watch(gridMarkersModeProvider);
                 final fixed = ref.watch(fixedGridProvider);
+                final startToday = ref.watch(calendarStartTodayProvider);
                 final weekError =
                     occurrences.error ??
                     classes.error ??
@@ -199,7 +203,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     absences.error ??
                     dayRange.error ??
                     markersMode.error ??
-                    fixed.error;
+                    fixed.error ??
+                    startToday.error;
                 if (weekError != null) {
                   return Center(
                     child: Text(context.l10n.couldNotLoadWeek('$weekError')),
@@ -222,7 +227,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     absences.hasValue &&
                     dayRange.hasValue &&
                     markersMode.hasValue &&
-                    fixed.hasValue;
+                    fixed.hasValue &&
+                    startToday.hasValue;
                 if (!ready) {
                   return _WeekSkeleton(
                     start: start,
@@ -249,7 +255,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   gridVertCtrl: _gridVertCtrl,
                   listDayWidth: listDayWidth,
                   gridDayWidth: gridDayWidth,
-                  autoScrollToday: compactDays,
+                  autoScrollToday:
+                      compactDays && (startToday.value ?? true),
                   todayMidnight: todayMidnight,
                 );
                 },
@@ -2285,12 +2292,18 @@ class _WeekBodyState extends State<_WeekBody> {
                 ),
               )
             : grid;
-        final gridChild = hideForJump('grid')
-            ? Offstage(offstage: true, child: gridBody)
-            : gridBody;
-        final listChild = hideForJump('list')
-            ? Offstage(offstage: true, child: strip)
-            : strip;
+        // Keep the Offstage wrapper across the reveal: swapping
+        // Offstage(child: X) for X remounts the scrollable subtree and
+        // resets its offset to zero, discarding the just-landed
+        // today-jump. Flipping only the flag preserves the ScrollPosition.
+        final gridChild = Offstage(
+          offstage: hideForJump('grid'),
+          child: gridBody,
+        );
+        final listChild = Offstage(
+          offstage: hideForJump('list'),
+          child: strip,
+        );
         return IndexedStack(
           index: widget.view == 'grid' ? 1 : 0,
           children: [listChild, gridChild],

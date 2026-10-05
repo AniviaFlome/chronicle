@@ -898,6 +898,16 @@ class SettingsRepository {
   Future<void> setCalendarOrientation(String value) =>
       set(calendarOrientationKey, value);
 
+  static const calendarStartTodayKey = 'calendar_start_today';
+
+  /// When true, the calendar scrolls the week to today on open.
+  /// Defaults to true.
+  Future<bool> startCalendarOnToday() async =>
+      (await get(calendarStartTodayKey)) != 'false';
+
+  Future<void> setStartCalendarOnToday(bool value) =>
+      set(calendarStartTodayKey, value ? 'true' : 'false');
+
   static const defaultMaxAbsencesKey = 'default_max_absences';
 
   /// Default absence limit applied to newly created classes. Null means

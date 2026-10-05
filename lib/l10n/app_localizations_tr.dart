@@ -1199,6 +1199,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get layoutVertical => 'Dikey';
 
   @override
+  String get startOnTodayTitle => 'Bugünden başla';
+
+  @override
+  String get startOnTodayHint => 'Takvim açıldığında haftayı bugüne kaydır';
+
+  @override
   String get modeClassTimes => 'Ders saatleri';
 
   @override

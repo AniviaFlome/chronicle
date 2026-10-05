@@ -2186,6 +2186,18 @@ abstract class AppLocalizations {
   /// **'Vertical'**
   String get layoutVertical;
 
+  /// No description provided for @startOnTodayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Start on today'**
+  String get startOnTodayTitle;
+
+  /// No description provided for @startOnTodayHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scroll the week to today when opening the calendar'**
+  String get startOnTodayHint;
+
   /// No description provided for @modeClassTimes.
   ///
   /// In en, this message translates to:

@@ -1222,6 +1222,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get layoutVertical => 'Vertical';
 
   @override
+  String get startOnTodayTitle => 'Start on today';
+
+  @override
+  String get startOnTodayHint =>
+      'Scroll the week to today when opening the calendar';
+
+  @override
   String get modeClassTimes => 'Class times';
 
   @override

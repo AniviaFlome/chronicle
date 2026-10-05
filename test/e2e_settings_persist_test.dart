@@ -23,6 +23,9 @@ void main() {
         await settings.setCalendarView('grid');
         await settings.setDayStartMinutes(480);
         await settings.setLocaleOverride('tr');
+        // Start-on-today defaults to true; opt out here.
+        expect(await settings.startCalendarOnToday(), isTrue);
+        await settings.setStartCalendarOnToday(false);
       });
       await tester.runAsync(() => db.close());
 
@@ -30,6 +33,9 @@ void main() {
       final settings2 = SettingsRepository(db2);
       expect(await tester.runAsync(() => settings2.calendarView()), 'grid');
       expect(
+        await tester.runAsync(() => settings2.startCalendarOnToday()),
+        isFalse,
+      );      expect(
         await tester.runAsync(() => settings2.dayStartMinutes()),
         480,
       );

@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-05
+
+### Added
+- Calendar setting "Start on today" (Settings → Calendar, on by
+  default): turn it off to open the week at its first day instead of
+  scrolling to today.
+
+### Fixed
+- Calendar (phones): the week now actually opens on today. The
+  today-jump landed while the week was still hidden and the reveal
+  remounted the scrollable, resetting it to the week start — today (and
+  its highlight) stayed off screen in both horizontal and vertical
+  layouts. The reveal now flips the hidden flag instead of swapping the
+  subtree, so the jump offset survives.
+
 ## [1.6.0] - 2026-10-03
 
 ### Added
