@@ -47,10 +47,6 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
   bool _catalogBusy = false;
   String? _catalogError;
 
-  /// Course-catalog source id ('' = none). Null while loading; the
-  /// fetch button stays hidden until a source is picked in Settings.
-  String? _catalogSource;
-
   /// Weekly slots taken from a picked catalog section. Only used when
   /// creating the class; while non-empty the manual meets-on/time
   /// controls are hidden and _save persists these instead.
@@ -87,19 +83,6 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
     _yearId = e?.yearId;
     if (e == null) {
       _prefillDefaults();
-    }
-    _loadCatalogSource();
-  }
-
-  Future<void> _loadCatalogSource() async {
-    try {
-      final value = await ref.read(settingsRepositoryProvider).catalogSource();
-      if (!mounted) return;
-      setState(
-        () => _catalogSource = catalogSourceIds.contains(value) ? value : '',
-      );
-    } catch (e) {
-      logLoadFailure('Load catalog source', e);
     }
   }
 
@@ -206,7 +189,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
   /// form. Results with sections open a section picker on new classes;
   /// the picked section also supplies the weekly slots.
   Future<void> _fetchCatalog() async {
-    if (_catalogBusy || _catalogSource != 'itu') return;
+    if (_catalogBusy) return;
     setState(() {
       _catalogBusy = true;
       _catalogError = null;
@@ -539,24 +522,22 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
                       onFieldSubmitted: (_) => _fetchCatalog(),
                     ),
                   ),
-                  if (_catalogSource == 'itu') ...[
-                    const SizedBox(width: 12),
-                    FilledButton.tonalIcon(
-                      onPressed: _catalogBusy ? null : _fetchCatalog,
-                      icon: _catalogBusy
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.cloud_download_outlined),
-                      label: Text(
-                        _catalogBusy
-                            ? context.l10n.catalogFetching
-                            : context.l10n.fetchCatalogButton,
-                      ),
+                  const SizedBox(width: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: _catalogBusy ? null : _fetchCatalog,
+                    icon: _catalogBusy
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cloud_download_outlined),
+                    label: Text(
+                      _catalogBusy
+                          ? context.l10n.catalogFetching
+                          : context.l10n.fetchCatalogButton,
                     ),
-                  ],
+                  ),
                 ],
               ),
               if (_catalogError != null) ...[

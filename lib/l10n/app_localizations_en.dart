@@ -40,18 +40,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fetchCatalogButton => 'Fetch details';
 
   @override
-  String get catalogSourceTitle => 'Course catalog';
-
-  @override
-  String get catalogSourceLabel => 'Catalog source';
-
-  @override
-  String get catalogSourceNone => 'None';
-
-  @override
-  String get catalogSourceItu => 'ITU';
-
-  @override
   String get catalogFetching => 'Fetching course details…';
 
   @override

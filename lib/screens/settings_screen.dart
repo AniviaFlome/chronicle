@@ -19,7 +19,6 @@ import '../l10n/l10n.dart';
 import '../theme.dart';
 import '../services/bilsis.dart';
 import '../services/bilsis_pdf.dart';
-import '../services/course_catalog/course_catalog.dart';
 import '../services/ical.dart';
 import '../services/menu/menu_sources.dart';
 import '../services/storage_access.dart';
@@ -52,7 +51,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   bool _portraitLock = false;
   String _localeOverride = 'system';
   String _menuProviderId = '';
-  String _catalogSource = '';
   String _calendarOrientation = 'horizontal';
   bool _startCalendarOnToday = true;
 
@@ -66,7 +64,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     _loadLocale();
     _loadPortraitLock();
     _loadMenuProvider();
-    _loadCatalogSource();
     _loadCalendarOrientation();
     _loadStartCalendarOnToday();
   }
@@ -144,26 +141,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     setState(() => _menuProviderId = value);
     await _saveSetting(
       () => ref.read(settingsRepositoryProvider).setMenuProviderId(value),
-      (m) => context.l10n.couldNotSaveSetting(m),
-    );
-  }
-
-  Future<void> _loadCatalogSource() async {
-    try {
-      final value = await ref.read(settingsRepositoryProvider).catalogSource();
-      if (!mounted) return;
-      setState(
-        () => _catalogSource = catalogSourceIds.contains(value) ? value : '',
-      );
-    } catch (e) {
-      logLoadFailure('Load catalog source', e);
-    }
-  }
-
-  Future<void> _setCatalogSource(String value) async {
-    setState(() => _catalogSource = value);
-    await _saveSetting(
-      () => ref.read(settingsRepositoryProvider).setCatalogSource(value),
       (m) => context.l10n.couldNotSaveSetting(m),
     );
   }
@@ -1128,34 +1105,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   ],
                   onChanged: (v) {
                     if (v != null) _setMenuProvider(v);
-                  },
-                ),
-              ),
-            ],
-          ),
-          _SettingsCard(
-            icon: Icons.menu_book_outlined,
-            title: context.l10n.catalogSourceTitle,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                child: DropdownButtonFormField<String>(
-                  initialValue: _catalogSource,
-                  decoration: InputDecoration(
-                    labelText: context.l10n.catalogSourceLabel,
-                  ),
-                  items: [
-                    DropdownMenuItem(
-                      value: '',
-                      child: Text(context.l10n.catalogSourceNone),
-                    ),
-                    DropdownMenuItem(
-                      value: 'itu',
-                      child: Text(context.l10n.catalogSourceItu),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) _setCatalogSource(v);
                   },
                 ),
               ),

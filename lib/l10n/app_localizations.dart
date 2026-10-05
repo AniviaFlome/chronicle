@@ -158,30 +158,6 @@ abstract class AppLocalizations {
   /// **'Fetch details'**
   String get fetchCatalogButton;
 
-  /// No description provided for @catalogSourceTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Course catalog'**
-  String get catalogSourceTitle;
-
-  /// No description provided for @catalogSourceLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Catalog source'**
-  String get catalogSourceLabel;
-
-  /// No description provided for @catalogSourceNone.
-  ///
-  /// In en, this message translates to:
-  /// **'None'**
-  String get catalogSourceNone;
-
-  /// No description provided for @catalogSourceItu.
-  ///
-  /// In en, this message translates to:
-  /// **'ITU'**
-  String get catalogSourceItu;
-
   /// No description provided for @catalogFetching.
   ///
   /// In en, this message translates to:

@@ -1250,17 +1250,6 @@ class SettingsRepository {
 
   Future<void> setMenuProviderId(String value) => set(menuProviderKey, value);
 
-  static const catalogSourceKey = 'catalog_source';
-
-  /// Course-catalog source id, or '' for none. The class editor hides
-  /// the catalog fetch button until the user picks a source.
-  /// Defaults to ''.
-  Future<String> catalogSource() async =>
-      (await get(catalogSourceKey)) ?? '';
-
-  Future<void> setCatalogSource(String value) =>
-      set(catalogSourceKey, value);
-
   static const autoSyncKey = 'auto_sync';
 
   /// Whether the data folder syncs automatically (debounced export on

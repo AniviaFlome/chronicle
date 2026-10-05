@@ -280,48 +280,6 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
-  testWidgets('Class editor hides the catalog fetch button with no source', (
-    tester,
-  ) async {
-    final db = AppDatabase(NativeDatabase.memory());
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
-        child: const MaterialApp(home: ClassEditScreen()),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await pumpForAsync(tester);
-    // Catalog source defaults to none: the code field stays, the
-    // ITU fetch button is hidden.
-    expect(find.widgetWithText(TextFormField, 'Course code'), findsOneWidget);
-    expect(find.text('Fetch details'), findsNothing);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpAndSettle();
-    await tester.runAsync(() => db.close());
-  });
-
-  testWidgets('Class editor shows the fetch button with the ITU source', (
-    tester,
-  ) async {
-    final db = AppDatabase(NativeDatabase.memory());
-    await tester.runAsync(
-      () => SettingsRepository(db).setCatalogSource('itu'),
-    );
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
-        child: const MaterialApp(home: ClassEditScreen()),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await pumpForAsync(tester);
-    expect(find.text('Fetch details'), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpAndSettle();
-    await tester.runAsync(() => db.close());
-  });
-
   testWidgets('Slot dialog returns a weekly meeting draft', (tester) async {
     SlotDraft? result;
     final db = AppDatabase(NativeDatabase.memory());
@@ -2571,7 +2529,7 @@ void main() {
   });
 
   testWidgets('Settings groups sections into cards', (tester) async {
-    tester.view.physicalSize = const Size(800, 3400);
+    tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     final db = AppDatabase(NativeDatabase.memory());

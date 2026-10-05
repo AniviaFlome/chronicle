@@ -40,18 +40,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String get fetchCatalogButton => 'Detayları getir';
 
   @override
-  String get catalogSourceTitle => 'Ders kataloğu';
-
-  @override
-  String get catalogSourceLabel => 'Katalog kaynağı';
-
-  @override
-  String get catalogSourceNone => 'Yok';
-
-  @override
-  String get catalogSourceItu => 'İTÜ';
-
-  @override
   String get catalogFetching => 'Ders detayları alınıyor…';
 
   @override
