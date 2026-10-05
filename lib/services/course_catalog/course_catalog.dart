@@ -14,6 +14,10 @@ library;
 /// code and pick the CRN from the section list instead.
 enum CourseLookupFailure { invalidCode, notFound, network, crnNotSupported }
 
+/// Valid course-catalog source ids. '' (none) disables catalog lookup;
+/// only implemented sources may be selected.
+const catalogSourceIds = {'itu'};
+
 class CourseLookupException implements Exception {
   const CourseLookupException(this.failure, [this.message = '']);
   final CourseLookupFailure failure;
