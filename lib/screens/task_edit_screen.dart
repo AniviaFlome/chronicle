@@ -7,6 +7,7 @@ import '../data/repositories.dart';
 import '../data/tables.dart';
 import '../providers.dart';
 import '../l10n/l10n.dart';
+import '../services/home_widgets.dart';
 import '../utils/time_format.dart';
 import '../utils/ui_feedback.dart';
 
@@ -191,6 +192,8 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
       }
       await scheduler.refreshTask(taskId);
       if (!mounted) return;
+      await refreshHomeWidgets(ProviderScope.containerOf(context));
+      if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
       logLoadFailure('Save task', e);
@@ -233,6 +236,8 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
       await ref.read(reminderSchedulerProvider).cancelTask(id);
       await ref.read(taskRepositoryProvider).delete(id);
       if (!mounted) return;
+      await refreshHomeWidgets(ProviderScope.containerOf(context));
+      if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
       logLoadFailure('Delete task', e);
@@ -247,6 +252,7 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
   Future<void> _setDone(bool done) async {
     if (_isNew) return;
     final id = widget.existing!.task.id;
+    final container = ProviderScope.containerOf(context);
     final spawned = await ref.read(taskRepositoryProvider).setDone(id, done);
     if (done) {
       await ref.read(reminderSchedulerProvider).cancelTask(id);
@@ -256,6 +262,7 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
     if (spawned != null) {
       await ref.read(reminderSchedulerProvider).refreshTask(spawned);
     }
+    await refreshHomeWidgets(container);
     if (mounted) setState(() {});
   }
 

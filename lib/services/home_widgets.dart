@@ -103,13 +103,18 @@ Future<void> _push(ProviderContainer container) async {
   final listed = upcoming.take(12).toList();
   // "Then ..." line for the entry at index i names class i+1
   // ("Then Physics · 10:20"); empty for the last class and the sentinel.
+  String nameWhen(engine.ClassOccurrence o) {
+    final name = byId[o.classId]?.name ?? '—';
+    final when =
+        '${shortWeekdayName(o.date.weekday, locale)} ${hhmmLocale(o.startMinutes, locale)}';
+    return locale.startsWith('tr')
+        ? 'Sonra $name · $when'
+        : 'Then $name · $when';
+  }
+
   String thenFor(int i) {
     if (i + 1 >= listed.length) return '';
-    final n = listed[i + 1];
-    final name = byId[n.classId]?.name ?? '—';
-    final when =
-        '${shortWeekdayName(n.date.weekday, locale)} ${hhmmLocale(n.startMinutes, locale)}';
-    return locale.startsWith('tr') ? 'Sonra $name · $when' : 'Then $name · $when';
+    return nameWhen(listed[i + 1]);
   }
 
   String detailFor(engine.ClassOccurrence o) {
@@ -128,16 +133,31 @@ Future<void> _push(ProviderContainer container) async {
             ? '${mins < 120 ? '$mins dk' : '${mins ~/ 60} sa'} içinde'
             : when;
       } else {
+        // Mid-class: say so explicitly instead of a bare end time.
         final ends = hhmmLocale(o.endMinutes, locale);
-        count = locale.startsWith('tr') ? 'bitiş $ends' : 'ends $ends';
+        count = locale.startsWith('tr')
+            ? 'Şu an · bitiş $ends'
+            : 'Currently · ends $ends';
       }
     }
     return count.isEmpty ? base : '$base · $count';
   }
 
+  final firstIsToday = listed.isNotEmpty && listed[0].date == today;
   final timed = <DateTime, NextClassTimedData>{
+    // Nothing today: say so instead of showing tomorrow's class as if
+    // it were happening now; tomorrow rides in the Then-line instead.
+    if (!firstIsToday && listed.isNotEmpty)
+      today: NextClassTimedData(
+        className: locale.startsWith('tr')
+            ? 'Bugün ders yok'
+            : 'No classes today',
+        detailLine: '',
+        thenLine: nameWhen(listed[0]),
+      ),
     for (var i = 0; i < listed.length; i++)
-      (i == 0 ? today : listed[i - 1].end): NextClassTimedData(
+      (i == 0 ? (firstIsToday ? today : listed[i].start) : listed[i - 1].end):
+          NextClassTimedData(
         className: byId[listed[i].classId]?.name ?? '—',
         detailLine: detailFor(listed[i]),
         thenLine: thenFor(i),
@@ -155,13 +175,13 @@ Future<void> _push(ProviderContainer container) async {
     themeFg: themeFg,
     themeAccent: themeAccent,
   );
-  await NextClassHomeWidget.updateWidget();
 
-  // Agenda: today's classes (max 3 today rows + filler), 7-day rail
-  // marks today. Row gaps come from the schema row spacing.
-  final agenda = [
-    for (final o in occs.where((o) => o.date == today).take(3))
-      TodayAgendaClassesItem(
+  // Agenda: one class list per day of the week ahead (the widget shows
+  // the selected rail day's rows, defaulting to today), plus the 7-day
+  // rail marking today. Row gaps come from the schema row spacing.
+  List<({String time, String name})> dayRows(int i) => [
+    for (final o in occs.where((o) => o.date == shiftDays(today, i)).take(4))
+      (
         time: hhmmLocale(o.startMinutes, locale),
         name: byId[o.classId]?.name ?? '—',
       ),
@@ -169,30 +189,23 @@ Future<void> _push(ProviderContainer container) async {
   final week = [
     for (var i = 0; i < 7; i++)
       TodayAgendaWeekItem(
-        initial: shortWeekdayName(shiftDays(today, i).weekday, locale)[0],
-        date: '${shiftDays(today, i).day}',
-        isToday: shiftDays(today, i) == today,
-      ),
-  ];
-  // Filler: upcoming classes after today so sparse days don't leave a
-  // blank card.
-  final later = [
-    for (final o in occs.where((o) => o.date != today).take(3))
-      TodayAgendaLaterItem(
-        label:
-            '${shortWeekdayName(o.date.weekday, locale)} ${hhmmLocale(o.startMinutes, locale)}',
-        name: byId[o.classId]?.name ?? '—',
+        label: shortWeekdayName(shiftDays(today, i).weekday, locale),
       ),
   ];
   await TodayAgendaHomeWidget.saveData(
     week: week,
-    classes: agenda,
-    later: later,
+    selectedDay: 0,
+    day0: [for (final r in dayRows(0)) TodayAgendaDay0Item(time: r.time, name: r.name)],
+    day1: [for (final r in dayRows(1)) TodayAgendaDay1Item(time: r.time, name: r.name)],
+    day2: [for (final r in dayRows(2)) TodayAgendaDay2Item(time: r.time, name: r.name)],
+    day3: [for (final r in dayRows(3)) TodayAgendaDay3Item(time: r.time, name: r.name)],
+    day4: [for (final r in dayRows(4)) TodayAgendaDay4Item(time: r.time, name: r.name)],
+    day5: [for (final r in dayRows(5)) TodayAgendaDay5Item(time: r.time, name: r.name)],
+    day6: [for (final r in dayRows(6)) TodayAgendaDay6Item(time: r.time, name: r.name)],
     themeBg: themeBg,
     themeFg: themeFg,
     themeAccent: themeAccent,
   );
-  await TodayAgendaHomeWidget.updateWidget();
 
   // Due tasks: open tasks with a due date, overdue first, capped at 8.
   // Rows are (title, date) pairs; the title carries a "☐ " checkbox glyph
@@ -232,5 +245,10 @@ Future<void> _push(ProviderContainer container) async {
     themeFg: themeFg,
     themeAccent: themeAccent,
   );
+  // Update all three only after every snapshot is saved, so a theme
+  // change re-renders every widget from the same push instead of one
+  // widget at a time (which read as parts lagging behind in the picker).
+  await NextClassHomeWidget.updateWidget();
+  await TodayAgendaHomeWidget.updateWidget();
   await DueTasksCompactHomeWidget.updateWidget();
 }

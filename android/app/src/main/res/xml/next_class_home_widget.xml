@@ -2,16 +2,17 @@
 <!-- // GENERATED CODE - DO NOT MODIFY BY HAND -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:initialLayout="@layout/glance_default_loading_layout"
-    android:previewLayout="@layout/widget_preview_next_class"
-    android:previewImage="@drawable/widget_preview_next_class_img"
-    android:minResizeWidth="40dp"
-    android:minResizeHeight="40dp"
-    android:minWidth="110dp"
+    android:minWidth="180dp"
     android:minHeight="110dp"
     android:updatePeriodMillis="1800000"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:targetCellWidth="2"
+    android:targetCellWidth="3"
     android:targetCellHeight="2"
     android:description="@string/home_widget_next_class_description"
+
+    android:previewLayout="@layout/widget_preview_next_class"
+    android:previewImage="@drawable/widget_preview_next_class_img"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
 />

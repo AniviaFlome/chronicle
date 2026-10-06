@@ -50,9 +50,9 @@ const _thenStyle = HWTextStyle(
 @HomeWidget(
   name: 'NextClass',
   android: HomeWidgetAndroidConfiguration(
-    minWidth: 110,
+    minWidth: 180,
     minHeight: 110,
-    targetCellWidth: 2,
+    targetCellWidth: 3,
     targetCellHeight: 2,
     updatePeriodMillis: 1800000,
   ),

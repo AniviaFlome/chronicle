@@ -7,6 +7,7 @@ import '../data/tables.dart';
 import '../providers.dart';
 import '../theme.dart';
 import '../l10n/l10n.dart';
+import '../services/home_widgets.dart';
 import '../utils/time_format.dart';
 
 String _repeatLabel(AppLocalizations l10n, RepeatKind? kind) =>
@@ -156,6 +157,8 @@ class _XtraDialogState extends ConsumerState<_XtraDialog> {
         );
         if (!updated) throw StateError('Event no longer exists');
       }
+      if (!mounted) return;
+      await refreshHomeWidgets(ProviderScope.containerOf(context));
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
@@ -188,6 +191,8 @@ class _XtraDialogState extends ConsumerState<_XtraDialog> {
     );
     if (confirmed != true || !mounted) return;
     await ref.read(xtraRepositoryProvider).delete(widget.existing!.id);
+    if (!mounted) return;
+    await refreshHomeWidgets(ProviderScope.containerOf(context));
     if (mounted) Navigator.of(context).pop(true);
   }
 

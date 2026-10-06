@@ -25,9 +25,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get close => 'Close';
 
   @override
-  String get ok => 'OK';
-
-  @override
   String get copy => 'Copy';
 
   @override
@@ -107,9 +104,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get navSettings => 'Settings';
-
-  @override
-  String get campusLabel => 'Campus';
 
   @override
   String get mealBreakfast => 'Breakfast';
@@ -346,11 +340,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get showingYear => 'Showing year';
-
-  @override
-  String absenceLimit(Object limit) {
-    return 'Absence limit: $limit';
-  }
 
   @override
   String get noClassesYet => 'No classes yet';
@@ -1003,9 +992,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get practicalLabel => 'Practical';
 
   @override
-  String get sessionKindLabel => 'Session';
-
-  @override
   String get classReminderLabel => 'Class reminder (minutes before)';
 
   @override
@@ -1109,13 +1095,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accentLabel => 'Accent';
 
   @override
-  String get generalHeader => 'General';
-
-  @override
   String get languagesHeader => 'Languages';
-
-  @override
-  String get languageLabel => 'Language';
 
   @override
   String get languageSystem => 'System default';

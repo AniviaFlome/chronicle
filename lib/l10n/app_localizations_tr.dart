@@ -25,9 +25,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String get close => 'Kapat';
 
   @override
-  String get ok => 'Tamam';
-
-  @override
   String get copy => 'Kopyala';
 
   @override
@@ -107,9 +104,6 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get navSettings => 'Ayarlar';
-
-  @override
-  String get campusLabel => 'Yerleşke';
 
   @override
   String get mealBreakfast => 'Kahvaltı';
@@ -346,11 +340,6 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get showingYear => 'Gösterilen yıl';
-
-  @override
-  String absenceLimit(Object limit) {
-    return 'Devamsızlık sınırı: $limit';
-  }
 
   @override
   String get noClassesYet => 'Henüz ders yok';
@@ -977,9 +966,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String get practicalLabel => 'Uygulama';
 
   @override
-  String get sessionKindLabel => 'Ders türü';
-
-  @override
   String get classReminderLabel => 'Ders hatırlatıcısı (dakika önce)';
 
   @override
@@ -1083,13 +1069,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get accentLabel => 'Vurgu';
 
   @override
-  String get generalHeader => 'Genel';
-
-  @override
   String get languagesHeader => 'Diller';
-
-  @override
-  String get languageLabel => 'Dil';
 
   @override
   String get languageSystem => 'Sistem varsayılanı';

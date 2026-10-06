@@ -7,6 +7,7 @@ import '../domain/grades.dart';
 import '../theme.dart';
 import '../l10n/l10n.dart';
 import '../providers.dart';
+import '../services/home_widgets.dart';
 import '../utils/time_format.dart';
 import 'focus_screen.dart';
 import 'grades_screen.dart';
@@ -240,6 +241,7 @@ class _TaskTile extends ConsumerWidget {
               Checkbox(
                 value: task.isDone,
                 onChanged: (v) async {
+                  final container = ProviderScope.containerOf(context);
                   final spawned = await ref
                       .read(taskRepositoryProvider)
                       .setDone(task.id, v ?? false);
@@ -257,6 +259,7 @@ class _TaskTile extends ConsumerWidget {
                         .read(reminderSchedulerProvider)
                         .refreshTask(spawned);
                   }
+                  await refreshHomeWidgets(container);
                 },
               ),
               Expanded(

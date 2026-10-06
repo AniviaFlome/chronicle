@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-06
+
+### Added
+- Selectable agenda days: tapping a day in the Today's-classes week rail
+  switches the widget to that day's classes (accent marks the selected
+  day); opening the app resets it to today. Next class shows
+  "Currently · ends …" while a class is in session.
+
+### Changed
+- Widgets resized to fit: Next class defaults to 3×2, Today's classes
+  to 2×1 (both still resizable). The agenda rail shows weekday names
+  (Mon, Tue…) rolling from today instead of date numbers, with no
+  header — the wide card adds the divider and rows.
+- Widgets refresh right after a class, task or event is added, edited
+  or deleted, not just on app start.
+- Task reminders are rescheduled at startup like class reminders, so
+  they survive a device reboot.
+
 ## [1.8.0] - 2026-10-06
 
 ### Added
@@ -12,8 +30,10 @@
   dimmed upcoming classes as filler), Due tasks (2×2, top open tasks
   with due dates, overdue first). They refresh when the app starts and
   follow the app theme and accent live (change it in Settings and the
-  widgets re-render); the picker shows proper preview cards. All three
-  share one look: small accent header, bold title, gray details.
+  widgets re-render); the picker shows proper preview cards. Next class
+  says "Currently" while a class is running; tapping a day in the
+  agenda rail switches the rows to that day. All three share
+  one look: small accent header, bold title, gray details.
 - Settings sync opt-in (Settings → Data, "Sync settings", default off):
   the data folder gains a settings.json snapshot with the portable
   app settings (appearance, calendar, reminders, menu/catalog source…

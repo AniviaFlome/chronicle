@@ -7,6 +7,7 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../data/database.dart';
 import '../l10n/l10n.dart';
 import '../providers.dart';
+import '../services/home_widgets.dart';
 import '../services/course_catalog/course_catalog.dart';
 import '../services/course_catalog/itu_obs.dart';
 import '../theme.dart';
@@ -423,6 +424,8 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
       ref.invalidate(classesByIdProvider);
       await ref.read(reminderSchedulerProvider).refreshClassReminders();
       if (!mounted) return;
+      await refreshHomeWidgets(ProviderScope.containerOf(context));
+      if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
       logLoadFailure('Save class', e);
@@ -465,6 +468,8 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
       ref.invalidate(engineProvider);
       ref.invalidate(classesByIdProvider);
       await ref.read(reminderSchedulerProvider).refreshClassReminders();
+      if (!mounted) return;
+      await refreshHomeWidgets(ProviderScope.containerOf(context));
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {

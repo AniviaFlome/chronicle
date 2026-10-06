@@ -97,8 +97,7 @@ class StartupRunnerState extends ConsumerState<StartupRunner>
     try {
       final scheduler = ref.read(reminderSchedulerProvider);
       NotificationService.instance.startLinuxDueChecker(scheduler);
-      await scheduler.refreshClassReminders();
-      await scheduler.nudgeOverdue();
+      await scheduler.refreshAll();
     } catch (e) {
       logLoadFailure('Startup reminder sync', e);
     }

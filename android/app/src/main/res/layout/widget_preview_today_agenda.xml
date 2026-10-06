@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Static picker preview for the Today's agenda widget, C5 look (hand-written:
-      re-add android:previewLayout to today_agenda_home_widget.xml after any
-      CLI regen. NOTE: no bare <View> elements — RemoteViews forbids them;
-      the divider is an ImageView, same as the Next-class preview fix). -->
+<!-- Static picker preview for the Today's agenda widget, current design
+     (hand-written: re-add android:previewLayout to
+     today_agenda_home_widget.xml after any CLI regen. NOTE: no bare
+     <View> elements — RemoteViews forbids them; the divider is an
+     ImageView. Rail = weekday names only, selected day accent-bold;
+     rows = accent time + white name, no rooms. Matches the live widget. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -17,16 +19,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="S&#10;4"
-            android:textSize="11sp"
-            android:gravity="center"
-            android:textColor="#CAC4D0" />
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="M&#10;5"
-            android:textSize="11sp"
+            android:text="Tue"
+            android:textSize="14sp"
             android:gravity="center"
             android:textStyle="bold"
             android:textColor="#D0BCFF" />
@@ -34,40 +28,48 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="T&#10;6"
-            android:textSize="11sp"
+            android:text="Wed"
+            android:textSize="14sp"
             android:gravity="center"
             android:textColor="#CAC4D0" />
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="W&#10;7"
-            android:textSize="11sp"
+            android:text="Thu"
+            android:textSize="14sp"
             android:gravity="center"
             android:textColor="#CAC4D0" />
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="T&#10;8"
-            android:textSize="11sp"
+            android:text="Fri"
+            android:textSize="14sp"
             android:gravity="center"
             android:textColor="#CAC4D0" />
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="F&#10;9"
-            android:textSize="11sp"
+            android:text="Sat"
+            android:textSize="14sp"
             android:gravity="center"
             android:textColor="#CAC4D0" />
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="S&#10;10"
-            android:textSize="11sp"
+            android:text="Sun"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:textColor="#CAC4D0" />
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Mon"
+            android:textSize="14sp"
             android:gravity="center"
             android:textColor="#CAC4D0" />
     </LinearLayout>
@@ -82,16 +84,17 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal">
         <TextView
-            android:layout_width="72dp"
+            android:layout_width="40dp"
             android:layout_height="wrap_content"
             android:text="08:40"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:textStyle="bold"
             android:textColor="#D0BCFF" />
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Mathematics · Room 101"
+            android:paddingStart="4dp"
+            android:text="Mathematics"
             android:textSize="14sp"
             android:textColor="#FFFFFF" />
     </LinearLayout>
@@ -100,15 +103,16 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal">
         <TextView
-            android:layout_width="72dp"
+            android:layout_width="40dp"
             android:layout_height="wrap_content"
             android:text="10:20"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:textStyle="bold"
             android:textColor="#D0BCFF" />
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:paddingStart="4dp"
             android:text="Physics"
             android:textSize="14sp"
             android:textColor="#FFFFFF" />
@@ -118,16 +122,17 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal">
         <TextView
-            android:layout_width="72dp"
+            android:layout_width="40dp"
             android:layout_height="wrap_content"
             android:text="13:00"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:textStyle="bold"
             android:textColor="#D0BCFF" />
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Chemistry lab · Lab 2"
+            android:paddingStart="4dp"
+            android:text="Chemistry lab"
             android:textSize="14sp"
             android:textColor="#FFFFFF" />
     </LinearLayout>

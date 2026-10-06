@@ -128,12 +128,6 @@ abstract class AppLocalizations {
   /// **'Close'**
   String get close;
 
-  /// No description provided for @ok.
-  ///
-  /// In en, this message translates to:
-  /// **'OK'**
-  String get ok;
-
   /// No description provided for @copy.
   ///
   /// In en, this message translates to:
@@ -289,12 +283,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Settings'**
   String get navSettings;
-
-  /// No description provided for @campusLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Campus'**
-  String get campusLabel;
 
   /// No description provided for @mealBreakfast.
   ///
@@ -703,12 +691,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Showing year'**
   String get showingYear;
-
-  /// No description provided for @absenceLimit.
-  ///
-  /// In en, this message translates to:
-  /// **'Absence limit: {limit}'**
-  String absenceLimit(Object limit);
 
   /// No description provided for @noClassesYet.
   ///
@@ -1796,12 +1778,6 @@ abstract class AppLocalizations {
   /// **'Practical'**
   String get practicalLabel;
 
-  /// No description provided for @sessionKindLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Session'**
-  String get sessionKindLabel;
-
   /// No description provided for @classReminderLabel.
   ///
   /// In en, this message translates to:
@@ -1982,23 +1958,11 @@ abstract class AppLocalizations {
   /// **'Accent'**
   String get accentLabel;
 
-  /// No description provided for @generalHeader.
-  ///
-  /// In en, this message translates to:
-  /// **'General'**
-  String get generalHeader;
-
   /// No description provided for @languagesHeader.
   ///
   /// In en, this message translates to:
   /// **'Languages'**
   String get languagesHeader;
-
-  /// No description provided for @languageLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Language'**
-  String get languageLabel;
 
   /// No description provided for @languageSystem.
   ///

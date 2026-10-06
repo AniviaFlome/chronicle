@@ -23,6 +23,7 @@ import androidx.glance.layout.Alignment
 import androidx.glance.layout.width
 import androidx.compose.ui.unit.dp
 import androidx.glance.layout.fillMaxHeight
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.text.TextStyle
 import androidx.glance.GlanceTheme
 import androidx.glance.layout.Column
@@ -86,10 +87,11 @@ class NextClassHomeWidget : GlanceAppWidget() {
     val chronicleAccent: UnitColorProvider? = chronicleTriple?.let { ColorProvider(day = Color(it.third.toInt()), night = Color(it.third.toInt())) }
 
     GlanceTheme {
-            Box(modifier = GlanceModifier.background(chronicleBg ?: GlanceTheme.colors.widgetBackground).padding(16.dp).fillMaxSize().clickable(onClick = actionStartActivity<MainActivity>()), contentAlignment = Alignment.TopStart) {
-                Row(verticalAlignment = Alignment.Top) {
-                    Text(modifier = GlanceModifier.background(chronicleAccent ?: ColorProvider(day = Color(0xFF4F6BED), night = Color(0xFF4F6BED))).width(6.0.dp).fillMaxHeight(), text = "", style = TextStyle(color = GlanceTheme.colors.onSurface))
-                    Column(modifier = GlanceModifier.padding(start = 12.0.dp), horizontalAlignment = Alignment.Start) {
+            Box(modifier = GlanceModifier.background(chronicleBg ?: GlanceTheme.colors.widgetBackground).fillMaxSize().clickable(onClick = actionStartActivity<MainActivity>()), contentAlignment = Alignment.TopStart) {
+                Row(modifier = GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.Top) {
+                    // Flush with the card's left edge (no padding gap).
+                    Box(modifier = GlanceModifier.background((chronicleAccent ?: ColorProvider(day = Color(0xFF4F6BED), night = Color(0xFF4F6BED)))).width(6.0.dp).fillMaxHeight()) {}
+                    Column(modifier = GlanceModifier.padding(start = 28.0.dp, top = 16.0.dp, end = 16.0.dp, bottom = 16.0.dp), horizontalAlignment = Alignment.Start) {
                         Text(text = context.getString(R.string.home_widget_next_class_t_fb138ae6), style = TextStyle(color = (chronicleAccent ?: ColorProvider(day = Color(0xFF6750A4), night = Color(0xFFD0BCFF))), fontSize = 12.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Start))
                         Text(text = widgetData.className ?: "", style = TextStyle(color = (chronicleFg ?: ColorProvider(day = Color(0xFF1C1B1F), night = Color(0xFFFFFFFF))), fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Start))
                         Text(text = widgetData.detailLine ?: "", style = TextStyle(color = ColorProvider(day = Color(0xFF49454F), night = Color(0xFFCAC4D0)), fontSize = 12.sp, textAlign = TextAlign.Start))

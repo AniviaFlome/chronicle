@@ -2,10 +2,6 @@
 <!-- // GENERATED CODE - DO NOT MODIFY BY HAND -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:initialLayout="@layout/glance_default_loading_layout"
-    android:previewLayout="@layout/widget_preview_due_tasks_compact"
-    android:previewImage="@drawable/widget_preview_due_tasks_compact_img"
-    android:minResizeWidth="40dp"
-    android:minResizeHeight="40dp"
     android:minWidth="110dp"
     android:minHeight="110dp"
     android:updatePeriodMillis="1800000"
@@ -14,4 +10,9 @@
     android:targetCellWidth="2"
     android:targetCellHeight="2"
     android:description="@string/home_widget_due_tasks_compact_description"
+
+    android:previewLayout="@layout/widget_preview_due_tasks_compact"
+    android:previewImage="@drawable/widget_preview_due_tasks_compact_img"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
 />

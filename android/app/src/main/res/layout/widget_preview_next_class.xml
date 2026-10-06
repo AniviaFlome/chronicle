@@ -9,7 +9,7 @@
     <ImageView
         android:layout_width="6dp"
         android:layout_height="match_parent"
-        android:background="#4F6BED" />
+        android:background="#CBA6F7" />
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -21,7 +21,7 @@
             android:layout_height="wrap_content"
             android:text="Next class"
             android:textSize="12sp"
-            android:textColor="#D0BCFF" />
+            android:textColor="#CBA6F7" />
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -32,7 +32,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="08:40 – 09:30 · Room 101 · in 47 min"
+            android:text="08:40 – 09:30 · in 47 min"
             android:textSize="12sp"
             android:textColor="#CAC4D0" />
         <TextView
@@ -40,6 +40,6 @@
             android:layout_height="wrap_content"
             android:text="Then Physics · 10:20"
             android:textSize="12sp"
-            android:textColor="#D0BCFF" />
+            android:textColor="#CBA6F7" />
     </LinearLayout>
 </LinearLayout>

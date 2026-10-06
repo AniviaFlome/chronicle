@@ -198,9 +198,7 @@ class _PhoneNavBar extends StatelessWidget {
                 children: [
                   for (var i = 0; i < items.length; i++)
                     Expanded(
-                      child: Tooltip(
-                        message: items[i].label(l10n),
-                        child: InkWell(
+                      child: InkWell(
                           borderRadius: BorderRadius.circular(20),
                           onTap: () => onSelect(i),
                           child: Column(
@@ -238,7 +236,6 @@ class _PhoneNavBar extends StatelessWidget {
                             ],
                           ),
                         ),
-                      ),
                     ),
                 ],
               ),

@@ -17,19 +17,19 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="! Submit lab report · 2026-10-06"
+        android:text="☐ ! Submit lab report · 2026-10-06"
         android:textSize="14sp"
         android:textColor="#E6E1E5" />
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Read chapter 4 · 2026-10-07"
+        android:text="☐ Read chapter 4 · 2026-10-07"
         android:textSize="14sp"
         android:textColor="#E6E1E5" />
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Problem set 5 · 2026-10-09"
+        android:text="☐ Problem set 5 · 2026-10-09"
         android:textSize="14sp"
         android:textColor="#E6E1E5" />
 </LinearLayout>
