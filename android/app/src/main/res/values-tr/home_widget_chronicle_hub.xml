@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_widget_chronicle_hub_label">Chronicle Merkezi</string>
+    <string name="home_widget_chronicle_hub_description">Sonraki ders, ajanda, görevler ve menü tek widget’ta.</string>
+    <string name="home_widget_chronicle_hub_t_fb138ae6">Sonraki ders</string>
+    <string name="home_widget_chronicle_hub_t_dee5c859">Bugün</string>
+</resources>

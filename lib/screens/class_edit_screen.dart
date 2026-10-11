@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -426,7 +427,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
       if (!mounted) return;
       await refreshHomeWidgets(ProviderScope.containerOf(context));
       if (!mounted) return;
-      Navigator.of(context).pop();
+      context.pop();
     } catch (e) {
       logLoadFailure('Save class', e);
       if (mounted) {
@@ -471,7 +472,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
       if (!mounted) return;
       await refreshHomeWidgets(ProviderScope.containerOf(context));
       if (!mounted) return;
-      Navigator.of(context).pop();
+      context.pop();
     } catch (e) {
       logLoadFailure('Delete class', e);
       if (mounted) {

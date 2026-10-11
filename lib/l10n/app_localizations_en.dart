@@ -1510,4 +1510,88 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bilsisNoSelection => 'Select at least one course';
+
+  @override
+  String get hubTabsTitle => 'Hub widget tabs';
+
+  @override
+  String get hubTabClass => 'Next class';
+
+  @override
+  String get hubTabAgenda => 'Today\'s agenda';
+
+  @override
+  String get hubTabTasks => 'Due tasks';
+
+  @override
+  String get hubTabMenu => 'Today\'s menu';
+
+  @override
+  String get widgetStyleLabel => 'Widget style';
+
+  @override
+  String get widgetStyleApp => 'App theme';
+
+  @override
+  String get widgetStyleYou => 'Material You';
+
+  @override
+  String get widgetOpacityLabel => 'Widget background';
+
+  @override
+  String get widgetOpacitySolid => 'Solid';
+
+  @override
+  String get widgetOpacityTranslucent => 'Translucent';
+
+  @override
+  String get widgetOpacityTransparent => 'Transparent';
+
+  @override
+  String get widgetNoClasses => 'No classes today';
+
+  @override
+  String get widgetAllCaughtUp => 'All caught up';
+
+  @override
+  String get widgetNoMenuToday => 'No menu today';
+
+  @override
+  String get widgetDueTasks => 'Due tasks';
+
+  @override
+  String get widgetNextClass => 'Next class';
+
+  @override
+  String get widgetToday => 'Today';
+
+  @override
+  String widgetThen(Object name, Object when) {
+    return 'Then $name · $when';
+  }
+
+  @override
+  String widgetThenName(Object name) {
+    return 'Then $name';
+  }
+
+  @override
+  String widgetLater(Object name) {
+    return 'Later $name';
+  }
+
+  @override
+  String widgetInMin(Object mins) {
+    return 'in $mins min';
+  }
+
+  @override
+  String widgetInHours(Object hours) {
+    return 'in $hours h';
+  }
+
+  @override
+  String widgetCurrentlyEnds(Object time) {
+    return 'Currently · ends $time';
+  }
 }

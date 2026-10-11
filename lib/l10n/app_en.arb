@@ -25,8 +25,7 @@
   "@catalogFetching": {},
   "catalogNotFound": "Course not found in the catalog",
   "@catalogNotFound": {},
-  "catalogCrnHint":
-      "CRN lookup isn't supported — enter the course code (e.g. MAT 103), then pick the CRN in the section list",
+  "catalogCrnHint": "CRN lookup isn't supported — enter the course code (e.g. MAT 103), then pick the CRN in the section list",
   "@catalogCrnHint": {},
   "catalogSectionTitle": "Pick a section",
   "@catalogSectionTitle": {},
@@ -909,5 +908,66 @@
       "n": {}
     }
   },
-  "bilsisNoSelection": "Select at least one course"
+  "bilsisNoSelection": "Select at least one course",
+  "hubTabsTitle": "Hub widget tabs",
+  "hubTabClass": "Next class",
+  "hubTabAgenda": "Today's agenda",
+  "hubTabTasks": "Due tasks",
+  "hubTabMenu": "Today's menu",
+  "widgetStyleLabel": "Widget style",
+  "widgetStyleApp": "App theme",
+  "widgetStyleYou": "Material You",
+  "widgetOpacityLabel": "Widget background",
+  "widgetOpacitySolid": "Solid",
+  "widgetOpacityTranslucent": "Translucent",
+  "widgetOpacityTransparent": "Transparent",
+  "widgetNoClasses": "No classes today",
+  "@widgetNoClasses": {},
+  "widgetAllCaughtUp": "All caught up",
+  "@widgetAllCaughtUp": {},
+  "widgetNoMenuToday": "No menu today",
+  "@widgetNoMenuToday": {},
+  "widgetDueTasks": "Due tasks",
+  "@widgetDueTasks": {},
+  "widgetNextClass": "Next class",
+  "@widgetNextClass": {},
+  "widgetToday": "Today",
+  "@widgetToday": {},
+  "widgetThen": "Then {name} · {when}",
+  "@widgetThen": {
+    "placeholders": {
+      "name": {},
+      "when": {}
+    }
+  },
+  "widgetThenName": "Then {name}",
+  "@widgetThenName": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "widgetLater": "Later {name}",
+  "@widgetLater": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "widgetInMin": "in {mins} min",
+  "@widgetInMin": {
+    "placeholders": {
+      "mins": {}
+    }
+  },
+  "widgetInHours": "in {hours} h",
+  "@widgetInHours": {
+    "placeholders": {
+      "hours": {}
+    }
+  },
+  "widgetCurrentlyEnds": "Currently · ends {time}",
+  "@widgetCurrentlyEnds": {
+    "placeholders": {
+      "time": {}
+    }
+  }
 }

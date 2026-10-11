@@ -1,6 +1,25 @@
 # Changelog
 
-## [Unreleased]
+## [1.10.0] - 2026-10-11
+
+### Added
+- Cafeteria menu widget (meal title + dishes with ‹ › meal stepping) and Weekly classes widget (day-by-day sections), sharing the vertical-flow foundation (24dp outer / 16dp inner radii) with the other widgets.
+- Chronicle Hub widget: next class, today's agenda, due tasks and today's dining menu in one card with a bottom ‹ dots › tab bar; configurable at placement (tab picker) and from Settings → Widgets; sealed Loading/Empty/Success/Error states like the other widgets.
+- Scrollable widget lists: hub/agenda/tasks menus, agenda rows and class lookahead scroll in tall buckets (weight-bounded `LazyColumn`) instead of capping; short buckets render whole rows only (static take + "+N more"), so a small widget never shows a row that cannot be fully seen.
+- Sliding 3-day agenda rail window with big readable numerals (tapping a side cell steps the selection); shortest strips lead with a one-line day summary. New Tiny bucket: 1×1/2×1 strips collapse to a single quiet line instead of clipping.
+- Countdown pills ("in N min", "Currently · ends …") computed at render time; cross-day lookahead chips carry weekday hints ("Sat 17:11").
+- Android widgets follow Material You (wallpaper + system dark mode) or the app theme via the Settings → Widgets style toggle.
+
+### Fixed
+- Widget taps reliable, verified on-device with screenshots: process locks + synchronous commits stop rapid taps collapsing into one; forgiving full-row tap targets stop fall-through app launches; snapshot bump counters stop live-session stale replays (Glance reuses compositions ~45s, so pure prefs reads replayed old tabs).
+- Hub class tab and standalone Next-class render one shared component (identical hero, meta, lookahead with gaps); multi-root compositions must live inside a vertical `Column` or siblings paint over each other.
+- Layout polish: bottom-pinned tab bar (flush shell slot); 6dp header gap; 12dp content corners; 6dp row gaps and gap above "+N more"; compact meal switcher (12sp title, 40dp arrows); narrow-width graceful degradation (smaller type, short "+N" counts, number rail cells) with wide layouts untouched.
+- Resize floors so widgets can't shrink into useless sizes (hub 200×150 … tasks 180×110).
+- Menu widgets self-heal an empty cache with a capped provider fetch; widget push also runs after data-folder import (manual + auto).
+- Empty states no longer swallow the hub bottom bar (`EmptyState` wraps content height instead of `fillMaxSize`).
+
+### Changed
+- Database moves from `~/Documents/chronicle.sqlite` to the app-data dir (`~/.local/share/com.chronicleapp.chronicle/` on Linux, with attachments); no auto-migration, the old file is left alone.
 
 ## [1.9.0] - 2026-10-06
 

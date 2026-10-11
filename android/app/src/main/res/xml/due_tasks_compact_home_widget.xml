@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- // GENERATED CODE - DO NOT MODIFY BY HAND -->
+<!-- Hand-maintained appwidget-provider (no codegen). Keep the preview* and
+     minResize* attributes in sync with the other three widget XMLs. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:initialLayout="@layout/glance_default_loading_layout"
     android:minWidth="110dp"
@@ -13,6 +14,6 @@
 
     android:previewLayout="@layout/widget_preview_due_tasks_compact"
     android:previewImage="@drawable/widget_preview_due_tasks_compact_img"
-    android:minResizeWidth="40dp"
-    android:minResizeHeight="40dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="110dp"
 />

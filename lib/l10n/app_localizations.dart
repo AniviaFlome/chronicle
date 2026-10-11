@@ -2599,6 +2599,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Select at least one course'**
   String get bilsisNoSelection;
+
+  /// No description provided for @hubTabsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub widget tabs'**
+  String get hubTabsTitle;
+
+  /// No description provided for @hubTabClass.
+  ///
+  /// In en, this message translates to:
+  /// **'Next class'**
+  String get hubTabClass;
+
+  /// No description provided for @hubTabAgenda.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s agenda'**
+  String get hubTabAgenda;
+
+  /// No description provided for @hubTabTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Due tasks'**
+  String get hubTabTasks;
+
+  /// No description provided for @hubTabMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s menu'**
+  String get hubTabMenu;
+
+  /// No description provided for @widgetStyleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Widget style'**
+  String get widgetStyleLabel;
+
+  /// No description provided for @widgetStyleApp.
+  ///
+  /// In en, this message translates to:
+  /// **'App theme'**
+  String get widgetStyleApp;
+
+  /// No description provided for @widgetStyleYou.
+  ///
+  /// In en, this message translates to:
+  /// **'Material You'**
+  String get widgetStyleYou;
+
+  /// No description provided for @widgetOpacityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Widget background'**
+  String get widgetOpacityLabel;
+
+  /// No description provided for @widgetOpacitySolid.
+  ///
+  /// In en, this message translates to:
+  /// **'Solid'**
+  String get widgetOpacitySolid;
+
+  /// No description provided for @widgetOpacityTranslucent.
+  ///
+  /// In en, this message translates to:
+  /// **'Translucent'**
+  String get widgetOpacityTranslucent;
+
+  /// No description provided for @widgetOpacityTransparent.
+  ///
+  /// In en, this message translates to:
+  /// **'Transparent'**
+  String get widgetOpacityTransparent;
+
+  /// No description provided for @widgetNoClasses.
+  ///
+  /// In en, this message translates to:
+  /// **'No classes today'**
+  String get widgetNoClasses;
+
+  /// No description provided for @widgetAllCaughtUp.
+  ///
+  /// In en, this message translates to:
+  /// **'All caught up'**
+  String get widgetAllCaughtUp;
+
+  /// No description provided for @widgetNoMenuToday.
+  ///
+  /// In en, this message translates to:
+  /// **'No menu today'**
+  String get widgetNoMenuToday;
+
+  /// No description provided for @widgetDueTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Due tasks'**
+  String get widgetDueTasks;
+
+  /// No description provided for @widgetNextClass.
+  ///
+  /// In en, this message translates to:
+  /// **'Next class'**
+  String get widgetNextClass;
+
+  /// No description provided for @widgetToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get widgetToday;
+
+  /// No description provided for @widgetThen.
+  ///
+  /// In en, this message translates to:
+  /// **'Then {name} · {when}'**
+  String widgetThen(Object name, Object when);
+
+  /// No description provided for @widgetThenName.
+  ///
+  /// In en, this message translates to:
+  /// **'Then {name}'**
+  String widgetThenName(Object name);
+
+  /// No description provided for @widgetLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later {name}'**
+  String widgetLater(Object name);
+
+  /// No description provided for @widgetInMin.
+  ///
+  /// In en, this message translates to:
+  /// **'in {mins} min'**
+  String widgetInMin(Object mins);
+
+  /// No description provided for @widgetInHours.
+  ///
+  /// In en, this message translates to:
+  /// **'in {hours} h'**
+  String widgetInHours(Object hours);
+
+  /// No description provided for @widgetCurrentlyEnds.
+  ///
+  /// In en, this message translates to:
+  /// **'Currently · ends {time}'**
+  String widgetCurrentlyEnds(Object time);
 }
 
 class _AppLocalizationsDelegate

@@ -1,178 +1,114 @@
-// GENERATED CODE - DO NOT MODIFY BY HAND
+// Hand-written Glance widget (Chronicle M3 Expressive redesign). NOT
+// generated — edit freely. Wire contract lives in
+// com.chronicleapp.chronicle.widget.WidgetData and is mirrored by
+// lib/services/widget_push.dart; keep both sides in lockstep.
 //
-// This is a placeholder Glance (Jetpack Compose) widget.
+// DueTasksCompact: checklist rows with drawn circular checkboxes, due-date
+// tonal chips, and an accent count pill in the consistent header. Urgent
+// tasks get a bold title and an error-container chip. Row takes are 2/4/8
+// by height.
 package com.chronicleapp.chronicle
 
-import androidx.compose.runtime.Composable
 import android.content.Context
-import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.core.os.ConfigurationCompat
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.LocalSize
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.provideContent
-import androidx.glance.background
-import androidx.glance.currentState
-import androidx.glance.layout.Box
-import androidx.glance.layout.fillMaxSize
-import androidx.glance.text.Text
-import es.antonborri.home_widget.HomeWidgetGlanceState
+import androidx.glance.layout.Column
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.height
+import com.chronicleapp.chronicle.widget.CountPill
+import com.chronicleapp.chronicle.widget.EmptyState
+import com.chronicleapp.chronicle.widget.Hairline
+import com.chronicleapp.chronicle.widget.Keys
+import com.chronicleapp.chronicle.widget.Samples
+import com.chronicleapp.chronicle.widget.TaskRow
+import com.chronicleapp.chronicle.widget.WidgetHeader
+import com.chronicleapp.chronicle.widget.WidgetShell
+import com.chronicleapp.chronicle.widget.WidgetSnapshot
+import com.chronicleapp.chronicle.widget.parseTaskRows
+import com.chronicleapp.chronicle.widget.resolvePalette
+import com.chronicleapp.chronicle.widget.snapshot
+import com.chronicleapp.chronicle.widget.str
+import com.chronicleapp.chronicle.widget.widgetSizeSlots
+
 import es.antonborri.home_widget.HomeWidgetGlanceStateDefinition
 import es.antonborri.home_widget.HomeWidgetPlugin
-import androidx.glance.layout.Column
-import androidx.glance.layout.Alignment
-import androidx.glance.text.TextStyle
-import androidx.glance.color.ColorProvider
-import androidx.glance.unit.ColorProvider as UnitColorProvider
-import androidx.compose.ui.unit.sp
-import androidx.glance.text.FontWeight
-import androidx.glance.text.TextAlign
-import androidx.glance.layout.Row
-import androidx.core.os.ConfigurationCompat
-import java.util.Locale
-import androidx.glance.GlanceTheme
-import androidx.compose.ui.unit.dp
-import androidx.glance.layout.padding
-import androidx.glance.action.clickable
-import androidx.glance.action.actionStartActivity
 
 class DueTasksCompactHomeWidget : GlanceAppWidget() {
-  override val stateDefinition = HomeWidgetGlanceStateDefinition()
+    override val stateDefinition = HomeWidgetGlanceStateDefinition()
 
-  override suspend fun provideGlance(context: Context, id: GlanceId) {
-    provideContent { WidgetContent(context, currentState()) }
-  }
+    // Responsive slots (widgetSizeSlots): LocalSize is the matched slot's
+    // dims, never the window.
+    override val sizeMode = widgetSizeSlots
 
-  override suspend fun providePreview(context: Context, widgetCategory: Int) {
-    provideContent { WidgetContent(context, HomeWidgetGlanceState(HomeWidgetPlugin.getData(context))) }
-  }
-
-  fun previewFingerprint(context: Context): String {
-    val hwLocales = hwCurrentLocales(context)
-    val hwPreviewData =
-        DueTasksCompactData.fromPreferences(HomeWidgetPlugin.getData(context))
-    return listOf(
-      "af83e92a",
-      hwLocales.joinToString(","),
-      hwPreviewData.toString(),
-    ).joinToString("|")
-  }
-
-  @Composable
-  private fun WidgetContent(context: Context, currentState: HomeWidgetGlanceState) {
-    val prefs = currentState.preferences
-    val widgetData = DueTasksCompactData.fromPreferences(prefs)
-    // CHRONICLE THEME: theme code pushed by the app (family*2+darkBit).
-    // Unknown codes fall back to the generated Glance colors below.
-    val themeCode: Int = try { prefs.getInt("home_widget.DueTasksCompact.themeBg", 0) } catch (e: ClassCastException) { prefs.getLong("home_widget.DueTasksCompact.themeBg", 0L).toInt() }
-    val chronicleTriple: Triple<Long, Long, Long>? = when (themeCode) {
-      0 -> Triple(0xFFFEF7FF, 0xFF1C1B1F, 0xFF4F6BED)
-      1 -> Triple(0xFF131318, 0xFFFFFFFF, 0xFF4F6BED)
-      2 -> Triple(0xFFEFF1F5, 0xFF1C1B1F, 0xFFCBA6F7)
-      3 -> Triple(0xFF1E1E2E, 0xFFFFFFFF, 0xFFCBA6F7)
-      4 -> Triple(0xFFECEFF4, 0xFF1C1B1F, 0xFF88C0D0)
-      5 -> Triple(0xFF2E3440, 0xFFFFFFFF, 0xFF88C0D0)
-      6 -> Triple(0xFFF8F8F2, 0xFF1C1B1F, 0xFFBD93F9)
-      7 -> Triple(0xFF282A36, 0xFFFFFFFF, 0xFFBD93F9)
-      8 -> Triple(0xFFFBF1C7, 0xFF1C1B1F, 0xFFFABD2F)
-      9 -> Triple(0xFF282828, 0xFFFFFFFF, 0xFFFABD2F)
-      10 -> Triple(0xFFD5D6DB, 0xFF1C1B1F, 0xFF7AA2F7)
-      11 -> Triple(0xFF1A1B26, 0xFFFFFFFF, 0xFF7AA2F7)
-      else -> null
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val prefs = HomeWidgetPlugin.getData(context)
+        val prefix = Keys.DUE_TASKS
+        val snap = prefs.snapshot(prefix)
+        val headerTitle = prefs.str("$prefix.${Keys.HEADER_TITLE}")
+        val tasksCount = prefs.str("$prefix.${Keys.TASKS_COUNT}")
+        val tasks = parseTaskRows(prefs.str("$prefix.${Keys.TASKS}"))
+        provideContent { TasksContent(context, snap, headerTitle, tasksCount, tasks) }
     }
-    val chronicleBg: UnitColorProvider? = chronicleTriple?.let { ColorProvider(day = Color(it.first.toInt()), night = Color(it.first.toInt())) }
-    val chronicleFg: UnitColorProvider? = chronicleTriple?.let { ColorProvider(day = Color(it.second.toInt()), night = Color(it.second.toInt())) }
-    val chronicleAccent: UnitColorProvider? = chronicleTriple?.let { ColorProvider(day = Color(it.third.toInt()), night = Color(it.third.toInt())) }
 
-    GlanceTheme {
-            Box(modifier = GlanceModifier.background(chronicleBg ?: GlanceTheme.colors.widgetBackground).padding(16.dp).fillMaxSize().clickable(onClick = actionStartActivity<MainActivity>()), contentAlignment = Alignment.TopStart) {
-                Column(horizontalAlignment = Alignment.Start) {
-                    Text(text = widgetData.headerLine ?: "", style = TextStyle(color = (chronicleAccent ?: ColorProvider(day = Color(0xFF6750A4), night = Color(0xFFD0BCFF))), fontSize = 12.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Start))
-                    Column(horizontalAlignment = Alignment.Start) {
-                        if (widgetData.tasks.isNullOrEmpty()) {
-                            Text(text = context.getString(R.string.home_widget_due_tasks_compact_t_5c236a5d), style = TextStyle(color = (chronicleFg ?: ColorProvider(day = Color(0xFF1C1B1F), night = Color(0xFFFFFFFF))), fontSize = 14.sp, textAlign = TextAlign.Start))
-                        } else {
-                            val hwItems = widgetData.tasks.orEmpty().take(3)
-                            hwItems.forEachIndexed { _, hwItem ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(text = hwItem.title ?: "", style = TextStyle(color = (chronicleFg ?: ColorProvider(day = Color(0xFF1C1B1F), night = Color(0xFFFFFFFF))), fontSize = 14.sp))
-                                    Text(text = hwItem.date ?: "", style = TextStyle(color = ColorProvider(day = Color(0xFF49454F), night = Color(0xFFCAC4D0)), fontSize = 12.sp))
-                                }
-                            }
-                        }
+    override suspend fun providePreview(context: Context, widgetCategory: Int) {
+        val snap = HomeWidgetPlugin.getData(context).snapshot(Keys.DUE_TASKS)
+        provideContent {
+            TasksContent(context, snap, Samples.headerTitle, Samples.tasksCount, Samples.tasks)
+        }
+    }
+
+    fun previewFingerprint(context: Context): String {
+        val locales = ConfigurationCompat.getLocales(context.resources.configuration)
+        val loc = (0 until locales.size()).mapNotNull { locales[it] }.joinToString(",")
+        val snap = HomeWidgetPlugin.getData(context).snapshot(Keys.DUE_TASKS)
+        return "v2|dt|$loc|${snap.useYou}|${snap.themeCode}"
+    }
+}
+
+@Composable
+private fun TasksContent(
+    context: Context,
+    snap: WidgetSnapshot,
+    headerTitle: String,
+    tasksCount: String,
+    tasks: List<TaskRow>,
+) {
+    val palette = resolvePalette(context, snap.useYou, snap.themeCode)
+    val h = LocalSize.current.height
+    val take = when {
+        h >= 380.dp -> 8
+        h >= 250.dp -> 4
+        h >= 170.dp -> 2
+        else -> 1
+    }
+
+    WidgetShell(context, palette, snap.opacity) {
+        Column {
+            WidgetHeader(
+                palette = palette,
+                iconRes = R.drawable.ic_widget_task,
+                title = headerTitle,
+                trailing = { CountPill(palette, tasksCount) },
+            )
+            Spacer(modifier = GlanceModifier.height(4.dp))
+            Hairline(palette)
+            Spacer(modifier = GlanceModifier.height(6.dp))
+            Column {
+                if (tasks.isEmpty()) {
+                    // "All caught up" — an intentional, reassuring empty state.
+                    EmptyState(palette, R.drawable.ic_widget_done_all, snap.emptyText)
+                } else {
+                    for (task in tasks.take(take)) {
+                        TaskRow(palette, task.title, task.date, task.urgent)
                     }
                 }
             }
-    }
-
-  }
-}
-
-data class DueTasksCompactData(
-    val themeBg: Long? = null,
-    val themeFg: Long? = null,
-    val themeAccent: Long? = null,
-    val headerLine: String? = null,
-    val tasks: List<DueTasksCompactTasksItem>? = null,
-) {
-    companion object {
-        private const val PREFERENCES_PREFIX = "home_widget.DueTasksCompact"
-
-        fun fromPreferences(prefs: android.content.SharedPreferences): DueTasksCompactData {
-            return DueTasksCompactData(
-                themeBg = if (prefs.contains("${PREFERENCES_PREFIX}.themeBg")) (try { prefs.getInt("${PREFERENCES_PREFIX}.themeBg", 0).toLong() } catch (_: ClassCastException) { prefs.getLong("${PREFERENCES_PREFIX}.themeBg", 0L) }) else 0L,
-                themeFg = if (prefs.contains("${PREFERENCES_PREFIX}.themeFg")) (try { prefs.getInt("${PREFERENCES_PREFIX}.themeFg", 0).toLong() } catch (_: ClassCastException) { prefs.getLong("${PREFERENCES_PREFIX}.themeFg", 0L) }) else 0L,
-                themeAccent = if (prefs.contains("${PREFERENCES_PREFIX}.themeAccent")) (try { prefs.getInt("${PREFERENCES_PREFIX}.themeAccent", 0).toLong() } catch (_: ClassCastException) { prefs.getLong("${PREFERENCES_PREFIX}.themeAccent", 0L) }) else 0L,
-                headerLine = prefs.getString("${PREFERENCES_PREFIX}.headerLine", "Due tasks"),
-                tasks = DueTasksCompactTasksItem.fromPath(prefs.getString("${PREFERENCES_PREFIX}.tasks", null)),
-            )
         }
     }
-}
-
-data class DueTasksCompactTasksItem(
-    val title: String? = null,
-    val date: String? = null,
-) {
-    companion object {
-        fun fromPath(path: String?): List<DueTasksCompactTasksItem>? {
-            if (path == null) return null
-            return try {
-                val file = java.io.File(path)
-                if (!file.exists()) return null
-                fromJsonArray(org.json.JSONArray(file.readText()))
-            } catch (_: Exception) {
-                null
-            }
-        }
-
-        fun fromJsonArray(array: org.json.JSONArray?): List<DueTasksCompactTasksItem>? {
-            if (array == null) return null
-            return List(array.length()) { index -> fromJson(array.optJSONObject(index)) }
-        }
-
-        fun fromJson(obj: org.json.JSONObject?): DueTasksCompactTasksItem {
-            val json = obj ?: org.json.JSONObject()
-            return DueTasksCompactTasksItem(
-                title = if (json.has("title") && !json.isNull("title")) json.optString("title") else null,
-                date = if (json.has("date") && !json.isNull("date")) json.optString("date") else null,
-            )
-        }
-    }
-}
-
-
-private fun hwCurrentLocales(context: Context): List<String> {
-    val configured = ConfigurationCompat
-        .getLocales(context.resources.configuration)
-    val tags = mutableListOf<String>()
-    for (index in 0 until configured.size()) {
-        val locale = configured[index] ?: continue
-        val tag = locale.toLanguageTag()
-        if (tag.isNotEmpty() && tag != "und") tags.add(tag)
-    }
-    if (tags.isEmpty()) {
-        val fallback = Locale.getDefault().toLanguageTag()
-        if (fallback.isNotEmpty() && fallback != "und") tags.add(fallback)
-    }
-    return tags
 }

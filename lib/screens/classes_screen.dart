@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../data/database.dart';
 import '../providers.dart';
 import '../theme.dart';
 import '../l10n/l10n.dart';
-import 'class_edit_screen.dart';
 import 'class_quick_edit.dart';
 import 'year_widgets.dart';
 
@@ -82,12 +82,11 @@ class ClassesScreen extends ConsumerWidget {
   }
 
   void _openEditor(BuildContext context, {ClassesData? existing}) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ClassEditScreen(existing: existing),
-        fullscreenDialog: true,
-      ),
-    );
+    if (existing == null) {
+      context.push('/classes/add');
+    } else {
+      context.push('/classes/edit', extra: existing);
+    }
   }
 
   /// Bulk-deletes every class (with slots and absence records) after

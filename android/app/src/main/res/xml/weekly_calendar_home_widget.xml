@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hand-maintained appwidget-provider (no codegen). Tall-portrait weekly
+     calendar: target 2x3, resizable both axes, static RemoteViews loading
+     layout. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="120dp"
+    android:minHeight="120dp"
+    android:updatePeriodMillis="1800000"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:targetCellWidth="2"
+    android:targetCellHeight="3"
+    android:description="@string/home_widget_weekly_calendar_description"
+
+    android:previewLayout="@layout/widget_preview_weekly_calendar"
+    android:minResizeWidth="200dp"
+    android:minResizeHeight="150dp"
+/>

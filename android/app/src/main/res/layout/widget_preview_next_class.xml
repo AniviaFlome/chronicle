@@ -1,45 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Static picker preview for the Next class widget (hand-written: re-add
-     android:previewLayout to next_class_home_widget.xml after any CLI regen). -->
+<!-- Static picker preview for the Next class hero widget (WD-1).
+     Hand-written RemoteViews-safe markup (no bare <View>): stripes/dots are
+     tinted ImageViews over preview_shape_* bases. Mirrors HeroContent in
+     NextClassHomeWidget.kt + Samples.nextClass/Samples.later.
+     Palette = theme-0 light (FEF7FF / 1C1B1F / 4F6BED). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:background="#1C1B1F">
-    <ImageView
-        android:layout_width="6dp"
-        android:layout_height="match_parent"
-        android:background="#CBA6F7" />
+    android:padding="12dp"
+    android:background="#FEF7FF">
+
     <LinearLayout
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:layout_weight="1"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp">
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Next class"
+            android:background="@drawable/preview_shape_pill"
+            android:backgroundTint="#D8D8FB"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:text="in 12 min"
             android:textSize="12sp"
-            android:textColor="#CBA6F7" />
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Mathematics"
-            android:textSize="20sp"
             android:textStyle="bold"
-            android:textColor="#FFFFFF" />
+            android:textColor="#24368F" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="08:40 – 09:30 · in 47 min"
-            android:textSize="12sp"
-            android:textColor="#CAC4D0" />
+            android:layout_marginTop="8dp"
+            android:text="Mathematics"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="#1C1B1F"
+            android:maxLines="2"
+            android:ellipsize="end" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Then Physics · 10:20"
+            android:layout_marginTop="3dp"
+            android:text="08:40–09:30 · Room B4"
             android:textSize="12sp"
-            android:textColor="#CBA6F7" />
+            android:textColor="#49454F" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@drawable/preview_shape_dot"
+                android:backgroundTint="#4F6BED"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Then Physics · 10:20"
+                android:textSize="12sp"
+                android:textColor="#49454F" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

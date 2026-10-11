@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../data/repositories.dart';
 import '../data/tables.dart';
@@ -9,8 +10,6 @@ import '../l10n/l10n.dart';
 import '../providers.dart';
 import '../services/home_widgets.dart';
 import '../utils/time_format.dart';
-import 'focus_screen.dart';
-import 'grades_screen.dart';
 import 'task_edit_screen.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
@@ -36,14 +35,12 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           IconButton(
             tooltip: context.l10n.gradesTooltip,
             icon: const Icon(Icons.grade_outlined),
-            onPressed: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => const GradesScreen())),
+            onPressed: () => context.push('/grades'),
           ),
           IconButton(
             tooltip: context.l10n.focusTooltip,
             icon: const Icon(Icons.timer_outlined),
-            onPressed: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => const FocusScreen())),
+            onPressed: () => context.push('/focus'),
           ),
         ],
       ),
@@ -145,12 +142,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   }
 
   void _openEditor(BuildContext context, {TaskWithDetails? existing}) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => TaskEditScreen(existing: existing),
-        fullscreenDialog: true,
-      ),
-    );
+    if (existing == null) {
+      context.push('/tasks/add');
+    } else {
+      context.push('/tasks/edit', extra: existing);
+    }
   }
 
   List<TaskWithDetails> _applyFilter(List<TaskWithDetails> list) {

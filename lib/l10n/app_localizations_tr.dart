@@ -1470,4 +1470,88 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get bilsisNoSelection => 'En az bir ders seçin';
+
+  @override
+  String get hubTabsTitle => 'Merkez widget sekmeleri';
+
+  @override
+  String get hubTabClass => 'Sonraki ders';
+
+  @override
+  String get hubTabAgenda => 'Bugünkü ajanda';
+
+  @override
+  String get hubTabTasks => 'Yaklaşan görevler';
+
+  @override
+  String get hubTabMenu => 'Günün menüsü';
+
+  @override
+  String get widgetStyleLabel => 'Widget stili';
+
+  @override
+  String get widgetStyleApp => 'Uygulama teması';
+
+  @override
+  String get widgetStyleYou => 'Material You';
+
+  @override
+  String get widgetOpacityLabel => 'Widget arka planı';
+
+  @override
+  String get widgetOpacitySolid => 'Opak';
+
+  @override
+  String get widgetOpacityTranslucent => 'Yarı saydam';
+
+  @override
+  String get widgetOpacityTransparent => 'Saydam';
+
+  @override
+  String get widgetNoClasses => 'Bugün ders yok';
+
+  @override
+  String get widgetAllCaughtUp => 'Hepsi tamam';
+
+  @override
+  String get widgetNoMenuToday => 'Bugün menü yok';
+
+  @override
+  String get widgetDueTasks => 'Yaklaşan Görevler';
+
+  @override
+  String get widgetNextClass => 'Sonraki ders';
+
+  @override
+  String get widgetToday => 'Bugün';
+
+  @override
+  String widgetThen(Object name, Object when) {
+    return 'Sonra $name · $when';
+  }
+
+  @override
+  String widgetThenName(Object name) {
+    return 'Sonra $name';
+  }
+
+  @override
+  String widgetLater(Object name) {
+    return 'Daha sonra $name';
+  }
+
+  @override
+  String widgetInMin(Object mins) {
+    return '$mins dk içinde';
+  }
+
+  @override
+  String widgetInHours(Object hours) {
+    return '$hours sa içinde';
+  }
+
+  @override
+  String widgetCurrentlyEnds(Object time) {
+    return 'Şu an · bitiş $time';
+  }
 }

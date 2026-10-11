@@ -1309,6 +1309,47 @@ class SettingsRepository {
   Future<void> setCatalogSource(String value) =>
       set(catalogSourceKey, value);
 
+  static const hubTabClassKey = 'hub_tab_class';
+  static const hubTabAgendaKey = 'hub_tab_agenda';
+  static const hubTabTasksKey = 'hub_tab_tasks';
+  static const hubTabMenuKey = 'hub_tab_menu';
+
+  /// Hub widget tabs (all on by default). Stored as 'true'/'false'
+  /// strings; anything but an explicit 'false' counts as on.
+  Future<bool> hubTab(String key) async => (await get(key)) != 'false';
+
+  Future<bool> hubTabClass() => hubTab(hubTabClassKey);
+  Future<bool> hubTabAgenda() => hubTab(hubTabAgendaKey);
+  Future<bool> hubTabTasks() => hubTab(hubTabTasksKey);
+  Future<bool> hubTabMenu() => hubTab(hubTabMenuKey);
+
+  Future<void> setHubTab(String key, bool value) =>
+      set(key, value ? 'true' : 'false');
+
+  static const widgetStyleKey = 'widget_style';
+
+  /// Home widget visual style: 'you' (Material You system colors) or
+  /// anything else (the app-theme mirror). Defaults to app theme.
+  Future<String> widgetStyle() async =>
+      (await get(widgetStyleKey)) ?? 'app';
+
+  Future<void> setWidgetStyle(String value) =>
+      set(widgetStyleKey, value);
+
+  static const widgetOpacityKey = 'widget_opacity';
+
+  /// Home widget background opacity: 0 = solid, 1 = translucent, 2 =
+  /// transparent. Defaults to solid. Out-of-range stored values clamp.
+  Future<int> widgetOpacity() async {
+    final raw = await get(widgetOpacityKey);
+    final v = int.tryParse(raw ?? '');
+    if (v == null) return 0;
+    return v.clamp(0, 2);
+  }
+
+  Future<void> setWidgetOpacity(int value) =>
+      set(widgetOpacityKey, value.clamp(0, 2).toString());
+
   static const autoSyncKey = 'auto_sync';
 
   /// Whether the data folder syncs automatically (debounced export on

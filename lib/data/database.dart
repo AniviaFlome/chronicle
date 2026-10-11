@@ -37,7 +37,12 @@ class AppDatabase extends _$AppDatabase {
   int get schemaVersion => 11;
 
   static QueryExecutor _openConnection() {
-    return driftDatabase(name: 'chronicle');
+    return driftDatabase(
+      name: 'chronicle',
+      native: DriftNativeOptions(
+        databaseDirectory: getApplicationSupportDirectory,
+      ),
+    );
   }
 
   @override
@@ -267,8 +272,5 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  Future<Directory> databaseDirectory() async {
-    final dir = await getApplicationSupportDirectory();
-    return dir;
-  }
+  Future<Directory> databaseDirectory() => getApplicationSupportDirectory();
 }

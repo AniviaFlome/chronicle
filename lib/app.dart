@@ -6,12 +6,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'l10n/l10n.dart';
+import 'data/database.dart';
+import 'data/repositories.dart';
 import 'providers.dart';
 import 'screens/absences_screen.dart';
+import 'screens/class_edit_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/classes_screen.dart';
+import 'screens/focus_screen.dart';
+import 'screens/grades_screen.dart';
 import 'screens/menu_screen.dart';
+import 'screens/task_edit_screen.dart';
 import 'screens/tasks_screen.dart';
 import 'screens/settings_screen.dart';
 import 'theme.dart';
@@ -111,6 +117,47 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/menu', builder: (_, _) => const MenuScreen()),
           GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
         ],
+      ),
+      // Fullscreen editors live above the Shell so the bottom nav stays
+      // hidden and — critically — so the system back button pops them via
+      // the GoRouter stack. Pushing them with raw Navigator.of(context)
+      // .push leaves GoRouter unaware of the route: at a tab location it
+      // has nothing to pop and exits the app instead of closing the editor.
+      GoRoute(
+        path: '/classes/add',
+        pageBuilder: (_, _) => const MaterialPage(
+          fullscreenDialog: true,
+          child: ClassEditScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/classes/edit',
+        pageBuilder: (_, state) => MaterialPage(
+          fullscreenDialog: true,
+          child: ClassEditScreen(existing: state.extra as ClassesData?),
+        ),
+      ),
+      GoRoute(
+        path: '/tasks/add',
+        pageBuilder: (_, _) => const MaterialPage(
+          fullscreenDialog: true,
+          child: TaskEditScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/tasks/edit',
+        pageBuilder: (_, state) => MaterialPage(
+          fullscreenDialog: true,
+          child: TaskEditScreen(existing: state.extra as TaskWithDetails?),
+        ),
+      ),
+      GoRoute(
+        path: '/grades',
+        builder: (_, _) => const GradesScreen(),
+      ),
+      GoRoute(
+        path: '/focus',
+        builder: (_, _) => const FocusScreen(),
       ),
     ],
   );

@@ -56,6 +56,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   String _catalogSource = '';
   String _calendarOrientation = 'horizontal';
   bool _startCalendarOnToday = true;
+  bool _hubTabClass = true;
+  bool _hubTabAgenda = true;
+  bool _hubTabTasks = true;
+  bool _hubTabMenu = true;
+  String _widgetStyle = 'app';
+  int _widgetOpacity = 0;
 
   @override
   void initState() {
@@ -70,6 +76,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     _loadCatalogSource();
     _loadCalendarOrientation();
     _loadStartCalendarOnToday();
+    _loadHubTabs();
+    _loadWidgetStyle();
+    _loadWidgetOpacity();
   }
 
   Future<void> _loadCalendarOrientation() async {
@@ -115,6 +124,94 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           .then((_) {
             ref.invalidate(calendarStartTodayProvider);
           }),
+      (m) => context.l10n.couldNotSaveSetting(m),
+    );
+  }
+
+  Future<void> _loadHubTabs() async {
+    try {
+      final repo = ref.read(settingsRepositoryProvider);
+      final results = await Future.wait([
+        repo.hubTabClass(),
+        repo.hubTabAgenda(),
+        repo.hubTabTasks(),
+        repo.hubTabMenu(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _hubTabClass = results[0];
+        _hubTabAgenda = results[1];
+        _hubTabTasks = results[2];
+        _hubTabMenu = results[3];
+      });
+    } catch (e) {
+      logLoadFailure('Load hub tabs', e);
+    }
+  }
+
+  Future<void> _toggleHubTab(String key, bool value) async {
+    setState(() {
+      switch (key) {
+        case 'class':
+          _hubTabClass = value;
+        case 'agenda':
+          _hubTabAgenda = value;
+        case 'tasks':
+          _hubTabTasks = value;
+        case 'menu':
+          _hubTabMenu = value;
+      }
+    });
+    final container = ProviderScope.containerOf(context);
+    await _saveSetting(
+      () => ref
+          .read(settingsRepositoryProvider)
+          .setHubTab('hub_tab_$key', value)
+          .then((_) => refreshHomeWidgets(container)),
+      (m) => context.l10n.couldNotSaveSetting(m),
+    );
+  }
+
+  Future<void> _loadWidgetStyle() async {
+    try {
+      final value = await ref.read(settingsRepositoryProvider).widgetStyle();
+      if (!mounted) return;
+      setState(() => _widgetStyle = value == 'you' ? 'you' : 'app');
+    } catch (e) {
+      logLoadFailure('Load widget style', e);
+    }
+  }
+
+  Future<void> _setWidgetStyle(String value) async {
+    setState(() => _widgetStyle = value);
+    final container = ProviderScope.containerOf(context);
+    await _saveSetting(
+      () => ref
+          .read(settingsRepositoryProvider)
+          .setWidgetStyle(value)
+          .then((_) => refreshHomeWidgets(container)),
+      (m) => context.l10n.couldNotSaveSetting(m),
+    );
+  }
+
+  Future<void> _loadWidgetOpacity() async {
+    try {
+      final value = await ref.read(settingsRepositoryProvider).widgetOpacity();
+      if (!mounted) return;
+      setState(() => _widgetOpacity = value.clamp(0, 2));
+    } catch (e) {
+      logLoadFailure('Load widget opacity', e);
+    }
+  }
+
+  Future<void> _setWidgetOpacity(int value) async {
+    setState(() => _widgetOpacity = value.clamp(0, 2));
+    final container = ProviderScope.containerOf(context);
+    await _saveSetting(
+      () => ref
+          .read(settingsRepositoryProvider)
+          .setWidgetOpacity(value)
+          .then((_) => refreshHomeWidgets(container)),
       (m) => context.l10n.couldNotSaveSetting(m),
     );
   }
@@ -239,11 +336,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     // Also pick up folder updates that landed while backgrounded.
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(dataFolderStatusProvider);
-      ref.read(folderSyncControllerProvider).importIfNewer().then((ran) {
+      final container = ProviderScope.containerOf(context);
+      ref.read(folderSyncControllerProvider).importIfNewer().then((ran) async {
         if (ran && mounted) {
           ref.invalidate(engineProvider);
           ref.invalidate(classesByIdProvider);
           ref.invalidate(dataFolderStatusProvider);
+          // Widgets snapshot at push time: push after the import lands,
+          // otherwise they keep the pre-import snapshot.
+          try {
+            await refreshHomeWidgets(container);
+          } catch (e) {
+            logLoadFailure('Post-import home widgets', e);
+          }
         }
       });
     }
@@ -505,10 +610,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Future<void> _refreshAfterDataChange(int upserted, int deleted) async {
+    final container = ProviderScope.containerOf(context);
     if (upserted > 0 || deleted > 0) {
       ref.invalidate(engineProvider);
       ref.invalidate(classesByIdProvider);
       await ref.read(reminderSchedulerProvider).refreshAll();
+      // Widgets snapshot data at push time: without this they keep
+      // showing the pre-import (often empty) snapshot.
+      try {
+        await refreshHomeWidgets(container);
+      } catch (e) {
+        logLoadFailure('Post-import home widgets', e);
+      }
     }
     ref.invalidate(dataFolderStatusProvider);
   }
@@ -1165,6 +1278,84 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     if (v != null) _setCatalogSource(v);
                   },
                 ),
+              ),
+            ],
+          ),
+          _SettingsCard(
+            icon: Icons.widgets_outlined,
+            title: context.l10n.hubTabsTitle,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                child: DropdownButtonFormField<String>(
+                  initialValue: _widgetStyle,
+                  decoration: InputDecoration(
+                    labelText: context.l10n.widgetStyleLabel,
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'app',
+                      child: Text(context.l10n.widgetStyleApp),
+                    ),
+                    DropdownMenuItem(
+                      value: 'you',
+                      child: Text(context.l10n.widgetStyleYou),
+                    ),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) _setWidgetStyle(v);
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                child: DropdownButtonFormField<int>(
+                  initialValue: _widgetOpacity,
+                  decoration: InputDecoration(
+                    labelText: context.l10n.widgetOpacityLabel,
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: 0,
+                      child: Text(context.l10n.widgetOpacitySolid),
+                    ),
+                    DropdownMenuItem(
+                      value: 1,
+                      child: Text(context.l10n.widgetOpacityTranslucent),
+                    ),
+                    DropdownMenuItem(
+                      value: 2,
+                      child: Text(context.l10n.widgetOpacityTransparent),
+                    ),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) _setWidgetOpacity(v);
+                  },
+                ),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.schedule_outlined),
+                title: Text(context.l10n.hubTabClass),
+                value: _hubTabClass,
+                onChanged: (v) => _toggleHubTab('class', v),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.view_agenda_outlined),
+                title: Text(context.l10n.hubTabAgenda),
+                value: _hubTabAgenda,
+                onChanged: (v) => _toggleHubTab('agenda', v),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.checklist_outlined),
+                title: Text(context.l10n.hubTabTasks),
+                value: _hubTabTasks,
+                onChanged: (v) => _toggleHubTab('tasks', v),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.restaurant_outlined),
+                title: Text(context.l10n.hubTabMenu),
+                value: _hubTabMenu,
+                onChanged: (v) => _toggleHubTab('menu', v),
               ),
             ],
           ),

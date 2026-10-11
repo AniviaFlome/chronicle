@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../data/database.dart';
 import '../data/repositories.dart';
@@ -194,7 +195,7 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
       if (!mounted) return;
       await refreshHomeWidgets(ProviderScope.containerOf(context));
       if (!mounted) return;
-      Navigator.of(context).pop();
+      context.pop();
     } catch (e) {
       logLoadFailure('Save task', e);
       if (mounted) {
@@ -238,7 +239,7 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
       if (!mounted) return;
       await refreshHomeWidgets(ProviderScope.containerOf(context));
       if (!mounted) return;
-      Navigator.of(context).pop();
+      context.pop();
     } catch (e) {
       logLoadFailure('Delete task', e);
       if (mounted) {

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hand-maintained appwidget-provider (no codegen). Keep the preview* and
+     minResize* attributes in sync with the other three widget XMLs. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="120dp"
+    android:minHeight="120dp"
+    android:updatePeriodMillis="1800000"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:targetCellWidth="2"
+    android:targetCellHeight="3"
+    android:description="@string/home_widget_chronicle_hub_description"
+
+    android:previewLayout="@layout/widget_preview_chronicle_hub"
+    android:previewImage="@drawable/widget_preview_chronicle_hub_img"
+    android:minResizeWidth="200dp"
+    android:minResizeHeight="150dp"
+/>

@@ -1,0 +1,498 @@
+// Hand-written Glance widget (Chronicle M3 Expressive redesign). NOT
+// generated — edit freely. Wire contract lives in
+// com.chronicleapp.chronicle.widget.WidgetData and is mirrored by
+// lib/services/widget_push.dart; keep both sides in lockstep.
+//
+// ChronicleHub: dashboard switcher. Two 48dp tab arrows cycle the enabled
+// tabs (selection is native-owned in prefs, position-in-enabled with
+// wrap-around — see HubTabCallback); the header follows the active tab and
+// a page-dot row mirrors position. Tab bodies reuse the shared components
+// so the hub stays visually identical to the standalone widgets.
+package com.chronicleapp.chronicle
+
+import android.content.Context
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.core.os.ConfigurationCompat
+import androidx.glance.GlanceId
+import androidx.glance.GlanceModifier
+import androidx.glance.action.actionParametersOf
+import androidx.glance.action.clickable
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.provideContent
+import androidx.glance.background
+import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
+import androidx.glance.layout.Column
+import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
+import androidx.glance.layout.padding
+import androidx.glance.text.TextAlign
+import com.chronicleapp.chronicle.widget.ChroniclePalette
+import com.chronicleapp.chronicle.widget.ClassRow
+import com.chronicleapp.chronicle.widget.DishRow
+import com.chronicleapp.chronicle.widget.EmptyState
+import com.chronicleapp.chronicle.widget.Hairline
+import com.chronicleapp.chronicle.widget.HubDirectionKey
+import com.chronicleapp.chronicle.widget.ChunkedRows
+import com.chronicleapp.chronicle.widget.HubMenuMealCallback
+import com.chronicleapp.chronicle.widget.HubTabCallback
+import com.chronicleapp.chronicle.widget.MealSwitcher
+import com.chronicleapp.chronicle.widget.MoreIndicator
+import com.chronicleapp.chronicle.widget.MenuMeal
+import com.chronicleapp.chronicle.widget.MenuMealDirectionKey
+import com.chronicleapp.chronicle.widget.Keys
+import com.chronicleapp.chronicle.widget.PageDots
+import com.chronicleapp.chronicle.widget.Samples
+import com.chronicleapp.chronicle.widget.SharedClassTab
+import com.chronicleapp.chronicle.widget.TabArrow
+import com.chronicleapp.chronicle.widget.TaskRow
+import com.chronicleapp.chronicle.widget.WidgetHeader
+import com.chronicleapp.chronicle.widget.VerticalBucket
+import com.chronicleapp.chronicle.widget.VerticalShell
+import com.chronicleapp.chronicle.widget.WidgetSnapshot
+import com.chronicleapp.chronicle.widget.bool
+import com.chronicleapp.chronicle.widget.currentVerticalBucket
+import com.chronicleapp.chronicle.widget.hubNavBump
+import com.chronicleapp.chronicle.widget.int
+import com.chronicleapp.chronicle.widget.isSentinel
+import com.chronicleapp.chronicle.widget.parseMenuMeals
+import com.chronicleapp.chronicle.widget.parseStrings
+import com.chronicleapp.chronicle.widget.parseTaskRows
+import com.chronicleapp.chronicle.widget.parseTimeRows
+import com.chronicleapp.chronicle.widget.parseTimed
+import com.chronicleapp.chronicle.widget.resolveMenuMeal
+import com.chronicleapp.chronicle.widget.resolvePalette
+import com.chronicleapp.chronicle.widget.resolveTimed
+import com.chronicleapp.chronicle.widget.snapshot
+import com.chronicleapp.chronicle.widget.str
+import com.chronicleapp.chronicle.widget.TinyRow
+import com.chronicleapp.chronicle.widget.verticalSizeSlots
+
+import es.antonborri.home_widget.HomeWidgetGlanceStateDefinition
+import es.antonborri.home_widget.HomeWidgetPlugin
+
+class ChronicleHubHomeWidget : GlanceAppWidget() {
+    override val stateDefinition = HomeWidgetGlanceStateDefinition()
+
+    // Portrait-first buckets: Compact / TallColumn / FullPortrait.
+    override val sizeMode = verticalSizeSlots
+
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        provideContent {
+            // Snapshot-tracked read (see hubNavBump): pins this composition
+            // to the bump so live-session recomposes re-read prefs instead
+            // of replaying the previously resolved state.
+            HubContent(context, resolveState(context, hubNavBump.intValue))
+        }
+    }
+
+    override suspend fun providePreview(context: Context, widgetCategory: Int) {
+        val snap = HomeWidgetPlugin.getData(context).snapshot(Keys.HUB)
+        val state = HubWidgetUiState.Success(
+            content = HubContentData(
+                snap = snap,
+                enabled = listOf(TAB_CLASS, TAB_AGENDA, TAB_TASKS, TAB_MENU),
+                pos = 0,
+                sel = TAB_CLASS,
+                entry = Samples.nextClass,
+                looks = Samples.looks,
+                agendaRows = Samples.agenda,
+                tasksRows = Samples.tasks,
+                menuRows = Samples.menu,
+                menuMeals = listOf(
+                    MenuMeal(
+                        kind = "ogle",
+                        title = Samples.menuTitle,
+                        dishes = Samples.menu,
+                    ),
+                ),
+                menuMealIdx = 0,
+                titleClass = Samples.titleClass,
+                titleAgenda = Samples.titleAgenda,
+                tasksTitle = Samples.tasksTitle,
+                menuTitle = Samples.menuTitle,
+                emptyTasks = Samples.emptyText,
+                emptyMenu = Samples.emptyText,
+            ),
+            nowMs = System.currentTimeMillis(),
+        )
+        provideContent { HubContent(context, state) }
+    }
+
+    fun previewFingerprint(context: Context): String {
+        val locales = ConfigurationCompat.getLocales(context.resources.configuration)
+        val loc = (0 until locales.size()).mapNotNull { locales[it] }.joinToString(",")
+        val snap = HomeWidgetPlugin.getData(context).snapshot(Keys.HUB)
+        return "v2|hub|$loc|${snap.useYou}|${snap.themeCode}"
+    }
+
+    companion object {
+        const val TAB_CLASS = 0
+        const val TAB_AGENDA = 1
+        const val TAB_TASKS = 2
+        const val TAB_MENU = 3
+
+        /** Position-in-enabled wrap, mirrored from HubTabCallback. */
+        fun wrap(pos: Int, size: Int): Int =
+            if (size <= 0) 0 else ((pos % size) + size) % size
+    }
+
+    private fun resolveState(context: Context, @Suppress("UNUSED_PARAMETER") navBump: Int): HubWidgetUiState {
+        return try {
+            val prefs = HomeWidgetPlugin.getData(context)
+            val prefix = Keys.HUB
+            val snap = prefs.snapshot(prefix)
+            val enabled = buildList {
+                if (prefs.bool("$prefix.${Keys.TAB_CLASS}", true)) add(TAB_CLASS)
+                if (prefs.bool("$prefix.${Keys.TAB_AGENDA}", true)) add(TAB_AGENDA)
+                if (prefs.bool("$prefix.${Keys.TAB_TASKS}", true)) add(TAB_TASKS)
+                if (prefs.bool("$prefix.${Keys.TAB_MENU}", true)) add(TAB_MENU)
+            }.ifEmpty { listOf(TAB_CLASS) }
+            val pos = wrap(prefs.int("$prefix.${Keys.SELECTED_TAB}", 0), enabled.size)
+            val sel = enabled[pos]
+
+            val now = System.currentTimeMillis()
+            val entries = parseTimed(prefs.str("$prefix.${Keys.TIMED_DATA}"), withThen = true)
+            val entry = resolveTimed(entries, now)
+            val menuMeals = parseMenuMeals(prefs.str("$prefix.${Keys.MENU_MEALS}"))
+            val menuMealDefault = prefs.int("$prefix.${Keys.MENU_MEAL_DEFAULT}", 0)
+            val menuMealKind = prefs.str("$prefix.${Keys.MENU_MEAL_KIND}")
+            val menuMealIdx = resolveMenuMeal(menuMeals, menuMealDefault, menuMealKind)
+                ?.let { menuMeals.indexOf(it) } ?: 0
+            val data = HubContentData(
+                snap = snap,
+                enabled = enabled,
+                pos = pos,
+                sel = sel,
+                entry = entry,
+                looks = entry?.looks ?: emptyList(),
+                agendaRows = parseTimeRows(prefs.str("$prefix.${Keys.AGENDA_ROWS}")),
+                tasksRows = parseTaskRows(prefs.str("$prefix.${Keys.TASKS_ROWS}")),
+                menuRows = parseStrings(prefs.str("$prefix.${Keys.MENU_ROWS}")),
+                menuMeals = menuMeals,
+                menuMealIdx = menuMealIdx,
+                titleClass = prefs.str("$prefix.${Keys.TITLE_CLASS}"),
+                titleAgenda = prefs.str("$prefix.${Keys.TITLE_AGENDA}"),
+                tasksTitle = prefs.str("$prefix.${Keys.TASKS_TITLE}"),
+                menuTitle = prefs.str("$prefix.${Keys.MENU_TITLE}"),
+                emptyTasks = prefs.str("$prefix.${Keys.EMPTY_TASKS}"),
+                emptyMenu = prefs.str("$prefix.${Keys.EMPTY_MENU}"),
+            )
+            HubWidgetUiState.Success(data, now)
+        } catch (e: Exception) {
+            HubWidgetUiState.Error(e.message ?: "Load failed")
+        }
+    }
+}
+
+@Composable
+private fun HubContent(context: Context, state: HubWidgetUiState) {
+    // Non-success states resolve against the live prefs snapshot for
+    // theming, so a cold bind never flashes raw keys.
+    val snap: WidgetSnapshot = when (state) {
+        is HubWidgetUiState.Success -> state.content.snap
+        else -> HomeWidgetPlugin.getData(context).snapshot(Keys.HUB)
+    }
+    val palette = resolvePalette(context, snap.useYou, snap.themeCode)
+    val tiny = state is HubWidgetUiState.Success &&
+        currentVerticalBucket() == VerticalBucket.Tiny
+    // The tab bar lives in the shell's flush bottom slot (not in the padded
+    // body), so dots + arrows sit stationary at the very bottom edge on
+    // every tab and every size. Tiny strips have no bar.
+    val barData = (state as? HubWidgetUiState.Success)
+        ?.takeUnless { tiny }
+        ?.content
+    VerticalShell(
+        context,
+        palette,
+        snap.opacity,
+        paddingDp = if (tiny) 8 else 12,
+        bottomBar = if (barData == null) null else ({ TabBar(palette, barData) }),
+    ) {
+        when (state) {
+            is HubWidgetUiState.Loading ->
+                EmptyState(palette, R.drawable.ic_widget_event_available, snap.emptyText)
+            is HubWidgetUiState.Empty ->
+                EmptyState(
+                    palette,
+                    R.drawable.ic_widget_event_available,
+                    state.message.ifEmpty { snap.emptyText },
+                )
+            is HubWidgetUiState.Error ->
+                EmptyState(
+                    palette,
+                    R.drawable.ic_widget_event_available,
+                    state.message.ifEmpty { snap.emptyText },
+                )
+            is HubWidgetUiState.Success -> HubBody(context, palette, state.content, state.nowMs)
+        }
+    }
+}
+
+@Composable
+private fun HubBody(
+    context: Context,
+    palette: ChroniclePalette,
+    data: HubContentData,
+    nowMs: Long,
+) {
+    // Portrait buckets: Tiny collapses to one quiet line; lists scroll in
+    // every other bucket, so short widgets clip nothing and tall ones
+    // fill up. Compact drops the hairline.
+    when (currentVerticalBucket()) {
+        VerticalBucket.Tiny ->
+            Tiny(palette, data)
+        VerticalBucket.Compact ->
+            HubColumn(context, palette, data, nowMs, hairline = false)
+        VerticalBucket.TallColumn ->
+            HubColumn(context, palette, data, nowMs, hairline = true)
+        VerticalBucket.FullPortrait ->
+            HubColumn(context, palette, data, nowMs, hairline = true)
+    }
+}
+
+/** Tiny strip (1x1/2x1): dense dot + first line of the active tab. */
+@Composable
+private fun Tiny(palette: ChroniclePalette, data: HubContentData) {
+    val line = when (data.sel) {
+        ChronicleHubHomeWidget.TAB_CLASS -> data.entry
+            ?.takeUnless { it.isSentinel || data.snap.stale }
+            ?.className ?: data.snap.staleName.ifEmpty { data.snap.emptyText }
+        ChronicleHubHomeWidget.TAB_AGENDA -> data.agendaRows.firstOrNull()
+            ?.let { "${it.time} · ${it.name}" }
+            ?: data.snap.staleName.ifEmpty { data.snap.emptyText }
+        ChronicleHubHomeWidget.TAB_TASKS -> data.tasksRows.firstOrNull()?.title
+            ?: data.emptyTasks.ifEmpty { data.snap.emptyText }
+        else -> HubMenuMeal(data)?.dishes?.firstOrNull()
+            ?: data.emptyMenu.ifEmpty { data.snap.emptyText }
+    }
+    val dot = when (data.sel) {
+        ChronicleHubHomeWidget.TAB_CLASS -> data.entry?.colorHex
+        ChronicleHubHomeWidget.TAB_AGENDA -> data.agendaRows.firstOrNull()?.colorHex
+        else -> null
+    }
+    TinyRow(palette, dot, line.ifEmpty { data.snap.emptyText })
+}
+
+@Composable
+private fun HubColumn(
+    context: Context,
+    palette: ChroniclePalette,
+    data: HubContentData,
+    nowMs: Long,
+    hairline: Boolean,
+) {
+    val iconRes = when (data.sel) {
+        ChronicleHubHomeWidget.TAB_CLASS -> R.drawable.ic_widget_school
+        ChronicleHubHomeWidget.TAB_AGENDA -> R.drawable.ic_widget_event
+        ChronicleHubHomeWidget.TAB_TASKS -> R.drawable.ic_widget_task
+        else -> R.drawable.ic_widget_menu
+    }
+    val title = when (data.sel) {
+        ChronicleHubHomeWidget.TAB_CLASS -> data.titleClass
+        ChronicleHubHomeWidget.TAB_AGENDA -> data.titleAgenda
+        ChronicleHubHomeWidget.TAB_TASKS -> data.tasksTitle
+        else -> HubMenuMeal(data)?.title ?: data.menuTitle
+    }
+
+    // fillMaxSize + weight spacer pins the tab bar to the bottom edge;
+    // the weight collapses to zero when content fills the widget.
+    // Compact buckets render whole rows only (static take + "+N more"):
+    // a short widget must never show a row that cannot be fully seen.
+    // Taller buckets scroll the full list instead.
+    val compact = currentVerticalBucket() == VerticalBucket.Compact
+    Column(modifier = GlanceModifier.fillMaxSize()) {
+        WidgetHeader(
+                palette = palette,
+                iconRes = iconRes,
+                title = title,
+            )
+            // Breathing room between the header and the body in every
+            // bucket (Compact previously glued them together).
+            Spacer(modifier = GlanceModifier.height(6.dp))
+            if (hairline) {
+                Spacer(modifier = GlanceModifier.height(4.dp))
+                Hairline(palette)
+                Spacer(modifier = GlanceModifier.height(6.dp))
+            }
+            Column {
+                when (data.sel) {
+                    // Compact renders whole rows only (static take + "+N
+                    // more"); taller buckets scroll the full list. True
+                    // strips never reach here (Tiny renders one-liners).
+                    ChronicleHubHomeWidget.TAB_CLASS ->
+                        SharedClassTab(
+                            palette,
+                            data.entry,
+                            data.snap,
+                            nowMs,
+                            data.looks,
+                            compact = currentVerticalBucket() == VerticalBucket.Compact,
+                        )
+                    ChronicleHubHomeWidget.TAB_AGENDA ->
+                        if (data.agendaRows.isEmpty()) {
+                            EmptyState(
+                                palette,
+                                R.drawable.ic_widget_event_available,
+                                data.snap.staleName.ifEmpty { data.snap.emptyText },
+                            )
+                        } else if (compact) {
+                            val shown = data.agendaRows.take(2)
+                            for ((i, row) in shown.withIndex()) {
+                                if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
+                                ClassRow(context, palette, row.time, row.name, row.colorHex)
+                            }
+                            Spacer(modifier = GlanceModifier.height(6.dp))
+                            MoreIndicator(palette, data.agendaRows.size - shown.size)
+                        } else {
+                            // Scrollable rows: every class reachable at any
+                            // height, nothing clips mid-row, no "+N more".
+                            // Items wrap in a Column (see agenda widget).
+                            LazyColumn(modifier = GlanceModifier.defaultWeight()) {
+                                items(data.agendaRows.size) { i ->
+                                    Column(modifier = GlanceModifier.fillMaxWidth()) {
+                                        if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
+                                        val row = data.agendaRows[i]
+                                        ClassRow(context, palette, row.time, row.name, row.colorHex)
+                                    }
+                                }
+                            }
+                        }
+                    ChronicleHubHomeWidget.TAB_TASKS ->
+                        if (data.tasksRows.isEmpty()) {
+                            EmptyState(
+                                palette,
+                                R.drawable.ic_widget_done_all,
+                                data.emptyTasks.ifEmpty { data.snap.emptyText },
+                            )
+                        } else if (compact) {
+                            val shown = data.tasksRows.take(2)
+                            for ((i, task) in shown.withIndex()) {
+                                if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
+                                TaskRow(palette, task.title, task.date, task.urgent)
+                            }
+                            Spacer(modifier = GlanceModifier.height(6.dp))
+                            MoreIndicator(palette, data.tasksRows.size - shown.size)
+                        } else {
+                            // Scrollable rows, same mechanism as above.
+                            LazyColumn(modifier = GlanceModifier.defaultWeight()) {
+                                items(data.tasksRows.size) { i ->
+                                    Column(modifier = GlanceModifier.fillMaxWidth()) {
+                                        if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
+                                        val task = data.tasksRows[i]
+                                        TaskRow(palette, task.title, task.date, task.urgent)
+                                    }
+                                }
+                            }
+                        }
+                    else -> {
+                        val meal = HubMenuMeal(data)
+                        val dishes = meal?.dishes ?: data.menuRows
+                        RowsOrEmpty(
+                            palette = palette,
+                            empty = dishes.isEmpty(),
+                            emptyIcon = R.drawable.ic_widget_menu,
+                            emptyCopy = data.emptyMenu.ifEmpty { data.snap.emptyText },
+                        ) {
+                            if (meal != null && data.menuMeals.size > 1) {
+                                MealSwitcher(
+                                    palette = palette,
+                                    title = meal.title,
+                                    showArrows = true,
+                                    leftIcon = R.drawable.ic_widget_chevron_left,
+                                    rightIcon = R.drawable.ic_widget_chevron_right,
+                                ) { dir ->
+                                    actionRunCallback<HubMenuMealCallback>(
+                                        actionParametersOf(MenuMealDirectionKey to dir),
+                                    )
+                                }
+                                Spacer(modifier = GlanceModifier.height(6.dp))
+                            }
+                            // Compact: whole dishes only (static take + "+N
+                            // more"); taller buckets scroll the full list.
+                            if (compact) {
+                                val shown = dishes.take(2)
+                                ChunkedRows(count = shown.size, perGroup = 2, gapDp = 4) { i ->
+                                    DishRow(palette, shown[i])
+                                }
+                                MoreIndicator(palette, dishes.size - shown.size)
+                            } else {
+                                // Scrollable dish list (same mechanism as the
+                                // standalone menu): fills the remaining body space
+                                // via weight, so every dish is reachable with no
+                                // cap and no "+N more".
+                                LazyColumn(modifier = GlanceModifier.defaultWeight()) {
+                                    items(dishes.size) { i -> DishRow(palette, dishes[i]) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+    }
+}
+
+/**
+ * Bottom tab bar: previous arrow, centered page dots, next arrow.
+ * One Row with 3 children — safely under the RemoteViews limit.
+ */
+@Composable
+private fun TabBar(palette: ChroniclePalette, data: HubContentData) {
+    // The row itself advances too: taps landing between the arrows and
+    // the dots would otherwise fall through to the whole-widget tap and
+    // open the app instead of switching tabs. Child actions win over
+    // the parent's, so arrows keep their own directions.
+    Row(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .clickable(
+                onClick = actionRunCallback<HubTabCallback>(
+                    actionParametersOf(HubDirectionKey to 1),
+                ),
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TabArrow(palette, R.drawable.ic_widget_chevron_left, -1)
+        Box(
+            modifier = GlanceModifier
+                .defaultWeight()
+                .clickable(
+                    onClick = actionRunCallback<HubTabCallback>(
+                        actionParametersOf(HubDirectionKey to 1),
+                    ),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            PageDots(palette, data.enabled.size, data.pos)
+        }
+        TabArrow(palette, R.drawable.ic_widget_chevron_right, 1)
+    }
+}
+
+/** Selected servable meal for the hub menu tab (legacy flat rows when the
+ * new list is absent, e.g. pushes from older app versions). */
+private fun HubMenuMeal(data: HubContentData): MenuMeal? =
+    if (data.menuMeals.isEmpty()) null
+    else data.menuMeals[data.menuMealIdx.coerceIn(data.menuMeals.indices)]
+
+@Composable
+private fun RowsOrEmpty(
+    palette: ChroniclePalette,
+    empty: Boolean,
+    emptyIcon: Int,
+    emptyCopy: String,
+    rows: @Composable () -> Unit,
+) {
+    if (empty) {
+        EmptyState(palette, emptyIcon, emptyCopy)
+    } else {
+        Column { rows() }
+    }
+}

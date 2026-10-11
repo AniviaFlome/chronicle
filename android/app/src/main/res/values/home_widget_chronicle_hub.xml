@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_widget_chronicle_hub_label">Chronicle Hub</string>
+    <string name="home_widget_chronicle_hub_description">Next class, agenda, tasks and menu in one widget.</string>
+    <string name="home_widget_chronicle_hub_t_fb138ae6">Next class</string>
+    <string name="home_widget_chronicle_hub_t_dee5c859">Today</string>
+</resources>

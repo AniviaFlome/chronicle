@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_widget_cafeteria_menu_label">Cafeteria menu</string>
+    <string name="home_widget_cafeteria_menu_description">Shows today\'s dining-hall menu.</string>
+</resources>

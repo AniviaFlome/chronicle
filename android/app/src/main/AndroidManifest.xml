@@ -89,6 +89,47 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/due_tasks_compact_home_widget" />
         </receiver>
+        <receiver
+            android:name="com.chronicleapp.chronicle.ChronicleHubHomeWidgetReceiver"
+            android:label="@string/home_widget_chronicle_hub_label"
+            android:exported="true"
+            android:configure="com.chronicleapp.chronicle.HubConfigureActivity">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/chronicle_hub_home_widget" />
+        </receiver>
+        <receiver
+            android:name="com.chronicleapp.chronicle.CafeteriaMenuHomeWidgetReceiver"
+            android:label="@string/home_widget_cafeteria_menu_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/cafeteria_menu_home_widget" />
+        </receiver>
+        <receiver
+            android:name="com.chronicleapp.chronicle.WeeklyCalendarHomeWidgetReceiver"
+            android:label="@string/home_widget_weekly_calendar_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/weekly_calendar_home_widget" />
+        </receiver>
+        <activity
+            android:name="com.chronicleapp.chronicle.HubConfigureActivity"
+            android:exported="false"
+            android:label="Hub tabs" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

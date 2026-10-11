@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -11,7 +12,6 @@ import '../providers.dart';
 import '../theme.dart';
 import '../l10n/l10n.dart';
 import '../utils/time_format.dart';
-import 'class_edit_screen.dart';
 import 'mark_absence_dialog.dart';
 
 /// Opens the detail sheet for one class meeting: time, room, teacher and
@@ -169,12 +169,7 @@ class _OccurrenceSheet extends ConsumerWidget {
                     child: OutlinedButton.icon(
                       onPressed: () {
                         Navigator.of(context).pop();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ClassEditScreen(existing: classRow),
-                            fullscreenDialog: true,
-                          ),
-                        );
+                        context.push('/classes/edit', extra: classRow);
                       },
                       icon: const Icon(Icons.edit_outlined),
                       label: Text(context.l10n.editClass),
