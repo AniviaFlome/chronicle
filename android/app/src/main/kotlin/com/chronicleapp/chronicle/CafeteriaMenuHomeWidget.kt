@@ -210,7 +210,7 @@ private fun Compact(
         for ((i, dish) in rows.withIndex()) {
             if (i > 0) Spacer(modifier = GlanceModifier.height(3.dp))
             Text(
-                text = dish,
+                text = "• $dish",
                 style = TextStyle(
                     color = palette.onSurface,
                     fontSize = if (isNarrowSlot()) 12.sp else 13.sp,
@@ -266,9 +266,15 @@ private fun TallColumn(
         // Scrollable list: LazyColumn fills the remaining space via weight
         // (a wrap-content list would measure only its first item — the exact
         // failure that got LazyColumn banned here before). Every dish is
-        // reachable by scrolling: no cap, no "+N more".
+        // reachable by scrolling: no cap, no "+N more". Items wrap in
+        // their own Column: bare single-node items mismeasure.
         LazyColumn(modifier = GlanceModifier.defaultWeight()) {
-            items(rows.size) { i -> DishRow(palette, rows[i]) }
+            items(rows.size) { i ->
+                Column(modifier = GlanceModifier.fillMaxWidth()) {
+                    if (i > 0) Spacer(modifier = GlanceModifier.height(4.dp))
+                    DishRow(palette, rows[i])
+                }
+            }
         }
     }
 }
@@ -314,8 +320,14 @@ private fun FullPortrait(
         }
         val rows = state.dishes
         // Scrollable list (see TallColumn): every dish reachable, no cap.
+        // Items wrap in their own Column: bare single-node items mismeasure.
         LazyColumn(modifier = GlanceModifier.defaultWeight()) {
-            items(rows.size) { i -> DishRow(palette, rows[i]) }
+            items(rows.size) { i ->
+                Column(modifier = GlanceModifier.fillMaxWidth()) {
+                    if (i > 0) Spacer(modifier = GlanceModifier.height(4.dp))
+                    DishRow(palette, rows[i])
+                }
+            }
         }
     }
 }

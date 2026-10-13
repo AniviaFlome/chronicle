@@ -632,6 +632,17 @@ class $ClassesTable extends Classes with TableInfo<$ClassesTable, ClassesData> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _courseCodeMeta = const VerificationMeta(
+    'courseCode',
+  );
+  @override
+  late final GeneratedColumn<String> courseCode = GeneratedColumn<String>(
+    'course_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _yearIdMeta = const VerificationMeta('yearId');
   @override
   late final GeneratedColumn<int> yearId = GeneratedColumn<int>(
@@ -820,6 +831,7 @@ class $ClassesTable extends Classes with TableInfo<$ClassesTable, ClassesData> {
     id,
     name,
     colorValue,
+    courseCode,
     yearId,
     startDate,
     endDate,
@@ -868,6 +880,12 @@ class $ClassesTable extends Classes with TableInfo<$ClassesTable, ClassesData> {
       );
     } else if (isInserting) {
       context.missing(_colorValueMeta);
+    }
+    if (data.containsKey('course_code')) {
+      context.handle(
+        _courseCodeMeta,
+        courseCode.isAcceptableOrUnknown(data['course_code']!, _courseCodeMeta),
+      );
     }
     if (data.containsKey('year_id')) {
       context.handle(
@@ -1007,6 +1025,10 @@ class $ClassesTable extends Classes with TableInfo<$ClassesTable, ClassesData> {
         DriftSqlType.int,
         data['${effectivePrefix}color_value'],
       )!,
+      courseCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}course_code'],
+      ),
       yearId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}year_id'],
@@ -1088,6 +1110,7 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
   final int id;
   final String name;
   final int colorValue;
+  final String? courseCode;
   final int? yearId;
 
   /// ISO-8601 date strings (yyyy-MM-dd), null = unbounded.
@@ -1127,6 +1150,7 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
     required this.id,
     required this.name,
     required this.colorValue,
+    this.courseCode,
     this.yearId,
     this.startDate,
     this.endDate,
@@ -1151,6 +1175,9 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
     map['id'] = Variable<int>(id);
     map['name'] = Variable<String>(name);
     map['color_value'] = Variable<int>(colorValue);
+    if (!nullToAbsent || courseCode != null) {
+      map['course_code'] = Variable<String>(courseCode);
+    }
     if (!nullToAbsent || yearId != null) {
       map['year_id'] = Variable<int>(yearId);
     }
@@ -1204,6 +1231,9 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
       id: Value(id),
       name: Value(name),
       colorValue: Value(colorValue),
+      courseCode: courseCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(courseCode),
       yearId: yearId == null && nullToAbsent
           ? const Value.absent()
           : Value(yearId),
@@ -1259,6 +1289,7 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
       id: serializer.fromJson<int>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       colorValue: serializer.fromJson<int>(json['colorValue']),
+      courseCode: serializer.fromJson<String?>(json['courseCode']),
       yearId: serializer.fromJson<int?>(json['yearId']),
       startDate: serializer.fromJson<String?>(json['startDate']),
       endDate: serializer.fromJson<String?>(json['endDate']),
@@ -1287,6 +1318,7 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
       'id': serializer.toJson<int>(id),
       'name': serializer.toJson<String>(name),
       'colorValue': serializer.toJson<int>(colorValue),
+      'courseCode': serializer.toJson<String?>(courseCode),
       'yearId': serializer.toJson<int?>(yearId),
       'startDate': serializer.toJson<String?>(startDate),
       'endDate': serializer.toJson<String?>(endDate),
@@ -1311,6 +1343,7 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
     int? id,
     String? name,
     int? colorValue,
+    Value<String?> courseCode = const Value.absent(),
     Value<int?> yearId = const Value.absent(),
     Value<String?> startDate = const Value.absent(),
     Value<String?> endDate = const Value.absent(),
@@ -1332,6 +1365,7 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
     id: id ?? this.id,
     name: name ?? this.name,
     colorValue: colorValue ?? this.colorValue,
+    courseCode: courseCode.present ? courseCode.value : this.courseCode,
     yearId: yearId.present ? yearId.value : this.yearId,
     startDate: startDate.present ? startDate.value : this.startDate,
     endDate: endDate.present ? endDate.value : this.endDate,
@@ -1363,6 +1397,9 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
       colorValue: data.colorValue.present
           ? data.colorValue.value
           : this.colorValue,
+      courseCode: data.courseCode.present
+          ? data.courseCode.value
+          : this.courseCode,
       yearId: data.yearId.present ? data.yearId.value : this.yearId,
       startDate: data.startDate.present ? data.startDate.value : this.startDate,
       endDate: data.endDate.present ? data.endDate.value : this.endDate,
@@ -1401,6 +1438,7 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('colorValue: $colorValue, ')
+          ..write('courseCode: $courseCode, ')
           ..write('yearId: $yearId, ')
           ..write('startDate: $startDate, ')
           ..write('endDate: $endDate, ')
@@ -1423,10 +1461,11 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     name,
     colorValue,
+    courseCode,
     yearId,
     startDate,
     endDate,
@@ -1444,7 +1483,7 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
     active,
     uuid,
     updatedAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1452,6 +1491,7 @@ class ClassesData extends DataClass implements Insertable<ClassesData> {
           other.id == this.id &&
           other.name == this.name &&
           other.colorValue == this.colorValue &&
+          other.courseCode == this.courseCode &&
           other.yearId == this.yearId &&
           other.startDate == this.startDate &&
           other.endDate == this.endDate &&
@@ -1475,6 +1515,7 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
   final Value<int> id;
   final Value<String> name;
   final Value<int> colorValue;
+  final Value<String?> courseCode;
   final Value<int?> yearId;
   final Value<String?> startDate;
   final Value<String?> endDate;
@@ -1496,6 +1537,7 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.colorValue = const Value.absent(),
+    this.courseCode = const Value.absent(),
     this.yearId = const Value.absent(),
     this.startDate = const Value.absent(),
     this.endDate = const Value.absent(),
@@ -1518,6 +1560,7 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
     this.id = const Value.absent(),
     required String name,
     required int colorValue,
+    this.courseCode = const Value.absent(),
     this.yearId = const Value.absent(),
     this.startDate = const Value.absent(),
     this.endDate = const Value.absent(),
@@ -1541,6 +1584,7 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
     Expression<int>? id,
     Expression<String>? name,
     Expression<int>? colorValue,
+    Expression<String>? courseCode,
     Expression<int>? yearId,
     Expression<String>? startDate,
     Expression<String>? endDate,
@@ -1563,6 +1607,7 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (colorValue != null) 'color_value': colorValue,
+      if (courseCode != null) 'course_code': courseCode,
       if (yearId != null) 'year_id': yearId,
       if (startDate != null) 'start_date': startDate,
       if (endDate != null) 'end_date': endDate,
@@ -1588,6 +1633,7 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
     Value<int>? id,
     Value<String>? name,
     Value<int>? colorValue,
+    Value<String?>? courseCode,
     Value<int?>? yearId,
     Value<String?>? startDate,
     Value<String?>? endDate,
@@ -1610,6 +1656,7 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
       id: id ?? this.id,
       name: name ?? this.name,
       colorValue: colorValue ?? this.colorValue,
+      courseCode: courseCode ?? this.courseCode,
       yearId: yearId ?? this.yearId,
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
@@ -1641,6 +1688,9 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
     }
     if (colorValue.present) {
       map['color_value'] = Variable<int>(colorValue.value);
+    }
+    if (courseCode.present) {
+      map['course_code'] = Variable<String>(courseCode.value);
     }
     if (yearId.present) {
       map['year_id'] = Variable<int>(yearId.value);
@@ -1702,6 +1752,7 @@ class ClassesCompanion extends UpdateCompanion<ClassesData> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('colorValue: $colorValue, ')
+          ..write('courseCode: $courseCode, ')
           ..write('yearId: $yearId, ')
           ..write('startDate: $startDate, ')
           ..write('endDate: $endDate, ')
@@ -10324,6 +10375,7 @@ typedef $$ClassesTableCreateCompanionBuilder = ClassesCompanion Function({
   Value<int> id,
   required String name,
   required int colorValue,
+  Value<String?> courseCode,
   Value<int?> yearId,
   Value<String?> startDate,
   Value<String?> endDate,
@@ -10346,6 +10398,7 @@ typedef $$ClassesTableUpdateCompanionBuilder = ClassesCompanion Function({
   Value<int> id,
   Value<String> name,
   Value<int> colorValue,
+  Value<String?> courseCode,
   Value<int?> yearId,
   Value<String?> startDate,
   Value<String?> endDate,
@@ -10482,6 +10535,11 @@ class $$ClassesTableFilterComposer
 
   ColumnFilters<int> get colorValue => $composableBuilder(
     column: $table.colorValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get courseCode => $composableBuilder(
+    column: $table.courseCode,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10713,6 +10771,11 @@ class $$ClassesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get courseCode => $composableBuilder(
+    column: $table.courseCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get startDate => $composableBuilder(
     column: $table.startDate,
     builder: (column) => ColumnOrderings(column),
@@ -10834,6 +10897,11 @@ class $$ClassesTableAnnotationComposer
 
   GeneratedColumn<int> get colorValue => $composableBuilder(
     column: $table.colorValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get courseCode => $composableBuilder(
+    column: $table.courseCode,
     builder: (column) => column,
   );
 
@@ -11058,6 +11126,7 @@ class $$ClassesTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<int> colorValue = const Value.absent(),
+                Value<String?> courseCode = const Value.absent(),
                 Value<int?> yearId = const Value.absent(),
                 Value<String?> startDate = const Value.absent(),
                 Value<String?> endDate = const Value.absent(),
@@ -11079,6 +11148,7 @@ class $$ClassesTableTableManager
                 id: id,
                 name: name,
                 colorValue: colorValue,
+                courseCode: courseCode,
                 yearId: yearId,
                 startDate: startDate,
                 endDate: endDate,
@@ -11102,6 +11172,7 @@ class $$ClassesTableTableManager
                 Value<int> id = const Value.absent(),
                 required String name,
                 required int colorValue,
+                Value<String?> courseCode = const Value.absent(),
                 Value<int?> yearId = const Value.absent(),
                 Value<String?> startDate = const Value.absent(),
                 Value<String?> endDate = const Value.absent(),
@@ -11123,6 +11194,7 @@ class $$ClassesTableTableManager
                 id: id,
                 name: name,
                 colorValue: colorValue,
+                courseCode: courseCode,
                 yearId: yearId,
                 startDate: startDate,
                 endDate: endDate,

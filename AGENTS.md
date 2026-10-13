@@ -20,6 +20,14 @@ Flutter student planner. NixOS-first repo; `flutter`/`dart` only exist inside `n
 - Keep full-app suites as plain `flutter_test` widget tests under `test/` (never an `integration_test/` dir: the flutter tool treats that path as on-device tests and tries to build + launch the Linux app, which needs GTK and a display that CI verify jobs don't have).
 - Ignore drift "multiple databases" warnings in tests (each test makes its own `NativeDatabase.memory()`).
 
+## On-device dev testing (side-by-side debug flavor)
+- Debug builds install next to release: `applicationIdSuffix = ".debug"` in `android/app/build.gradle.kts` + `android/app/src/debug/AndroidManifest.xml` overlay (label `Chronicle Dev`, `tools:replace`). Ids in `.env` (`CHRONICLE_DEV_APP_ID`, `CHRONICLE_TEST_DEVICE`, `CHRONICLE_SYNC_FOLDER`).
+- Same namespace/classes under both flavors, so the Dart push MUST use `qualifiedAndroidName` with fully-qualified receiver names (`WidgetReceivers` in `lib/services/widget_push.dart`); bare `androidName` resolves against the applicationId and throws `-3` on debug, failing the whole push silently (caught + debugPrint only).
+- Never call `updateWidgetPreview` in the push loop: preview renders run full Glance compositions on the main thread per widget and wedge the method channel for tens of seconds (startup ANRs, subsequent pushes never sent). Gallery previews keep system cadence.
+- Seed the dev app via `run-as $CHRONICLE_DEV_APP_ID` (`files/chronicle.sqlite`, `settings` keys `data_folder_path` + `auto_sync=false`), then manual Import in Settings → Data folder. Keep dev auto-sync OFF: two writers on one sync folder churn.
+- Widget instances are placed by hand; verify with `dumpsys appwidget` (bindings carry the package, distinguishes Dev vs release), `logcat` (`Trying to notify widget update`, `Home widget refresh failed`, `Error in Glance App Widget`), screencap. Fresh-install cold starts ANR under dexopt load — force-stop + relaunch before concluding anything.
+- Debug APKs install with `adb install -r` (different package: no signature clash with release). Never uninstall the user's release app for testing.
+
 ## Codegen — do not edit generated files
 - `lib/data/database.g.dart` from `database.dart` + `tables.dart` via `dart run build_runner build --delete-conflicting-outputs`. Bump `schemaVersion` + idempotent `_addColumnIfMissing` steps (killed migrates must re-run safely).
 - l10n source is `lib/l10n/app_en.arb` / `app_tr.arb` (`l10n.yaml`); generated `app_localizations*.dart` via `flutter generate`. Add strings to ARBs only.

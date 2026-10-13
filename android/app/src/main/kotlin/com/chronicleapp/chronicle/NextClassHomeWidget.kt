@@ -15,13 +15,18 @@ import androidx.compose.runtime.Composable
 import androidx.core.os.ConfigurationCompat
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.action.Action
+import androidx.glance.action.actionParametersOf
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxWidth
 import com.chronicleapp.chronicle.widget.ChroniclePalette
 import com.chronicleapp.chronicle.widget.EmptyState
+import com.chronicleapp.chronicle.widget.ExpandAtKey
 import com.chronicleapp.chronicle.widget.Keys
+import com.chronicleapp.chronicle.widget.NextClassExpandCallback
 import com.chronicleapp.chronicle.widget.Samples
 import com.chronicleapp.chronicle.widget.SharedClassTab
 import com.chronicleapp.chronicle.widget.TimeRow
@@ -31,6 +36,8 @@ import com.chronicleapp.chronicle.widget.WidgetSnapshot
 import com.chronicleapp.chronicle.widget.currentVerticalBucket
 import com.chronicleapp.chronicle.widget.heroName
 import com.chronicleapp.chronicle.widget.isSentinel
+import com.chronicleapp.chronicle.widget.long
+import com.chronicleapp.chronicle.widget.nextClassNavBump
 import com.chronicleapp.chronicle.widget.parseTimed
 import com.chronicleapp.chronicle.widget.resolvePalette
 import com.chronicleapp.chronicle.widget.snapshot
@@ -102,6 +109,10 @@ class NextClassHomeWidget : GlanceAppWidget() {
 private fun NextClassContent(context: Context, state: NextClassWidgetUiState) {
     // Loading resolves against the live prefs snapshot for theming; the
     // body is a quiet empty state so a cold bind never flashes raw keys.
+    // Tracked bump read (see nextClassNavBump): hero expand taps re-read
+    // prefs on live-session recomposes instead of replaying old state.
+    @Suppress("unused")
+    val navBump = nextClassNavBump.intValue
     val snap: WidgetSnapshot = when (state) {
         is NextClassWidgetUiState.Success -> state.snap
         else -> HomeWidgetPlugin.getData(context).snapshot(Keys.NEXT_CLASS)
@@ -109,6 +120,22 @@ private fun NextClassContent(context: Context, state: NextClassWidgetUiState) {
     val palette = resolvePalette(context, snap.useYou, snap.themeCode)
     val tiny = state is NextClassWidgetUiState.Success &&
         currentVerticalBucket() == VerticalBucket.Tiny
+    // Hero expand state: native-owned marker (epoch key, -1 = collapsed).
+    // Tiny strips stay untappable one-liners.
+    val success = state as? NextClassWidgetUiState.Success
+    val hero = success?.hero
+    val expanded = hero != null && !hero.isSentinel &&
+        hero.at == HomeWidgetPlugin.getData(context)
+            .long("${Keys.NEXT_CLASS}.${Keys.EXPANDED_AT}", -1L)
+    val expandAction: (() -> Action)? = hero
+        ?.takeUnless { it.isSentinel }
+        ?.let { h ->
+            {
+                actionRunCallback<NextClassExpandCallback>(
+                    actionParametersOf(ExpandAtKey to h.at),
+                )
+            }
+        }
     VerticalShell(context, palette, snap.opacity, paddingDp = if (tiny) 8 else 12) {
         when (state) {
             is NextClassWidgetUiState.Loading ->
@@ -119,9 +146,9 @@ private fun NextClassContent(context: Context, state: NextClassWidgetUiState) {
                 EmptyState(palette, R.drawable.ic_widget_event_available, state.message)
             is NextClassWidgetUiState.Success -> when (currentVerticalBucket()) {
                 VerticalBucket.Tiny -> Tiny(state, palette)
-                VerticalBucket.Compact -> Compact(state, palette)
-                VerticalBucket.TallColumn -> TallColumn(state, palette)
-                VerticalBucket.FullPortrait -> FullPortrait(state, palette)
+                VerticalBucket.Compact -> Compact(state, palette, expanded, expandAction)
+                VerticalBucket.TallColumn -> TallColumn(state, palette, expanded, expandAction)
+                VerticalBucket.FullPortrait -> FullPortrait(state, palette, expanded, expandAction)
             }
         }
     }
@@ -141,9 +168,14 @@ private fun Tiny(
 private fun Compact(
     state: NextClassWidgetUiState.Success,
     palette: ChroniclePalette,
+    expanded: Boolean = false,
+    expandAction: (() -> Action)? = null,
 ) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
-        SharedClassTab(palette, state.hero, state.snap, state.nowMs, state.upcoming, compact = true)
+        SharedClassTab(
+            palette, state.hero, state.snap, state.nowMs, state.upcoming,
+            compact = true, expanded = expanded, expandAction = expandAction,
+        )
     }
 }
 
@@ -152,9 +184,14 @@ private fun Compact(
 private fun TallColumn(
     state: NextClassWidgetUiState.Success,
     palette: ChroniclePalette,
+    expanded: Boolean = false,
+    expandAction: (() -> Action)? = null,
 ) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
-        SharedClassTab(palette, state.hero, state.snap, state.nowMs, state.upcoming)
+        SharedClassTab(
+            palette, state.hero, state.snap, state.nowMs, state.upcoming,
+            expanded = expanded, expandAction = expandAction,
+        )
     }
 }
 
@@ -163,8 +200,13 @@ private fun TallColumn(
 private fun FullPortrait(
     state: NextClassWidgetUiState.Success,
     palette: ChroniclePalette,
+    expanded: Boolean = false,
+    expandAction: (() -> Action)? = null,
 ) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
-        SharedClassTab(palette, state.hero, state.snap, state.nowMs, state.upcoming)
+        SharedClassTab(
+            palette, state.hero, state.snap, state.nowMs, state.upcoming,
+            expanded = expanded, expandAction = expandAction,
+        )
     }
 }

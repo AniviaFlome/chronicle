@@ -111,21 +111,19 @@ private fun AgendaContent(
     val palette = resolvePalette(context, snap.useYou, snap.themeCode)
     val h = LocalSize.current.height
     val emptyCopy = snap.staleName.ifEmpty { snap.emptyText }
-    // Sliding 3-day window centered on the selection (wrapping around the
+    // Sliding day window centered on the selection (wrapping around the
     // week): tapping a side cell steps the selection and the window slides
-    // with it — no arrows needed. Three cells (not five): each cell must
-    // stay wide enough for its numeral on every host, and 5-across
-    // compositions demonstrably collapse into "..." dots on real devices
-    // even with correct strings, bounds and taps. The date header above
-    // names the selected day in full. (Glance 1.2 ships no LazyRow —
-    // verified in the artifact — so a scrolling rail is not possible;
-    // this window is the mechanism instead.)
+    // with it — no arrows needed. Narrow slots show 3 cells, wide slots 5
+    // (Glance 1.2 ships no LazyRow — verified in the artifact — so a
+    // scrolling rail is not possible; this window is the mechanism
+    // instead).
+    val halfWindow = if (isNarrowSlot()) 1 else 2
     val rail: @Composable (Boolean) -> Unit = { compact ->
         Row(
             modifier = GlanceModifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            for (k in -1..1) {
+            for (k in -halfWindow..halfWindow) {
                 val i = ((sel + k) % week.size + week.size) % week.size
                 val cell = week[i]
                 WeekCellView(

@@ -30,6 +30,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
+import androidx.glance.action.NoRippleOverride
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.cornerRadius
@@ -107,7 +108,10 @@ fun GlanceModifier.widgetCornerRadius(context: Context): GlanceModifier =
 /**
  * Whole-widget shell: edge-to-edge background at the pushed opacity (see
  * [widgetBg]), light content insets, whole-widget tap opens the app.
- * Row-level callbacks override this.
+ * Row-level callbacks override this. No press ripple: the app opening is
+ * feedback enough, and the flash reads as a rendering glitch (seen
+ * on-device as a white flicker on every tab switch, since the press
+ * lands on the shell before the child action wins on release).
  */
 @Composable
 fun WidgetShell(
@@ -121,7 +125,10 @@ fun WidgetShell(
             .fillMaxSize()
             .background(widgetBg(context, palette.bg, opacity))
             .widgetCornerRadius(context)
-            .clickable(onClick = actionStartActivity<MainActivity>()),
+            .clickable(
+                onClick = actionStartActivity<MainActivity>(),
+                rippleOverride = NoRippleOverride,
+            ),
         contentAlignment = Alignment.TopStart,
     ) {
         Box(modifier = GlanceModifier.fillMaxSize().padding(12.dp)) {
@@ -219,10 +226,11 @@ fun TonalChip(
     }
 }
 
-/** Accent count pill for headers ("3"). */
+/** Accent count pill for headers ("3"). Hidden for empty/"0" counts:
+ *  a zero pill next to an "All caught up" body is redundant noise. */
 @Composable
 fun CountPill(palette: ChroniclePalette, count: String) {
-    if (count.isEmpty()) return
+    if (count.isEmpty() || count.trim() == "0") return
     Box(
         modifier = GlanceModifier
             .background(palette.accentChipBg)
@@ -324,22 +332,55 @@ fun FilledMiniRow(palette: ChroniclePalette, text: String, colorHex: String) {
     FilledLookaheadRow(palette, time = text.substring(sep + 3), name = text.substring(0, sep))
 }
 
-/** Structured lookahead row: tonal time chip + bold name. Compact chips
- * and gaps leave maximum width for the class name. */
+/**
+ * Fixed chip width for lookahead lists so every class name in the list
+ * starts at the same x. Sized for weekday-prefixed chips ("Wed 13:40");
+ * plain times ("08:40") just leave air. Wide rows only — narrow slots
+ * stack the chip below the name where widths don't interact.
+ */
+fun lookaheadChipWidth(): Dp = 72.dp
+
+/** Structured lookahead row: tonal time chip + bold name. Wide slots keep
+ * the compact horizontal form with a FIXED chip width so every name in
+ * the list starts at the same x (weekday-prefixed chips like "Wed 13:40"
+ * are wider than plain "08:40"); narrow slots (~145.dp columns) stack
+ * vertically (full-width name first, chip below) because a weekday-prefixed
+ * chip ("Mon 08:40") otherwise eats the whole row and the name collapses
+ * into a 3-character sliver (seen on-device). */
 @Composable
-fun FilledLookaheadRow(palette: ChroniclePalette, time: String, name: String) {
+fun FilledLookaheadRow(
+    palette: ChroniclePalette,
+    time: String,
+    name: String,
+    chipWidth: Dp? = null,
+) {
     FilledBlock(palette, "", radius = 12.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (time.isNotEmpty()) {
-                TonalChip(palette, time)
-                Spacer(modifier = GlanceModifier.width(6.dp))
+        if (isNarrowSlot()) {
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
+                Text(
+                    text = name,
+                    style = TextStyle(color = palette.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                    maxLines = 2,
+                    modifier = GlanceModifier.fillMaxWidth(),
+                )
+                if (time.isNotEmpty()) {
+                    Spacer(modifier = GlanceModifier.height(4.dp))
+                    TonalChip(palette, time)
+                }
             }
-            Text(
-                text = name,
-                style = TextStyle(color = palette.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold),
-                maxLines = 1,
-                modifier = GlanceModifier.defaultWeight(),
-            )
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (time.isNotEmpty()) {
+                    TonalChip(palette, time, width = chipWidth)
+                    Spacer(modifier = GlanceModifier.width(6.dp))
+                }
+                Text(
+                    text = name,
+                    style = TextStyle(color = palette.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                    maxLines = 2,
+                    modifier = GlanceModifier.defaultWeight(),
+                )
+            }
         }
     }
 }
@@ -347,13 +388,29 @@ fun FilledLookaheadRow(palette: ChroniclePalette, time: String, name: String) {
 /**
  * Then-line for a timeline entry: structured name/when parts when pushed
  * (no baked-in "Then" prefix), legacy composed-string split as fallback
- * for old pushes.
+ * for old pushes. Tappable with [expandAction] (quiet "tomorrow" entries
+ * expand to the next class's teacher); without it, a plain row.
  */
 @Composable
-fun ThenLine(palette: ChroniclePalette, entry: TimedEntry) {
+fun ThenLine(
+    palette: ChroniclePalette,
+    entry: TimedEntry,
+    expandAction: (() -> Action)? = null,
+) {
     if (entry.thenName.isNotEmpty()) {
         Spacer(modifier = GlanceModifier.height(4.dp))
-        FilledLookaheadRow(palette, entry.thenWhen, entry.thenName)
+        if (expandAction == null) {
+            FilledLookaheadRow(palette, entry.thenWhen, entry.thenName)
+        } else {
+            Box(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .background(fixedProvider(0x00000000L))
+                    .clickable(onClick = expandAction(), rippleOverride = NoRippleOverride),
+            ) {
+                FilledLookaheadRow(palette, entry.thenWhen, entry.thenName)
+            }
+        }
     } else if (entry.thenLine.isNotEmpty()) {
         Spacer(modifier = GlanceModifier.height(4.dp))
         FilledMiniRow(palette, entry.thenLine, entry.thenColorHex)
@@ -363,7 +420,8 @@ fun ThenLine(palette: ChroniclePalette, entry: TimedEntry) {
 /**
  * Shared class hero: big title, gray status/time/room meta, then-line.
  * The lookahead list itself lives in [SharedClassTab] (scrollable or
- * static depending on bucket).
+ * static depending on bucket). Tapping the title toggles the teacher
+ * detail line when [expandAction] is supplied (hub + standalone hero).
  */
 @Composable
 fun ClassHero(
@@ -372,14 +430,32 @@ fun ClassHero(
     snap: WidgetSnapshot,
     nowMs: Long,
     titleSizeSp: Int,
+    expanded: Boolean = false,
+    expandAction: (() -> Action)? = null,
 ) {
     // Narrow slots step the hero down 2sp so titles survive ~200dp widths.
     val fittedTitleSp = if (isNarrowSlot()) (titleSizeSp - 2).coerceAtLeast(14) else titleSizeSp
-    Text(
-        text = entry.className,
-        style = TextStyle(color = palette.onSurface, fontSize = fittedTitleSp.sp, fontWeight = FontWeight.Bold),
-        maxLines = 2,
-    )
+    val title = @Composable {
+        Text(
+            text = entry.className,
+            style = TextStyle(color = palette.onSurface, fontSize = fittedTitleSp.sp, fontWeight = FontWeight.Bold),
+            maxLines = 2,
+        )
+    }
+    // The whole title is the tap target (a bare Text takes no click
+    // action); without an action it renders as a plain title.
+    if (expandAction == null) {
+        title()
+    } else {
+        Box(
+            modifier = GlanceModifier
+                .fillMaxWidth()
+                .background(fixedProvider(0x00000000L))
+                .clickable(onClick = expandAction(), rippleOverride = NoRippleOverride),
+        ) {
+            Column(modifier = GlanceModifier.fillMaxWidth()) { title() }
+        }
+    }
     val meta = listOf(liveStatus(entry, snap, nowMs), entry.detailLine)
         .filter { it.isNotEmpty() }
         .joinToString(" · ")
@@ -391,7 +467,15 @@ fun ClassHero(
             maxLines = 2,
         )
     }
-    ThenLine(palette, entry)
+    if (expanded && entry.teacher.isNotEmpty()) {
+        Spacer(modifier = GlanceModifier.height(4.dp))
+        Text(
+            text = entry.teacher,
+            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 13.sp),
+            maxLines = 2,
+        )
+    }
+    ThenLine(palette, entry, expandAction)
 }
 
 /**
@@ -416,6 +500,8 @@ fun SharedClassTab(
     nowMs: Long,
     looks: List<TimeRow>,
     compact: Boolean = false,
+    expanded: Boolean = false,
+    expandAction: (() -> Action)? = null,
 ) {
     if (entry == null || entry.isSentinel || snap.stale) {
         EmptyState(
@@ -430,6 +516,15 @@ fun SharedClassTab(
     // and no class times — render them quiet, not as a hero class name.
     // (True strips never reach here: Tiny buckets render one-liners, and
     // the shortest agenda tier renders its own summary.)
+    // The quiet entry still carries tomorrow in thenName/thenWhen ("tomorrow
+    // rides in the Then-line") plus the classes after that in looks — render
+    // both, otherwise tall widgets show one line over a large blank void.
+    // Quiet always renders the static take-2 + "+N more" form (never the
+    // scrolling LazyColumn): the hub's tab container is wrap-content, where
+    // a weight-bound lazy list mismeasures rows past the first two
+    // (seen on-device: 1px-tall third row). Two rows + an indicator always
+    // fit and always measure. The hub's nested looks repeat tomorrow as
+    // looks[0], so drop rows duplicating the Then-line.
     val quiet = entry.startLabel.isEmpty()
     if (quiet) {
         Text(
@@ -441,6 +536,36 @@ fun SharedClassTab(
             ),
             maxLines = 2,
         )
+        // Tomorrow's class expands to its teacher (pushed as the quiet
+        // entry's teacher): the evening use-case is planning tomorrow.
+        if (expanded && entry.teacher.isNotEmpty()) {
+            Spacer(modifier = GlanceModifier.height(4.dp))
+            Text(
+                text = entry.teacher,
+                style = TextStyle(color = palette.onSurfaceVariant, fontSize = 13.sp),
+                maxLines = 2,
+            )
+        }
+        ThenLine(palette, entry, expandAction)
+        val next = looks.filterNot { it.time == entry.thenWhen && it.name == entry.thenName }
+        if (next.isNotEmpty()) {
+            Spacer(modifier = GlanceModifier.height(6.dp))
+            // Narrow stacked rows are ~3x taller than wide horizontal ones:
+            // one row is all a narrow widget fits — and the "+N more" pill
+            // with it: squeezed last children mismeasure instead of clipping
+            // (seen on-device: 6px-tall pill), so narrow omits the pill.
+            // Wide widgets keep two rows plus the indicator.
+            val narrow = isNarrowSlot()
+            val shown = next.take(if (narrow) 1 else 2)
+            for ((i, row) in shown.withIndex()) {
+                if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
+                FilledLookaheadRow(palette, row.time, row.name, chipWidth = lookaheadChipWidth())
+            }
+            if (!narrow) {
+                Spacer(modifier = GlanceModifier.height(6.dp))
+                MoreIndicator(palette, next.size - shown.size)
+            }
+        }
     } else {
         ClassHero(
             palette = palette,
@@ -448,17 +573,29 @@ fun SharedClassTab(
             snap = snap,
             nowMs = nowMs,
             titleSizeSp = 20,
+            expanded = expanded,
+            expandAction = expandAction,
         )
-        if (looks.isNotEmpty()) {
+        // The pushed looks start with the Then-line class itself
+        // (looks[0] == thenName/thenWhen by contract), so drop it here —
+        // otherwise the hero's Then-line and the first lookahead row show
+        // the same class twice (seen on-device: Viyolonsel I twice).
+        // The quiet branch above already does the same filtering.
+        val upcoming = if (entry.thenName.isEmpty() && entry.thenWhen.isEmpty()) {
+            looks
+        } else {
+            looks.filterNot { it.time == entry.thenWhen && it.name == entry.thenName }
+        }
+        if (upcoming.isNotEmpty()) {
             Spacer(modifier = GlanceModifier.height(6.dp))
             if (compact) {
-                val shown = looks.take(2)
+                val shown = upcoming.take(2)
                 for ((i, row) in shown.withIndex()) {
                     if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
-                    FilledLookaheadRow(palette, row.time, row.name)
+                    FilledLookaheadRow(palette, row.time, row.name, chipWidth = lookaheadChipWidth())
                 }
                 Spacer(modifier = GlanceModifier.height(6.dp))
-                MoreIndicator(palette, looks.size - shown.size)
+                MoreIndicator(palette, upcoming.size - shown.size)
             } else {
                 // Plain wrapper: it only exists so the weight below resolves
                 // inside a Column scope (a bare weight has no scope here).
@@ -468,10 +605,10 @@ fun SharedClassTab(
                 // not stack reliably (gap spacers collapse to zero).
                 Column(modifier = GlanceModifier.fillMaxWidth()) {
                     LazyColumn(modifier = GlanceModifier.defaultWeight()) {
-                        items(looks.size) { i ->
+                        items(upcoming.size) { i ->
                             Column(modifier = GlanceModifier.fillMaxWidth()) {
                                 if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
-                                FilledLookaheadRow(palette, looks[i].time, looks[i].name)
+                                FilledLookaheadRow(palette, upcoming[i].time, upcoming[i].name, chipWidth = lookaheadChipWidth())
                             }
                         }
                     }
@@ -729,7 +866,9 @@ fun EmptyState(palette: ChroniclePalette, iconRes: Int, text: String) {
         modifier = GlanceModifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(modifier = GlanceModifier.height(16.dp))
+        // 8.dp, not 16: 4x1 strips are only ~120.dp tall and 16.dp pushed
+        // the copy off the bottom edge (seen on-device).
+        Spacer(modifier = GlanceModifier.height(8.dp))
         Image(
             provider = ImageProvider(iconRes),
             contentDescription = null,
@@ -749,25 +888,23 @@ fun EmptyState(palette: ChroniclePalette, iconRes: Int, text: String) {
     }
 }
 
-/** Menu dish row: accent dot + dish name. */
+/** Menu dish row: bulleted plain dish name text, deliberately NOT a
+ * filled block — food rows render bubble-free by design. (A FilledBlock
+ * here is fine structurally, but the menu look is plain text rows.)
+ * Single Text node, full width, 2 lines max: the only shape that
+ * measures everywhere (repeated siblings and explicit newlines both
+ * mismeasure on-device). */
 @Composable
 fun DishRow(palette: ChroniclePalette, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = GlanceModifier
-                .width(6.dp)
-                .height(6.dp)
-                .background(palette.accent)
-                .cornerRadius(50.dp),
-        ) {}
-        Spacer(modifier = GlanceModifier.width(10.dp))
-        Text(
-            text = text,
-            style = TextStyle(color = palette.onSurface, fontSize = if (isNarrowSlot()) 12.sp else 14.sp),
-            maxLines = 1,
-            modifier = GlanceModifier.defaultWeight(),
-        )
-    }
+    Text(
+        text = "• $text",
+        style = TextStyle(
+            color = palette.onSurface,
+            fontSize = if (isNarrowSlot()) 12.sp else 14.sp,
+        ),
+        maxLines = 2,
+        modifier = GlanceModifier.fillMaxWidth(),
+    )
 }
 
 /** Subtle full-width divider (fill, not stroke). */
@@ -819,11 +956,9 @@ fun TaskRow(palette: ChroniclePalette, title: String, date: String, urgent: Bool
 }
 
 /**
- * Week-rail day cell: the day number, centered. Number-only,
- * unconditionally: the date header above the rail always names the
- * selected weekday, and weekday labels demonstrably ellipsize on real
- * devices even when sibling cells render fine. Two-digit numerals fit
- * every cell size this rail can produce. Tappable via [onClick].
+ * Week-rail day cell: weekday label over the day number, centered.
+ * Today (unselected) gets accent-tinted bold content; the selection keeps
+ * its filled accent + white. Tappable via [onClick].
  */
 @Composable
 fun WeekCellView(
@@ -856,9 +991,26 @@ fun WeekCellView(
             // widgets goes through a Column and measures correctly.
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
+                    text = cell.label,
+                    style = TextStyle(
+                        color = when {
+                            selected -> fixedProvider(0xFFFFFFFFL)
+                            cell.isToday -> palette.accent
+                            else -> palette.onSurfaceVariant
+                        },
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    maxLines = 1,
+                )
+                Text(
                     text = cell.num,
                     style = TextStyle(
-                        color = if (selected) fixedProvider(0xFFFFFFFFL) else palette.onSurface,
+                        color = when {
+                            selected -> fixedProvider(0xFFFFFFFFL)
+                            cell.isToday -> palette.accent
+                            else -> palette.onSurface
+                        },
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                     ),
@@ -904,7 +1056,23 @@ fun TabArrow(palette: ChroniclePalette, iconRes: Int, direction: Int) {
     }
 }
 
-/** 48.dp tappable chevron box with a caller-supplied click action. */
+/**
+ * Meal stepper chevron: steps the native-owned meal override shared by
+ * the hub menu tab and the standalone menu widget. Lives in tight
+ * spaces (tab headers), so the box is 40.dp.
+ */
+@Composable
+fun MenuStepArrow(palette: ChroniclePalette, iconRes: Int, direction: Int) {
+    MealArrow(palette, iconRes, boxDp = 40.dp) {
+        actionRunCallback<HubMenuMealCallback>(
+            actionParametersOf(MenuMealDirectionKey to direction),
+        )
+    }
+}
+
+/** 48.dp tappable chevron box with a caller-supplied click action.
+ * No press ripple: chevrons sit on the widget background and the flash
+ * reads as a rendering glitch, not feedback (the tab/meal visibly steps). */
 @Composable
 private fun MealArrow(
     palette: ChroniclePalette,
@@ -916,7 +1084,8 @@ private fun MealArrow(
         modifier = GlanceModifier
             .width(boxDp)
             .height(boxDp)
-            .clickable(onClick = onClick()),
+            .background(fixedProvider(0x00000000L))
+            .clickable(onClick = onClick(), rippleOverride = NoRippleOverride),
         contentAlignment = Alignment.Center,
     ) {
         Image(
@@ -948,7 +1117,8 @@ fun MealSwitcher(
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .clickable(onClick = arrowAction(1)),
+            .background(fixedProvider(0x00000000L))
+            .clickable(onClick = arrowAction(1), rippleOverride = NoRippleOverride),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showArrows) {

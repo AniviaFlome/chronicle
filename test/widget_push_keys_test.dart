@@ -15,13 +15,16 @@ void main() {
       expect(WidgetKeys.weeklyCalendar, 'home_widget.WeeklyCalendar');
     });
 
-    test('receiver names match AndroidManifest entries', () {
-      expect(WidgetReceivers.nextClass, 'NextClassHomeWidgetReceiver');
-      expect(WidgetReceivers.todayAgenda, 'TodayAgendaHomeWidgetReceiver');
-      expect(WidgetReceivers.dueTasks, 'DueTasksCompactHomeWidgetReceiver');
-      expect(WidgetReceivers.hub, 'ChronicleHubHomeWidgetReceiver');
-      expect(WidgetReceivers.menu, 'CafeteriaMenuHomeWidgetReceiver');
-      expect(WidgetReceivers.weekly, 'WeeklyCalendarHomeWidgetReceiver');
+    test('receiver names match AndroidManifest entries (qualified)', () {
+      // Fully qualified: debug installs under a different applicationId, so
+      // the push must not rely on package-prefixed resolution.
+      const pkg = 'com.chronicleapp.chronicle';
+      expect(WidgetReceivers.nextClass, '$pkg.NextClassHomeWidgetReceiver');
+      expect(WidgetReceivers.todayAgenda, '$pkg.TodayAgendaHomeWidgetReceiver');
+      expect(WidgetReceivers.dueTasks, '$pkg.DueTasksCompactHomeWidgetReceiver');
+      expect(WidgetReceivers.hub, '$pkg.ChronicleHubHomeWidgetReceiver');
+      expect(WidgetReceivers.menu, '$pkg.CafeteriaMenuHomeWidgetReceiver');
+      expect(WidgetReceivers.weekly, '$pkg.WeeklyCalendarHomeWidgetReceiver');
     });
 
     test('shared field keys are stable', () {

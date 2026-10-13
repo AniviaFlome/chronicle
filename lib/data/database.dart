@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:uuid/uuid.dart';
 
 import 'tables.dart';
@@ -34,13 +35,25 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   static QueryExecutor _openConnection() {
     return driftDatabase(
       name: 'chronicle',
       native: DriftNativeOptions(
-        databaseDirectory: getApplicationSupportDirectory,
+        databaseDirectory: () async {
+          final support = await getApplicationSupportDirectory();
+          // Pre-v1.10 databases live in the documents directory; without
+          // this one-time copy every updater would open an empty database
+          // (data intact but orphaned at the old path).
+          await copyLegacyDatabaseFile(
+            legacy: File(
+              '${(await getApplicationDocumentsDirectory()).path}/chronicle.sqlite',
+            ),
+            target: File('${support.path}/chronicle.sqlite'),
+          );
+          return support;
+        },
       ),
     );
   }
@@ -199,6 +212,11 @@ class AppDatabase extends _$AppDatabase {
         await _addColumnIfMissing(m, xtraEvents, xtraEvents.repeatKind);
         await _addColumnIfMissing(m, xtraEvents, xtraEvents.repeatUntil);
       }
+      if (from < 12) {
+        // University course code on classes (nullable, no backfill:
+        // null = no code entered, widgets show the name alone).
+        await _addColumnIfMissing(m, classes, classes.courseCode);
+      }
     },
     beforeOpen: (_) => customStatement('PRAGMA foreign_keys = ON'),
   );
@@ -273,4 +291,73 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<Directory> databaseDirectory() => getApplicationSupportDirectory();
+}
+
+/// One-time rescue for the pre-v1.10 database location
+/// (`<documents>/chronicle.sqlite`, drift's default) after the move to
+/// `<support>/chronicle.sqlite`.
+///
+/// Copies [legacy] over [target] when the target holds no classes and the
+/// legacy file holds at least one — i.e. an updater opening an empty
+/// database while their data sits orphaned at the old path. Never
+/// overwrites a target that already has classes, never touches a missing
+/// legacy file, and never throws: any failure returns false and the open
+/// proceeds normally. Safe to run on every startup (idempotent).
+Future<bool> copyLegacyDatabaseFile({
+  required File legacy,
+  required File target,
+}) async {
+  try {
+    if (!await legacy.exists()) return false;
+    if (await _sqliteRowCount(legacy, 'classes') == 0) return false;
+    if (await target.exists()) {
+      // Never overwrite real data: only replace a support DB that holds
+      // no classes (an updater's first launch already created an empty one).
+      if (await _sqliteRowCount(target, 'classes') != 0) return false;
+    }
+    await target.parent.create(recursive: true);
+    // Copy aside first so a failed copy can never leave a half-written
+    // target behind (the old file is only replaced by an atomic rename).
+    final incoming = File('${target.path}.incoming');
+    if (await incoming.exists()) await incoming.delete();
+    await legacy.copy(incoming.path);
+    for (final suffix in ['-wal', '-shm', '-journal']) {
+      final companion = File('${legacy.path}$suffix');
+      if (await companion.exists()) {
+        await companion.copy('${incoming.path}$suffix');
+      }
+    }
+    if (await target.exists()) await target.delete();
+    await incoming.rename(target.path);
+    for (final suffix in ['-wal', '-shm', '-journal']) {
+      final companion = File('${incoming.path}$suffix');
+      if (await companion.exists()) {
+        await companion.rename('${target.path}$suffix');
+      }
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Read-only row count; missing tables, corrupt files and any error all
+/// count as 0 (empty), never as data worth preserving or rescuing.
+Future<int> _sqliteRowCount(File dbFile, String table) async {
+  try {
+    final db = sqlite.sqlite3.open(dbFile.path, mode: sqlite.OpenMode.readOnly);
+    try {
+      final tables = db.select(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        [table],
+      );
+      if (tables.isEmpty) return 0;
+      final rows = db.select('SELECT COUNT(*) AS c FROM "$table"');
+      return (rows.first['c'] as int?) ?? 0;
+    } finally {
+      db.close();
+    }
+  } catch (_) {
+    return 0;
+  }
 }

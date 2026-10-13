@@ -1286,7 +1286,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             title: context.l10n.hubTabsTitle,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: DropdownButtonFormField<String>(
                   initialValue: _widgetStyle,
                   decoration: InputDecoration(

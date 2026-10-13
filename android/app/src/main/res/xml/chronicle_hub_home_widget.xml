@@ -14,6 +14,6 @@
 
     android:previewLayout="@layout/widget_preview_chronicle_hub"
     android:previewImage="@drawable/widget_preview_chronicle_hub_img"
-    android:minResizeWidth="200dp"
-    android:minResizeHeight="150dp"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
 />

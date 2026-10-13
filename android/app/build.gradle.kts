@@ -51,6 +51,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Side-by-side testing: debug installs as
+            // com.chronicleapp.chronicle.debug next to the release app,
+            // with its own data and widgets (see src/debug/).
+            applicationIdSuffix = ".debug"
+        }
         release {
             // Release signing comes from the environment (CI secrets). When
             // absent — local builds — fall back to debug keys so

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../data/repositories.dart';
 import '../l10n/l10n.dart';
 import '../providers.dart';
+import '../services/home_widgets.dart';
 import '../services/menu/menu_provider.dart';
 import '../services/menu/menu_sources.dart';
 import '../utils/time_format.dart';
@@ -129,6 +130,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       // until the TTL expires instead of refetching.
       if (day.meals.any((m) => m.dishes.isNotEmpty)) {
         await repo.storeDay(provider.id, _location, iso, day);
+        // Fresh menu in: the standalone menu widget and the hub menu tab
+        // only re-render on push, so refresh here (best-effort, never
+        // blocks the page).
+        if (mounted && gen == _loadGen) {
+          await refreshHomeWidgets(ProviderScope.containerOf(context));
+        }
       }
       if (!mounted || gen != _loadGen) return;
       setState(() {

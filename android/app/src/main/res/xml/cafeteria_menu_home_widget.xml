@@ -13,6 +13,6 @@
     android:description="@string/home_widget_cafeteria_menu_description"
 
     android:previewLayout="@layout/widget_preview_cafeteria_menu"
-    android:minResizeWidth="180dp"
-    android:minResizeHeight="120dp"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
 />

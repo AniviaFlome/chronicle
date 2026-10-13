@@ -31,6 +31,12 @@ object Keys {
 
     // NextClass.
     const val TIMED_DATA = "timedData"
+    // Native-owned expanded-entry marker (epoch-ms key of the expanded
+    // timeline entry, -1 = collapsed); never pushed, like SELECTED_TAB.
+    const val EXPANDED_AT = "expandedAt"
+    // Native-owned hub menu dish cursor (index into the shown meal's
+    // dishes, rotated by tapping the summary); never pushed.
+    const val MENU_DISH_IDX = "menuDishIdx"
 
     // TodayAgenda.
     const val SELECTED_DAY = "selectedDay"
@@ -97,6 +103,8 @@ data class TimedEntry(
      *  pushed statusLine instead. */
     val startMs: Long = 0,
     val endMs: Long = 0,
+    /** Teacher name for the expandable hero detail; empty when unset. */
+    val teacher: String = "",
 )
 
 /** Generic time+name row (agenda days, hub agenda/looks). */
@@ -163,6 +171,17 @@ fun SharedPreferences.bool(key: String, def: Boolean = false): Boolean =
         getBoolean(key, def)
     } catch (_: ClassCastException) {
         def
+    }
+
+fun SharedPreferences.long(key: String, def: Long = -1L): Long =
+    try {
+        getLong(key, def)
+    } catch (_: ClassCastException) {
+        try {
+            getInt(key, def.toInt()).toLong()
+        } catch (_: ClassCastException) {
+            def
+        }
     }
 
 fun SharedPreferences.snapshot(prefix: String): WidgetSnapshot {
@@ -351,6 +370,7 @@ fun parseTimed(json: String, withThen: Boolean): List<TimedEntry> {
                         looks = parseLooksArr(o.optJSONArray("looks")),
                         startMs = o.optLong("startMs", 0),
                         endMs = o.optLong("endMs", 0),
+                        teacher = o.s("teacher"),
                     ),
                 )
             }

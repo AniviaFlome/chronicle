@@ -22,6 +22,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
 import com.chronicleapp.chronicle.CafeteriaMenuHomeWidget
 import com.chronicleapp.chronicle.ChronicleHubHomeWidget
+import com.chronicleapp.chronicle.NextClassHomeWidget
 import com.chronicleapp.chronicle.TodayAgendaHomeWidget
 
 /** Hub navigation bump counter.
@@ -49,6 +50,12 @@ val agendaNavBump = mutableIntStateOf(0)
  * meal step, and the menu's `provideContent` lambda reads before
  * resolving. */
 val menuNavBump = mutableIntStateOf(0)
+
+/** Same contract for the standalone next-class widget, which gains its
+ * first tap target with hero expand/collapse ([NextClassExpandCallback]).
+ * Previously bump-free (nothing was tappable); the hub reuses its
+ * existing [hubNavBump]. */
+val nextClassNavBump = mutableIntStateOf(0)
 
 /** Week-rail tap: select one of the 7 upcoming days. */
 class AgendaDaySelectCallback : ActionCallback {
@@ -116,7 +123,7 @@ class HubTabSelectCallback : ActionCallback {
             if (prefs.bool("${Keys.HUB}.${Keys.TAB_MENU}", true)) add(3)
         }.ifEmpty { listOf(0) }
         if (idx !in enabled.indices) return
-        prefs.edit().putInt("${Keys.HUB}.${Keys.SELECTED_TAB}", idx).apply()
+        prefs.edit().putInt("${Keys.HUB}.${Keys.SELECTED_TAB}", idx).commit()
         hubNavBump.intValue++
         ChronicleHubHomeWidget().update(context, glanceId)
     }
@@ -174,5 +181,81 @@ class StandaloneMenuMealCallback : ActionCallback {
         stepMenuMeal(widgetPrefs(context), Keys.CAFETERIA_MENU, direction)
         menuNavBump.intValue++
         CafeteriaMenuHomeWidget().update(context, glanceId)
+    }
+}
+
+/**
+ * Hub menu summary tap: rotate which dish the one-line summary shows.
+ * The summary is a single Text node (repeated rows and explicit
+ * newlines both mismeasure on-device), so paging is done by swapping
+ * its string: first tap keeps dish 0 with a "+N" tail, further taps
+ * walk dish 1..N with a "k/N" position tail, then wrap around.
+ */
+class HubMenuDishCallback : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters,
+    ) {
+        val prefs = widgetPrefs(context)
+        val prefix = Keys.HUB
+        val meals = parseMenuMeals(prefs.str("$prefix.${Keys.MENU_MEALS}"))
+        val defaultIdx = prefs.int("$prefix.${Keys.MENU_MEAL_DEFAULT}", 0)
+        val kind = prefs.str("$prefix.${Keys.MENU_MEAL_KIND}")
+        val meal = resolveMenuMeal(meals, defaultIdx, kind)
+        val count = (meal?.dishes ?: parseStrings(prefs.str("$prefix.${Keys.MENU_ROWS}"))).size
+        if (count <= 1) return
+        val key = "$prefix.${Keys.MENU_DISH_IDX}"
+        val next = (prefs.int(key, 0) + 1) % count
+        prefs.edit().putInt(key, next).commit()
+        hubNavBump.intValue++
+        ChronicleHubHomeWidget().update(context, glanceId)
+    }
+}
+
+/** ActionParameters key for the expanded timeline entry (epoch-ms key). */
+val ExpandAtKey = ActionParameters.Key<Long>("expandAt")
+/**
+ * Toggles the hero detail for one timeline entry: tapping the expanded
+ * hero collapses it, tapping another expands that one instead. The marker
+ * is native-owned per widget prefix (never pushed); every write bumps the
+ * matching snapshot counter so the live session re-reads prefs.
+ */
+private fun toggleExpanded(context: Context, prefix: String, at: Long) {
+    widgetPrefs(context).edit()
+        .putLong("$prefix.${Keys.EXPANDED_AT}", at)
+        .commit()
+}
+
+private fun readExpanded(context: Context, prefix: String): Long =
+    widgetPrefs(context).long("$prefix.${Keys.EXPANDED_AT}", -1L)
+
+/** Hub hero expand: flip the marker, refresh hub. */
+class HubClassExpandCallback : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters,
+    ) {
+        val at = parameters[ExpandAtKey] ?: return
+        val current = readExpanded(context, Keys.HUB)
+        toggleExpanded(context, Keys.HUB, if (current == at) -1L else at)
+        hubNavBump.intValue++
+        ChronicleHubHomeWidget().update(context, glanceId)
+    }
+}
+
+/** Standalone next-class hero expand: flip the marker, refresh. */
+class NextClassExpandCallback : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters,
+    ) {
+        val at = parameters[ExpandAtKey] ?: return
+        val current = readExpanded(context, Keys.NEXT_CLASS)
+        toggleExpanded(context, Keys.NEXT_CLASS, if (current == at) -1L else at)
+        nextClassNavBump.intValue++
+        NextClassHomeWidget().update(context, glanceId)
     }
 }

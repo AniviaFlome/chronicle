@@ -83,7 +83,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
     _reminder = TextEditingController(
       text: e?.reminderMinutes?.toString() ?? '',
     );
-    _courseCode = TextEditingController();
+    _courseCode = TextEditingController(text: e?.courseCode ?? '');
     _color = e?.colorValue ?? classColorPalette.first;
     _active = e?.active ?? true;
     _yearId = e?.yearId;
@@ -255,6 +255,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
     ].join(' · ');
     setState(() {
       if (_name.text.trim().isEmpty) _name.text = name;
+      if (_courseCode.text.trim().isEmpty) _courseCode.text = course.code;
       if (facts.isNotEmpty && !_notes.text.contains(course.code)) {
         _notes.text = _notes.text.trim().isEmpty
             ? facts
@@ -389,6 +390,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
     final entry = ClassesCompanion.insert(
       name: _name.text.trim(),
       colorValue: _color,
+      courseCode: Value(_emptyToNull(_courseCode.text)),
       teacher: Value(_emptyToNull(_teacher.text)),
       teacherEmail: Value(_emptyToNull(_email.text)),
       room: Value(_emptyToNull(_room.text)),

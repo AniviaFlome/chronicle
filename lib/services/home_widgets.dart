@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +21,10 @@ import '../utils/ui_feedback.dart';
 import './menu/menu_sources.dart';
 import 'widget_push.dart';
 
+/// Last-sent payload fingerprint per widget prefix (in-memory only).
+/// See `updateIfChanged` inside `_push`.
+final _lastWidgetPayload = <String, String>{};
+
 /// Pushes schedule/task snapshots to the Android home widgets.
 ///
 /// Best-effort only: the widgets also re-render on their own from stored
@@ -33,6 +39,12 @@ import 'widget_push.dart';
 /// only lays them out.
 Future<void> refreshHomeWidgets(ProviderContainer container) async {
   if (defaultTargetPlatform != TargetPlatform.android) return;
+  // Widget tests run with FakeAsync: the push below performs real async
+  // I/O (drift streams, an 8s self-heal fetch timeout) that never
+  // completes in fake time and wedges pumpAndSettle forever. Widgets
+  // re-render from stored prefs on their own cadence, so skipping the
+  // push under flutter_test loses no coverage.
+  if (Platform.environment.containsKey('FLUTTER_TEST')) return;
   try {
     await _push(container);
   } catch (e) {
@@ -128,6 +140,19 @@ Future<void> _push(ProviderContainer container) async {
 
   final listed = upcoming.take(12).toList();
   String nameOf(engine.ClassOccurrence o) => byId[o.classId]?.name ?? '—';
+  String codeOf(engine.ClassOccurrence o) =>
+      byId[o.classId]?.courseCode?.trim() ?? '';
+  String teacherOf(engine.ClassOccurrence o) =>
+      byId[o.classId]?.teacher?.trim() ?? '';
+  // Display name with the saved university course code when one exists
+  // ("MAT 103E · Müzik Teorisi I"), plain name otherwise. Used by the
+  // timeline (hero/then/looks); agenda day rows keep plain names.
+  String displayNameOf(engine.ClassOccurrence o) {
+    final code = codeOf(o);
+    final name = nameOf(o);
+    if (code.isEmpty || name == '—') return name;
+    return '$code · $name';
+  }
   String colorOf(engine.ClassOccurrence o) =>
       _hexColor(byId[o.classId]?.colorValue ?? 0);
 
@@ -145,7 +170,7 @@ Future<void> _push(ProviderContainer container) async {
   // keeps the composed string for backward compatibility.
   String thenNameFor(int i) {
     if (i + 1 >= listed.length) return '';
-    return nameOf(listed[i + 1]);
+    return displayNameOf(listed[i + 1]);
   }
 
   String thenWhenFor(int i) {
@@ -155,13 +180,17 @@ Future<void> _push(ProviderContainer container) async {
 
   String thenFor(int i) {
     if (i + 1 >= listed.length) return '';
-    return l10n.widgetThen(nameOf(listed[i + 1]), whenOf(listed[i + 1]));
+    return l10n.widgetThen(displayNameOf(listed[i + 1]), whenOf(listed[i + 1]));
   }
 
   String detailLineFor(engine.ClassOccurrence o) {
     final room = o.room ?? byId[o.classId]?.room;
     final range = rangeFor(o);
-    return room != null && room.isNotEmpty ? '$range · $room' : range;
+    final roomText = room?.trim();
+    // A bare "--" (placeholder users type for "no room") reads as noise
+    // on the widget; treat it like an absent room.
+    if (roomText == null || roomText.isEmpty || roomText == '--') return range;
+    return '$range · $roomText';
   }
 
   // Countdown lives in its own pill on the new design ("in 12 min",
@@ -180,9 +209,9 @@ Future<void> _push(ProviderContainer container) async {
   }
 
   // Hub class-tab lookahead rows: the classes after the hero entry,
-  // plain names (no Then/Later prefix — the native side lays out time
-  // and name separately). Rides inside each timeline entry so the native
-  // side can slice it at render time.
+  // display names with course codes (no Then/Later prefix — the native
+  // side lays out time and name separately). Rides inside each timeline
+  // entry so the native side can slice it at render time.
   List<Map<String, Object?>> looksFor(int i) => [
     for (var j = i + 1; j < listed.length && j <= i + 2; j++)
       {
@@ -191,7 +220,7 @@ Future<void> _push(ProviderContainer container) async {
         'time': listed[j].date == today
             ? hhmmLocale(listed[j].startMinutes, locale)
             : '${shortWeekdayName(listed[j].date.weekday, locale)} ${hhmmLocale(listed[j].startMinutes, locale)}',
-        'name': nameOf(listed[j]),
+        'name': displayNameOf(listed[j]),
         'colorHex': colorOf(listed[j]),
       },
   ];
@@ -206,6 +235,7 @@ Future<void> _push(ProviderContainer container) async {
     required String thenWhen,
     required String colorHex,
     required String thenColorHex,
+    required String teacher,
     required List<Map<String, Object?>> looks,
     // Class start/end instants (epoch ms) for the render-time countdown;
     // 0 on synthetic entries (no-classes/sentinel).
@@ -221,6 +251,7 @@ Future<void> _push(ProviderContainer container) async {
     'thenWhen': thenWhen,
     'colorHex': colorHex,
     'thenColorHex': thenColorHex,
+    'teacher': teacher,
     'looks': looks,
     'startMs': startMs,
     'endMs': endMs,
@@ -238,11 +269,12 @@ Future<void> _push(ProviderContainer container) async {
       detailLine: '',
       statusLine: '',
       startLabel: '',
-      thenLine: l10n.widgetThen(nameOf(listed[0]), whenOf(listed[0])),
-      thenName: nameOf(listed[0]),
+      thenLine: l10n.widgetThen(displayNameOf(listed[0]), whenOf(listed[0])),
+      thenName: displayNameOf(listed[0]),
       thenWhen: whenOf(listed[0]),
       colorHex: '',
       thenColorHex: colorOf(listed[0]),
+      teacher: teacherOf(listed[0]),
       looks: looksFor(-1),
       startMs: 0,
       endMs: 0,
@@ -253,7 +285,7 @@ Future<void> _push(ProviderContainer container) async {
     final next = i + 1 < listed.length ? listed[i + 1] : null;
     final at = i == 0 ? (firstIsToday ? today : listed[i].start) : listed[i - 1].end;
     timed[keyOf(at)] = entryJson(
-      className: nameOf(o),
+      className: displayNameOf(o),
       detailLine: detailLineFor(o),
       statusLine: statusFor(o),
       startLabel: whenOf(o),
@@ -262,6 +294,7 @@ Future<void> _push(ProviderContainer container) async {
       thenWhen: thenWhenFor(i),
       colorHex: colorOf(o),
       thenColorHex: next == null ? '' : colorOf(next),
+      teacher: teacherOf(o),
       looks: looksFor(i),
       startMs: o.start.millisecondsSinceEpoch,
       endMs: o.end.millisecondsSinceEpoch,
@@ -278,6 +311,7 @@ Future<void> _push(ProviderContainer container) async {
       thenWhen: '',
       colorHex: '',
       thenColorHex: '',
+      teacher: '',
       looks: const [],
       startMs: 0,
       endMs: 0,
@@ -439,60 +473,105 @@ Future<void> _push(ProviderContainer container) async {
 
   // ---- Save every snapshot first, then update every widget, so a theme
   // ---- change re-renders all widgets from the same push.
-  Future<void> saveCommon(
+  //
+  // Payload fingerprints skip redundant updates: re-applying identical
+  // RemoteViews is what users perceive as flicker on every app resume.
+  // Countdown freshness between pushes is covered natively (class
+  // instants re-render on every compose) and by the scheduled timeline
+  // ticks below. In-memory only: the first push after a restart always
+  // goes out. The agenda is exempt (always=true): its selectedDay=0
+  // reset-to-today contract must hold on every refresh.
+  Map<String, Object?> commonFields(String emptyText) => {
+    WidgetKeys.themeBg: themeBg,
+    WidgetKeys.useYou: useYou,
+    WidgetKeys.widgetOpacity: widgetOpacity,
+    WidgetKeys.todayIso: isoFromDateTime(today),
+    WidgetKeys.staleClassName: l10n.widgetNoClasses,
+    WidgetKeys.emptyText: emptyText,
+    WidgetKeys.fmtInMin: l10n.widgetInMin('{n}'),
+    WidgetKeys.fmtInHours: l10n.widgetInHours('{n}'),
+    WidgetKeys.fmtEnds: l10n.widgetCurrentlyEnds('{n}'),
+  };
+
+  Future<Map<String, Object?>> saveCommon(
     String prefix, {
     required String emptyText,
   }) async {
-    await widgetSave('$prefix.${WidgetKeys.themeBg}', themeBg);
-    await widgetSave('$prefix.${WidgetKeys.useYou}', useYou);
-    await widgetSave(
-      '$prefix.${WidgetKeys.widgetOpacity}',
-      widgetOpacity,
-    );
-    await widgetSave('$prefix.${WidgetKeys.todayIso}', isoFromDateTime(today));
-    await widgetSave('$prefix.${WidgetKeys.staleClassName}', l10n.widgetNoClasses);
-    await widgetSave('$prefix.${WidgetKeys.emptyText}', emptyText);
-    // Render-time countdown templates with a "{n}" slot the native side
-    // fills in (see liveStatus): the pushed statusLine goes stale, class
-    // instants don't.
-    await widgetSave(
-      '$prefix.${WidgetKeys.fmtInMin}',
-      l10n.widgetInMin('{n}'),
-    );
-    await widgetSave(
-      '$prefix.${WidgetKeys.fmtInHours}',
-      l10n.widgetInHours('{n}'),
-    );
-    await widgetSave(
-      '$prefix.${WidgetKeys.fmtEnds}',
-      l10n.widgetCurrentlyEnds('{n}'),
-    );
+    final fields = commonFields(emptyText);
+    for (final e in fields.entries) {
+      await widgetSave('$prefix.${e.key}', e.value as Object);
+    }
+    return fields;
+  }
+
+  Future<void> updateIfChanged(
+    String prefix,
+    String receiver,
+    Map<String, Object?> payload, {
+    bool always = false,
+  }) async {
+    if (!always) {
+      final fingerprint = jsonEncode(payload);
+      if (_lastWidgetPayload[prefix] == fingerprint) return;
+      _lastWidgetPayload[prefix] = fingerprint;
+    }
+    await HomeWidget.updateWidget(qualifiedAndroidName: receiver);
   }
 
   // Next-class hero.
-  await saveCommon(WidgetKeys.nextClass, emptyText: l10n.widgetNoClasses);
+  final nextCommon = await saveCommon(
+    WidgetKeys.nextClass,
+    emptyText: l10n.widgetNoClasses,
+  );
   await widgetSaveJson('${WidgetKeys.nextClass}.${WidgetKeys.timedData}', timed);
+  await updateIfChanged(WidgetKeys.nextClass, WidgetReceivers.nextClass, {
+    ...nextCommon,
+    WidgetKeys.timedData: timed,
+  });
 
   // Today agenda (+ 7-day rail). selectedDay is pushed as 0 every refresh:
-  // native day taps hold until the next push resets to today.
-  await saveCommon(WidgetKeys.todayAgenda, emptyText: l10n.widgetNoClasses);
+  // native day taps hold until the next push resets to today. Always
+  // updated (see updateIfChanged): the reset contract must hold.
+  final agendaCommon = await saveCommon(
+    WidgetKeys.todayAgenda,
+    emptyText: l10n.widgetNoClasses,
+  );
   await widgetSave('${WidgetKeys.todayAgenda}.${WidgetKeys.selectedDay}', 0);
   await widgetSaveJson('${WidgetKeys.todayAgenda}.${WidgetKeys.week}', week);
   for (var i = 0; i < 7; i++) {
     await widgetSaveJson('${WidgetKeys.todayAgenda}.day$i', agendaDays[i]);
   }
+  await updateIfChanged(WidgetKeys.todayAgenda, WidgetReceivers.todayAgenda, {
+    ...agendaCommon,
+    WidgetKeys.selectedDay: 0,
+    WidgetKeys.week: week,
+    for (var i = 0; i < 7; i++) 'day$i': agendaDays[i],
+  }, always: true);
 
   // Due-tasks checklist.
-  await saveCommon(WidgetKeys.dueTasks, emptyText: l10n.widgetAllCaughtUp);
+  final tasksCommon = await saveCommon(
+    WidgetKeys.dueTasks,
+    emptyText: l10n.widgetAllCaughtUp,
+  );
   await widgetSave(
     '${WidgetKeys.dueTasks}.${WidgetKeys.headerTitle}',
     l10n.widgetDueTasks,
   );
   await widgetSave('${WidgetKeys.dueTasks}.${WidgetKeys.tasksCount}', tasksCount);
   await widgetSaveJson('${WidgetKeys.dueTasks}.${WidgetKeys.tasks}', taskRows);
+  await updateIfChanged(WidgetKeys.dueTasks, WidgetReceivers.dueTasks, {
+    ...tasksCommon,
+    WidgetKeys.headerTitle: l10n.widgetDueTasks,
+    WidgetKeys.tasksCount: tasksCount,
+    WidgetKeys.tasks: taskRows,
+  });
 
   // Hub dashboard.
-  await saveCommon(WidgetKeys.hub, emptyText: l10n.widgetNoClasses);
+  final hubTasksTitle = '${l10n.widgetDueTasks} · $tasksCount';
+  final hubCommon = await saveCommon(
+    WidgetKeys.hub,
+    emptyText: l10n.widgetNoClasses,
+  );
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.tabClass}', tabClass);
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.tabAgenda}', tabAgenda);
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.tabTasks}', tabTasks);
@@ -500,10 +579,7 @@ Future<void> _push(ProviderContainer container) async {
   await widgetSaveJson('${WidgetKeys.hub}.${WidgetKeys.timedData}', timed);
   await widgetSaveJson('${WidgetKeys.hub}.${WidgetKeys.agendaRows}', agendaDays[0]);
   await widgetSaveJson('${WidgetKeys.hub}.${WidgetKeys.tasksRows}', taskRows);
-  await widgetSave(
-    '${WidgetKeys.hub}.${WidgetKeys.tasksTitle}',
-    '${l10n.widgetDueTasks} · $tasksCount',
-  );
+  await widgetSave('${WidgetKeys.hub}.${WidgetKeys.tasksTitle}', hubTasksTitle);
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.menuTitle}', hubMenuTitle);
   await widgetSaveJson('${WidgetKeys.hub}.${WidgetKeys.menuRows}', hubMenu);
   await widgetSaveJson('${WidgetKeys.hub}.${WidgetKeys.menuMeals}', menuMeals);
@@ -521,11 +597,33 @@ Future<void> _push(ProviderContainer container) async {
   );
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.emptyTasks}', l10n.widgetAllCaughtUp);
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.emptyMenu}', l10n.widgetNoMenuToday);
+  await updateIfChanged(WidgetKeys.hub, WidgetReceivers.hub, {
+    ...hubCommon,
+    WidgetKeys.tabClass: tabClass,
+    WidgetKeys.tabAgenda: tabAgenda,
+    WidgetKeys.tabTasks: tabTasks,
+    WidgetKeys.tabMenu: tabMenu,
+    WidgetKeys.timedData: timed,
+    WidgetKeys.agendaRows: agendaDays[0],
+    WidgetKeys.tasksRows: taskRows,
+    WidgetKeys.tasksTitle: hubTasksTitle,
+    WidgetKeys.menuTitle: hubMenuTitle,
+    WidgetKeys.menuRows: hubMenu,
+    WidgetKeys.menuMeals: menuMeals,
+    WidgetKeys.menuMealDefault: menuMealDefault,
+    WidgetKeys.titleClass: l10n.widgetNextClass,
+    WidgetKeys.titleAgenda: l10n.widgetToday,
+    WidgetKeys.emptyTasks: l10n.widgetAllCaughtUp,
+    WidgetKeys.emptyMenu: l10n.widgetNoMenuToday,
+  });
 
   // Standalone cafeteria-menu widget: every servable meal plus the
   // menu-page default index; the native side keeps the user's picked meal
   // and falls back to the default when it is unset or no longer servable.
-  await saveCommon(WidgetKeys.cafeteriaMenu, emptyText: l10n.widgetNoMenuToday);
+  final menuCommon = await saveCommon(
+    WidgetKeys.cafeteriaMenu,
+    emptyText: l10n.widgetNoMenuToday,
+  );
   await widgetSave(
     '${WidgetKeys.cafeteriaMenu}.${WidgetKeys.menuTitle}',
     hubMenuTitle,
@@ -542,10 +640,20 @@ Future<void> _push(ProviderContainer container) async {
     '${WidgetKeys.cafeteriaMenu}.${WidgetKeys.menuMealDefault}',
     menuMealDefault,
   );
+  await updateIfChanged(WidgetKeys.cafeteriaMenu, WidgetReceivers.menu, {
+    ...menuCommon,
+    WidgetKeys.menuTitle: hubMenuTitle,
+    WidgetKeys.menuRows: hubMenu,
+    WidgetKeys.menuMeals: menuMeals,
+    WidgetKeys.menuMealDefault: menuMealDefault,
+  });
 
   // Standalone weekly-calendar widget: the 7-day rail plus one class list
   // per day (same shapes as TodayAgenda's `week` / `dayN`).
-  await saveCommon(WidgetKeys.weeklyCalendar, emptyText: l10n.widgetNoClasses);
+  final weeklyCommon = await saveCommon(
+    WidgetKeys.weeklyCalendar,
+    emptyText: l10n.widgetNoClasses,
+  );
   await widgetSaveJson(
     '${WidgetKeys.weeklyCalendar}.${WidgetKeys.week}',
     week,
@@ -553,18 +661,17 @@ Future<void> _push(ProviderContainer container) async {
   for (var i = 0; i < 7; i++) {
     await widgetSaveJson('${WidgetKeys.weeklyCalendar}.day$i', agendaDays[i]);
   }
+  await updateIfChanged(WidgetKeys.weeklyCalendar, WidgetReceivers.weekly, {
+    ...weeklyCommon,
+    WidgetKeys.week: week,
+    for (var i = 0; i < 7; i++) 'day$i': agendaDays[i],
+  });
 
-  for (final receiver in const [
-    WidgetReceivers.nextClass,
-    WidgetReceivers.todayAgenda,
-    WidgetReceivers.dueTasks,
-    WidgetReceivers.hub,
-    WidgetReceivers.menu,
-    WidgetReceivers.weekly,
-  ]) {
-    await HomeWidget.updateWidget(androidName: receiver);
-    await HomeWidget.updateWidgetPreview(androidName: receiver);
-  }
+  // NOTE: no updateWidgetPreview here on purpose. Preview renders run a
+  // full Glance composition on the main thread per widget; fired back to
+  // back with the six updates on every push (startup, every save), they
+  // stall the method channel for tens of seconds and ANR the app
+  // (seen on-device). The launcher gallery keeps its own cadence.
   // Timed entry switchover + closing sentinel drive the hero; hourly ticks
   // and midnight keep the countdown widgets fresh between pushes.
   await scheduleWidgetTimelines(

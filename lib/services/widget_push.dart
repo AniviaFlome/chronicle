@@ -32,7 +32,7 @@ abstract final class WidgetKeys {
   // epoch-millis strings `{"<epochMs>": {...}}`. Native renders the entry
   // with the greatest key at or before now. Each entry:
   // {className, detailLine, statusLine, startLabel, thenLine, colorHex,
-  //  thenColorHex, startMs, endMs, looks: [{time, name, colorHex}]}.
+  //  thenColorHex, teacher, startMs, endMs, looks: [{time, name, colorHex}]}.
   // startMs/endMs drive the render-time countdown; looks time carries a
   // weekday hint for cross-day rows ("Fri 18:09").
   // `looks` rides INSIDE each entry on purpose: the hub's lookahead rows
@@ -84,14 +84,21 @@ abstract final class WidgetKeys {
   static const emptyMenu = 'emptyMenu';
 }
 
-/// Receiver class names registered in AndroidManifest.xml.
+/// Receiver class names registered in AndroidManifest.xml, fully qualified.
+///
+/// Qualified on purpose: debug builds install side-by-side under a different
+/// applicationId (`.debug` suffix), and the plugin resolves a bare
+/// [androidName] against the applicationId — which no longer matches the
+/// real (namespace-based) receiver classes. Qualified names work for both
+/// flavors. Keep in lockstep with the manifest.
 abstract final class WidgetReceivers {
-  static const nextClass = 'NextClassHomeWidgetReceiver';
-  static const todayAgenda = 'TodayAgendaHomeWidgetReceiver';
-  static const dueTasks = 'DueTasksCompactHomeWidgetReceiver';
-  static const hub = 'ChronicleHubHomeWidgetReceiver';
-  static const menu = 'CafeteriaMenuHomeWidgetReceiver';
-  static const weekly = 'WeeklyCalendarHomeWidgetReceiver';
+  static const _pkg = 'com.chronicleapp.chronicle';
+  static const nextClass = '$_pkg.NextClassHomeWidgetReceiver';
+  static const todayAgenda = '$_pkg.TodayAgendaHomeWidgetReceiver';
+  static const dueTasks = '$_pkg.DueTasksCompactHomeWidgetReceiver';
+  static const hub = '$_pkg.ChronicleHubHomeWidgetReceiver';
+  static const menu = '$_pkg.CafeteriaMenuHomeWidgetReceiver';
+  static const weekly = '$_pkg.WeeklyCalendarHomeWidgetReceiver';
 }
 
 /// Saves one scalar widget value (bool/int/double/String) under a fully
@@ -111,7 +118,9 @@ Future<void> widgetSaveJson(String key, Object? value) =>
 Future<void> scheduleWidgetTimelines({required List<DateTime> boundaries}) async {
   for (final name in const [WidgetReceivers.nextClass, WidgetReceivers.hub]) {
     if (boundaries.isEmpty) {
-      await HomeWidget.cancelScheduledWidgetUpdates(androidName: name);
+      await HomeWidget.cancelScheduledWidgetUpdates(
+        qualifiedAndroidName: name,
+      );
       continue;
     }
     final now = DateTime.now();
@@ -122,6 +131,9 @@ Future<void> scheduleWidgetTimelines({required List<DateTime> boundaries}) async
       for (var i = 1; i <= 24; i++) now.add(Duration(hours: i)),
       midnight,
     }.toList()..sort();
-    await HomeWidget.scheduleWidgetUpdates(times, androidName: name);
+    await HomeWidget.scheduleWidgetUpdates(
+      times,
+      qualifiedAndroidName: name,
+    );
   }
 }

@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.11.0] - 2026-10-13
+
+### Added
+- Course code on classes: saved from the class editor (auto-filled by the catalog lookup), synced via folder sync, and shown in the Next-class / hub class-tab timeline ("MAT 103E · Müzik Teorisi I").
+- Class hero expands on tap: tapping the class title toggles a teacher detail line (native-owned expand marker per widget, Hub + standalone Next-class; quiet "tomorrow" rows expand too).
+- Agenda day rail: weekday label over numeral in every cell, today highlighted accent, 5 cells on wide widgets (3 when narrow).
+
+### Fixed
+- Widget pushes no longer stall/ANR the app: dropped the per-push gallery-preview renders (six main-thread Glance compositions on every startup/save left the method channel wedged and broadcasts unsent).
+- Next-class / hub class tab no longer render a lone "No classes today" line over a tall blank void: quiet entries now show the pushed Then-line plus lookahead rows.
+- Widget empty-state fit: `EmptyState` top spacer 16dp → 8dp for short strips; due-tasks header hides the count pill when the count is 0.
+- Updaters no longer open an empty database: pre-v1.10 files lived in the documents directory, now in app-data — startup one-time-copies the legacy file when the new location holds no classes (never overwrites real data, never throws).
+- Widget pushes skip identical payloads (fingerprint per widget): re-applying unchanged RemoteViews read as flicker on every app resume; freshness is covered natively plus scheduled ticks. Agenda still refreshes every push (reset-to-today contract).
+- Widget pushes are skipped under `flutter_test` (FakeAsync + real async I/O wedged `pumpAndSettle` forever in menu widget tests).
+- Hub / Next-class lookahead no longer repeats the next class twice: the Then-line class is filtered out of the lookahead list (was showing e.g. Viyolonsel I at 13:30 two times in a row).
+- Widgets can be shrunk again and survive being enlarged: resize floors lowered to 40x40 (1-cell strips, which the Tiny bucket renders as a one-liner) on the four portrait widgets and wide responsive slots (320/470dp) added, so an enlarged widget matches a real slot instead of stretching the nearest portrait one.
+- Hub tab arrows use synchronous commits and a composition-tracked bump read, so ‹ › taps switch tabs instead of replaying the previous tab.
+- Shrunken tall widgets render the narrow stacked layout instead of squeezed horizontal rows: tall-narrow responsive slots (120x320, 120x450, 260x320) added; hosts apply first-fit, so narrow slots sort first.
+- 1-column Hub keeps a usable tab bar: dots-only next-tab target (fixed 72x40dp box — wrap-content clickables never received taps on-device) instead of chevrons that don't fit.
+- Hub menu tab renders dishes again: meal steppers moved into the header trailing slot; short buckets show a tappable one-line summary (tap rotates the dish), tall buckets list every dish. Hub dish lists also respect the small-bucket take.
+- Menu food rows are bubble-free plain text with bullets (no tonal blocks), everywhere they appear.
+- NextClass location: room-less classes no longer show a "--" placeholder (null/blank/"--" rooms render time range only).
+- Lookahead time chips are fixed-width so class names start aligned in wide rows.
+- No press visuals anywhere on the widgets: `NoRippleOverride` on every clickable, explicit transparent backgrounds on bg-less tap targets, minimized tap boxes (host-painted pressed states follow the clicked view's bounds).
+- Weekly calendar updates faster: its own slim 8-slot responsive set (was sharing the 13-slot set — every update composes/translates one view per slot, and the 7-day feed is the heaviest composition).
+
+### Changed
+- Debug builds install side-by-side with release (`applicationIdSuffix ".debug"`, "Chronicle Dev" label) for on-device widget testing without touching real data.
+- Widget pushes use fully-qualified receiver names (bare `androidName` resolves against the applicationId and throws on the `.debug` flavor, failing pushes silently).
+
 ## [1.10.0] - 2026-10-11
 
 ### Added

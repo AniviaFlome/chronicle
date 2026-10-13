@@ -180,7 +180,11 @@ void main() {
       expect(info, hasLength(1), reason: 'missing table $name');
     }
     // v9 per-kind quota columns exist.
-    for (final column in ['max_absences_theory', 'max_absences_practical']) {
+    for (final column in [
+      'max_absences_theory',
+      'max_absences_practical',
+      'course_code',
+    ]) {
       final classColumns = await db
           .customSelect("PRAGMA table_info('classes')")
           .get();

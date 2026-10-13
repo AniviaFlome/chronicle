@@ -7,10 +7,10 @@
 // order; each section is a per-day header over stacked class rows. No
 // horizontal day-strip: a 7-cell rail cannot survive 120.dp widths. Row
 // appears only inside ClassRow (inline time chip + name). Buckets
-// (verticalSizeSlots): Compact 120x120 today only, TallColumn 120x240
-// today + tomorrow, FullPortrait 260x240 up to 4 class days under
-// headers. Tall lists cap statically with a "+X more" indicator (no
-// LazyColumn: static RemoteViews are the crash-safe path). Outer radius
+// (weeklySizeSlots, slimmed for update speed): Compact 120x120 today
+// only, TallColumn 120x240 today + tomorrow, FullPortrait 260x240 up to
+// 4 class days under headers. Tall lists cap statically with a "+X more"
+// indicator (no LazyColumn: static RemoteViews are the crash-safe path). Outer radius
 // 24.dp, inner cards 16.dp via shared components. Only
 // androidx.glance.* composables (plus compose unit / runtime primitives
 // dp/sp/Composable).
@@ -55,7 +55,7 @@ import com.chronicleapp.chronicle.widget.resolvePalette
 import com.chronicleapp.chronicle.widget.snapshot
 import com.chronicleapp.chronicle.widget.str
 import com.chronicleapp.chronicle.widget.TinyRow
-import com.chronicleapp.chronicle.widget.verticalSizeSlots
+import com.chronicleapp.chronicle.widget.weeklySizeSlots
 
 import es.antonborri.home_widget.HomeWidgetGlanceStateDefinition
 import es.antonborri.home_widget.HomeWidgetPlugin
@@ -63,8 +63,9 @@ import es.antonborri.home_widget.HomeWidgetPlugin
 class WeeklyCalendarHomeWidget : GlanceAppWidget() {
     override val stateDefinition = HomeWidgetGlanceStateDefinition()
 
-    // Portrait-first buckets: Compact / TallColumn / FullPortrait.
-    override val sizeMode = verticalSizeSlots
+    // Slim slot set (weeklySizeSlots): the weekly feed is the heaviest
+    // composition, and every update renders one view per slot.
+    override val sizeMode = weeklySizeSlots
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent { WeekContent(context, resolveState(context)) }

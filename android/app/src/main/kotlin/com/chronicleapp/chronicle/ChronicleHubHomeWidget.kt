@@ -13,11 +13,13 @@ package com.chronicleapp.chronicle
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.os.ConfigurationCompat
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
+import androidx.glance.action.NoRippleOverride
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.lazy.LazyColumn
@@ -33,20 +35,24 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.width
+import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
+import androidx.glance.text.TextStyle
 import com.chronicleapp.chronicle.widget.ChroniclePalette
 import com.chronicleapp.chronicle.widget.ClassRow
 import com.chronicleapp.chronicle.widget.DishRow
 import com.chronicleapp.chronicle.widget.EmptyState
+import com.chronicleapp.chronicle.widget.ExpandAtKey
 import com.chronicleapp.chronicle.widget.Hairline
+import com.chronicleapp.chronicle.widget.fixedProvider
 import com.chronicleapp.chronicle.widget.HubDirectionKey
-import com.chronicleapp.chronicle.widget.ChunkedRows
-import com.chronicleapp.chronicle.widget.HubMenuMealCallback
+import com.chronicleapp.chronicle.widget.HubClassExpandCallback
+import com.chronicleapp.chronicle.widget.HubMenuDishCallback
 import com.chronicleapp.chronicle.widget.HubTabCallback
-import com.chronicleapp.chronicle.widget.MealSwitcher
-import com.chronicleapp.chronicle.widget.MoreIndicator
 import com.chronicleapp.chronicle.widget.MenuMeal
-import com.chronicleapp.chronicle.widget.MenuMealDirectionKey
+import com.chronicleapp.chronicle.widget.MenuStepArrow
+import com.chronicleapp.chronicle.widget.MoreIndicator
 import com.chronicleapp.chronicle.widget.Keys
 import com.chronicleapp.chronicle.widget.PageDots
 import com.chronicleapp.chronicle.widget.Samples
@@ -60,6 +66,8 @@ import com.chronicleapp.chronicle.widget.WidgetSnapshot
 import com.chronicleapp.chronicle.widget.bool
 import com.chronicleapp.chronicle.widget.currentVerticalBucket
 import com.chronicleapp.chronicle.widget.hubNavBump
+import com.chronicleapp.chronicle.widget.isNarrowSlot
+import com.chronicleapp.chronicle.widget.long
 import com.chronicleapp.chronicle.widget.int
 import com.chronicleapp.chronicle.widget.isSentinel
 import com.chronicleapp.chronicle.widget.parseMenuMeals
@@ -103,6 +111,8 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
                 sel = TAB_CLASS,
                 entry = Samples.nextClass,
                 looks = Samples.looks,
+                expanded = false,
+                dishIdx = 0,
                 agendaRows = Samples.agenda,
                 tasksRows = Samples.tasks,
                 menuRows = Samples.menu,
@@ -173,6 +183,9 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
                 sel = sel,
                 entry = entry,
                 looks = entry?.looks ?: emptyList(),
+                expanded = entry != null && !entry.isSentinel && !snap.stale &&
+                    entry.at == prefs.long("$prefix.${Keys.EXPANDED_AT}", -1L),
+                dishIdx = prefs.int("$prefix.${Keys.MENU_DISH_IDX}", 0),
                 agendaRows = parseTimeRows(prefs.str("$prefix.${Keys.AGENDA_ROWS}")),
                 tasksRows = parseTaskRows(prefs.str("$prefix.${Keys.TASKS_ROWS}")),
                 menuRows = parseStrings(prefs.str("$prefix.${Keys.MENU_ROWS}")),
@@ -196,6 +209,11 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
 private fun HubContent(context: Context, state: HubWidgetUiState) {
     // Non-success states resolve against the live prefs snapshot for
     // theming, so a cold bind never flashes raw keys.
+    // Tracked bump read (see hubNavBump): keeps this composition pinned to
+    // the counter even if the resolveState call above gets hoisted, so
+    // live-session recomposes after tab taps re-read prefs.
+    @Suppress("unused")
+    val navBump = hubNavBump.intValue
     val snap: WidgetSnapshot = when (state) {
         is HubWidgetUiState.Success -> state.content.snap
         else -> HomeWidgetPlugin.getData(context).snapshot(Keys.HUB)
@@ -301,6 +319,20 @@ private fun HubColumn(
         ChronicleHubHomeWidget.TAB_TASKS -> data.tasksTitle
         else -> HubMenuMeal(data)?.title ?: data.menuTitle
     }
+    // Meal steppers live in the header's trailing slot, NOT in the tab
+    // body: a switcher Row above the dish list makes the translator drop
+    // everything below it on-device (blank tab under the switcher).
+    val trailing: (@Composable () -> Unit)? =
+        if (data.sel == ChronicleHubHomeWidget.TAB_MENU && data.menuMeals.size > 1) {
+            {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    MenuStepArrow(palette, R.drawable.ic_widget_chevron_left, -1)
+                    MenuStepArrow(palette, R.drawable.ic_widget_chevron_right, 1)
+                }
+            }
+        } else {
+            null
+        }
 
     // fillMaxSize + weight spacer pins the tab bar to the bottom edge;
     // the weight collapses to zero when content fills the widget.
@@ -313,6 +345,7 @@ private fun HubColumn(
                 palette = palette,
                 iconRes = iconRes,
                 title = title,
+                trailing = trailing,
             )
             // Breathing room between the header and the body in every
             // bucket (Compact previously glued them together).
@@ -322,7 +355,16 @@ private fun HubColumn(
                 Hairline(palette)
                 Spacer(modifier = GlanceModifier.height(6.dp))
             }
-            Column {
+            // The tab body takes the remaining shell space with a bound
+            // (not wrap-content): unbounded bodies mismeasure everything
+            // below an interactive Row (seen on-device as a blank menu tab
+            // under the meal switcher), and weight-bound lazy lists need a
+            // bound anyway. Same arrangement as the standalone widgets.
+            Column(
+                modifier = GlanceModifier
+                    .defaultWeight()
+                    .fillMaxWidth(),
+            ) {
                 when (data.sel) {
                     // Compact renders whole rows only (static take + "+N
                     // more"); taller buckets scroll the full list. True
@@ -335,6 +377,16 @@ private fun HubColumn(
                             nowMs,
                             data.looks,
                             compact = currentVerticalBucket() == VerticalBucket.Compact,
+                            expanded = data.expanded,
+                            expandAction = data.entry
+                                ?.takeUnless { it.isSentinel || data.snap.stale }
+                                ?.let { entry ->
+                                    {
+                                        actionRunCallback<HubClassExpandCallback>(
+                                            actionParametersOf(ExpandAtKey to entry.at),
+                                        )
+                                    }
+                                },
                         )
                     ChronicleHubHomeWidget.TAB_AGENDA ->
                         if (data.agendaRows.isEmpty()) {
@@ -395,41 +447,62 @@ private fun HubColumn(
                     else -> {
                         val meal = HubMenuMeal(data)
                         val dishes = meal?.dishes ?: data.menuRows
-                        RowsOrEmpty(
-                            palette = palette,
-                            empty = dishes.isEmpty(),
-                            emptyIcon = R.drawable.ic_widget_menu,
-                            emptyCopy = data.emptyMenu.ifEmpty { data.snap.emptyText },
-                        ) {
-                            if (meal != null && data.menuMeals.size > 1) {
-                                MealSwitcher(
-                                    palette = palette,
-                                    title = meal.title,
-                                    showArrows = true,
-                                    leftIcon = R.drawable.ic_widget_chevron_left,
-                                    rightIcon = R.drawable.ic_widget_chevron_right,
-                                ) { dir ->
-                                    actionRunCallback<HubMenuMealCallback>(
-                                        actionParametersOf(MenuMealDirectionKey to dir),
+                        if (dishes.isEmpty()) {
+                            EmptyState(
+                                palette,
+                                R.drawable.ic_widget_menu,
+                                data.emptyMenu.ifEmpty { data.snap.emptyText },
+                            )
+                        } else if (compact) {
+                            // Short buckets keep the tappable one-line
+                            // summary (tap rotates the dish): there is no
+                            // room for a list here.
+                            val idx = data.dishIdx.coerceIn(dishes.indices)
+                            val joined = buildString {
+                                append("• ").append(dishes[idx])
+                                if (dishes.size > 1) {
+                                    append(" · ").append(
+                                        if (idx == 0) {
+                                            val remaining = dishes.size - 1
+                                            if (isNarrowSlot()) "+$remaining"
+                                            else "+$remaining more"
+                                        } else {
+                                            "${idx + 1}/${dishes.size}"
+                                        },
                                     )
                                 }
-                                Spacer(modifier = GlanceModifier.height(6.dp))
                             }
-                            // Compact: whole dishes only (static take + "+N
-                            // more"); taller buckets scroll the full list.
-                            if (compact) {
-                                val shown = dishes.take(2)
-                                ChunkedRows(count = shown.size, perGroup = 2, gapDp = 4) { i ->
-                                    DishRow(palette, shown[i])
-                                }
-                                MoreIndicator(palette, dishes.size - shown.size)
-                            } else {
-                                // Scrollable dish list (same mechanism as the
-                                // standalone menu): fills the remaining body space
-                                // via weight, so every dish is reachable with no
-                                // cap and no "+N more".
-                                LazyColumn(modifier = GlanceModifier.defaultWeight()) {
-                                    items(dishes.size) { i -> DishRow(palette, dishes[i]) }
+                            Box(
+                                modifier = GlanceModifier
+                                    .fillMaxWidth()
+                                    .background(fixedProvider(0x00000000L))
+                                    .clickable(
+                                        onClick = actionRunCallback<HubMenuDishCallback>(),
+                                        rippleOverride = NoRippleOverride,
+                                    ),
+                                contentAlignment = Alignment.TopStart,
+                            ) {
+                                Text(
+                                    text = joined,
+                                    style = TextStyle(
+                                        color = palette.onSurface,
+                                        fontSize = if (isNarrowSlot()) 12.sp else 14.sp,
+                                    ),
+                                    maxLines = 1,
+                                    modifier = GlanceModifier.fillMaxWidth(),
+                                )
+                            }
+                        } else {
+                            // Tall buckets list every dish: scrolling list,
+                            // same mechanism as the agenda/tasks tabs above
+                            // (weight-bound LazyColumn inside the bounded
+                            // tab body, items wrapped in their own Column).
+                            LazyColumn(modifier = GlanceModifier.defaultWeight()) {
+                                items(dishes.size) { i ->
+                                    Column(modifier = GlanceModifier.fillMaxWidth()) {
+                                        if (i > 0) Spacer(modifier = GlanceModifier.height(4.dp))
+                                        DishRow(palette, dishes[i])
+                                    }
                                 }
                             }
                         }
@@ -441,7 +514,9 @@ private fun HubColumn(
 
 /**
  * Bottom tab bar: previous arrow, centered page dots, next arrow.
- * One Row with 3 children — safely under the RemoteViews limit.
+ * Tappable views hug their content: host-painted pressed states follow
+ * the clicked view's bounds, so full-width targets flash full-width
+ * bars. Narrow slots collapse to dots-only (the chevrons don't fit).
  */
 @Composable
 private fun TabBar(palette: ChroniclePalette, data: HubContentData) {
@@ -449,29 +524,63 @@ private fun TabBar(palette: ChroniclePalette, data: HubContentData) {
     // the dots would otherwise fall through to the whole-widget tap and
     // open the app instead of switching tabs. Child actions win over
     // the parent's, so arrows keep their own directions.
+    // Narrow slots (1-column widgets) cannot fit both 48dp chevrons plus
+    // the dots (the trailing chevron gets dropped and tabs become
+    // one-directional): there the whole bar is a single next-tab target.
+    // The tappable box wraps JUST the dots (centered): host-painted
+    // pressed states follow the clicked view's bounds, so a full-width
+    // target flashes a full-width grey bar on every tap (seen on-device).
+    if (isNarrowSlot()) {
+        Box(
+            modifier = GlanceModifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = GlanceModifier
+                    .width(72.dp)
+                    .height(40.dp)
+                    .background(fixedProvider(0x00000000L))
+                    .clickable(
+                        onClick = actionRunCallback<HubTabCallback>(
+                            actionParametersOf(HubDirectionKey to 1),
+                        ),
+                        rippleOverride = NoRippleOverride,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                PageDots(palette, data.enabled.size, data.pos)
+            }
+        }
+        return
+    }
+    // No row-level tap target here on purpose: a full-width clickable
+    // flashes a full-width host-painted pressed bar on every tap, and the
+    // user asked for zero press visuals. Taps between the arrows and the
+    // dots fall through to the whole-widget tap (opens the app) instead.
+    // The dots box wraps its content for the same reason: host feedback
+    // follows the clicked view's bounds.
     Row(
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .clickable(
-                onClick = actionRunCallback<HubTabCallback>(
-                    actionParametersOf(HubDirectionKey to 1),
-                ),
-            ),
+        modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TabArrow(palette, R.drawable.ic_widget_chevron_left, -1)
+        Spacer(modifier = GlanceModifier.defaultWeight())
         Box(
             modifier = GlanceModifier
-                .defaultWeight()
+                .width(72.dp)
+                .height(40.dp)
+                .background(fixedProvider(0x00000000L))
                 .clickable(
                     onClick = actionRunCallback<HubTabCallback>(
                         actionParametersOf(HubDirectionKey to 1),
                     ),
+                    rippleOverride = NoRippleOverride,
                 ),
             contentAlignment = Alignment.Center,
         ) {
             PageDots(palette, data.enabled.size, data.pos)
         }
+        Spacer(modifier = GlanceModifier.defaultWeight())
         TabArrow(palette, R.drawable.ic_widget_chevron_right, 1)
     }
 }
@@ -481,18 +590,3 @@ private fun TabBar(palette: ChroniclePalette, data: HubContentData) {
 private fun HubMenuMeal(data: HubContentData): MenuMeal? =
     if (data.menuMeals.isEmpty()) null
     else data.menuMeals[data.menuMealIdx.coerceIn(data.menuMeals.indices)]
-
-@Composable
-private fun RowsOrEmpty(
-    palette: ChroniclePalette,
-    empty: Boolean,
-    emptyIcon: Int,
-    emptyCopy: String,
-    rows: @Composable () -> Unit,
-) {
-    if (empty) {
-        EmptyState(palette, emptyIcon, emptyCopy)
-    } else {
-        Column { rows() }
-    }
-}

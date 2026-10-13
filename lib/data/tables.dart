@@ -44,6 +44,9 @@ class Classes extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text().withLength(min: 1, max: 120)();
   IntColumn get colorValue => integer()();
+  // University course code (e.g. "MAT 103E"): lookup helper in the class
+  // editor, shown in the home widgets. Null = none entered.
+  TextColumn get courseCode => text().nullable()();
   IntColumn get yearId => integer().nullable().references(
     AcademicYears,
     #id,

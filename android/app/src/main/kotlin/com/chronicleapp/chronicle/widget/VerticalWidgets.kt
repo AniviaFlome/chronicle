@@ -17,6 +17,7 @@ import androidx.glance.GlanceModifier
 import androidx.glance.LocalSize
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
+import androidx.glance.action.NoRippleOverride
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.background
@@ -44,6 +45,16 @@ import com.chronicleapp.chronicle.MainActivity
  * Small strip slots (1x1 = 40dp, 2x1 = 110x40, 1x2 = 40x110 per the
  * Android cell formula 70 x n - 30) match Tiny renders exactly instead of
  * stretching the nearest larger slot.
+ * Wide slots (320/470 wide) cover user-enlarged widgets: without a
+ * covering entry the host stretches the nearest slot (wrong tier,
+ * oversized text), and once stretched small the widget never picks the
+ * portrait slot again. Tall-narrow slots (120/260 wide, 320/450 tall)
+ * cover shrunken tall widgets: a 1-column tall widget must match a
+ * narrow slot to get the stacked layout. ORDER MATTERS: the host
+ * applies first-fit over this set, so narrow slots sort before wide
+ * ones (a wide slot earlier in the set shadows them — seen on-device:
+ * a 1-column widget kept rendering the 470x320 view). 13 slots, under
+ * the framework MAX_INIT_VIEW_COUNT=16 cap — do not grow past 16.
  */
 val verticalSizeSlots = SizeMode.Responsive(
     setOf(
@@ -53,7 +64,33 @@ val verticalSizeSlots = SizeMode.Responsive(
         DpSize(120.dp, 80.dp),
         DpSize(120.dp, 120.dp),
         DpSize(120.dp, 240.dp),
+        DpSize(120.dp, 320.dp),
+        DpSize(120.dp, 450.dp),
         DpSize(260.dp, 240.dp),
+        DpSize(260.dp, 320.dp),
+        DpSize(320.dp, 240.dp),
+        DpSize(470.dp, 240.dp),
+        DpSize(470.dp, 320.dp),
+    ),
+)
+
+/**
+ * Slim slot set for the weekly calendar: 8 entries instead of 13. Every
+ * widget update composes + translates one view PER SLOT, and the weekly
+ * feed (7 day sections) is the heaviest composition — the full set made
+ * its updates visibly laggy. Buckets still resolve the same way; wide
+ * enlargements fall back to the nearest covering slot.
+ */
+val weeklySizeSlots = SizeMode.Responsive(
+    setOf(
+        DpSize(40.dp, 40.dp),
+        DpSize(110.dp, 40.dp),
+        DpSize(40.dp, 110.dp),
+        DpSize(120.dp, 120.dp),
+        DpSize(120.dp, 240.dp),
+        DpSize(120.dp, 320.dp),
+        DpSize(260.dp, 240.dp),
+        DpSize(470.dp, 320.dp),
     ),
 )
 
@@ -83,13 +120,15 @@ fun isNarrowSlot(): Boolean = LocalSize.current.width < 200.dp
 
 /**
  * Outer shell for vertical widgets: 24.dp outer radius, 12.dp content
- * insets, whole-widget tap opens the app. Inner cards use 16.dp (see
+ * insets, whole-widget tap opens the app (no press ripple: the app
+ * opening is feedback enough, and the shell flash reads as a white
+ * flicker on tab switches). Inner cards use 16.dp (see
  * FilledBlock default 20.dp — pass radius = 16.dp at call sites).
  *
  * The optional [bottomBar] renders OUTSIDE the padded content box, pinned
- * flush to the background's bottom edge (12.dp side insets, no bottom
- * inset): navigation bars stay stationary at the very bottom no matter
- * how tall the body content is. Widgets without a bar pass null and get
+ * near the background's bottom edge (12.dp side insets plus an 8.dp bottom
+ * inset: fully flush bars get their dots clipped by some hosts).
+ * Widgets without a bar pass null and get
  * the exact legacy tree (single padded box).
  */
 @Composable
@@ -106,7 +145,10 @@ fun VerticalShell(
             .fillMaxSize()
             .background(widgetBg(context, palette.bg, opacity))
             .cornerRadius(24.dp)
-            .clickable(onClick = actionStartActivity<MainActivity>()),
+            .clickable(
+                onClick = actionStartActivity<MainActivity>(),
+                rippleOverride = NoRippleOverride,
+            ),
         contentAlignment = Alignment.TopStart,
     ) {
         if (bottomBar == null) {
@@ -126,7 +168,8 @@ fun VerticalShell(
                 Box(
                     modifier = GlanceModifier
                         .fillMaxWidth()
-                        .padding(horizontal = paddingDp.dp),
+                        .padding(horizontal = paddingDp.dp)
+                        .padding(bottom = 8.dp),
                 ) {
                     bottomBar()
                 }
@@ -151,7 +194,11 @@ fun SectionHeader(palette: ChroniclePalette, title: String) {
 }
 
 /** "+X more" overflow indicator for capped TallColumn lists. Narrow slots
- * use the short "+X" form so the count itself never truncates. */@Composable
+ * use the short "+X" form so the count itself never truncates.
+ * NOTE: keep the Column wrapper even for a single child — a bare Text
+ * directly in a centered fillMaxWidth Box mismeasures on-device (the same
+ * collapse WeekCellView documents); the text rendered 6px tall. */
+@Composable
 fun MoreIndicator(palette: ChroniclePalette, remaining: Int) {
     if (remaining <= 0) return
     Box(
@@ -162,15 +209,17 @@ fun MoreIndicator(palette: ChroniclePalette, remaining: Int) {
             .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = if (isNarrowSlot()) "+$remaining" else "+$remaining more",
-            style = TextStyle(
-                color = palette.onSurfaceVariant,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-            ),
-            maxLines = 1,
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = if (isNarrowSlot()) "+$remaining" else "+$remaining more",
+                style = TextStyle(
+                    color = palette.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                maxLines = 1,
+            )
+        }
     }
 }
 
