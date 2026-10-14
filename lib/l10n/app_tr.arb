@@ -505,5 +505,6 @@
   "widgetLater": "Daha sonra {name}",
   "widgetInMin": "{mins} dk içinde",
   "widgetInHours": "{hours} sa içinde",
-  "widgetCurrentlyEnds": "Şu an · bitiş {time}"
+  "widgetCurrentlyEnds": "Şu an · bitiş {time}",
+  "widgetCurrently": "Şu an"
 }

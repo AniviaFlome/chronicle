@@ -1594,4 +1594,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String widgetCurrentlyEnds(Object time) {
     return 'Currently · ends $time';
   }
+
+  @override
+  String get widgetCurrently => 'Currently';
 }

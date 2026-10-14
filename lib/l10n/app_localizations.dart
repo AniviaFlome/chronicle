@@ -2743,6 +2743,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Currently · ends {time}'**
   String widgetCurrentlyEnds(Object time);
+
+  /// No description provided for @widgetCurrently.
+  ///
+  /// In en, this message translates to:
+  /// **'Currently'**
+  String get widgetCurrently;
 }
 
 class _AppLocalizationsDelegate

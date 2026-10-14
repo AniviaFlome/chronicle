@@ -1554,4 +1554,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String widgetCurrentlyEnds(Object time) {
     return 'Şu an · bitiş $time';
   }
+
+  @override
+  String get widgetCurrently => 'Şu an';
 }

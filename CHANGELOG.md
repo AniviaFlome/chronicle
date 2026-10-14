@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.11.1] - 2026-10-14
+
+### Fixed
+- Release builds no longer break every widget tap: R8 strips the Glance `ActionCallback` no-arg constructors it can't see used (debug builds never minify), crashing taps with `NoSuchMethodException` — `proguard-rules.pro` now keeps every `*Callback` in the widget package.
+
 ## [1.11.0] - 2026-10-13
 
 ### Added
@@ -25,6 +30,7 @@
 - Lookahead time chips are fixed-width so class names start aligned in wide rows.
 - No press visuals anywhere on the widgets: `NoRippleOverride` on every clickable, explicit transparent backgrounds on bg-less tap targets, minimized tap boxes (host-painted pressed states follow the clicked view's bounds).
 - Weekly calendar updates faster: its own slim 8-slot responsive set (was sharing the 13-slot set — every update composes/translates one view per slot, and the 7-day feed is the heaviest composition).
+- Running classes show plain "Currently" (the time range already carries start/end — no repeated end time).
 
 ### Changed
 - Debug builds install side-by-side with release (`applicationIdSuffix ".debug"`, "Chronicle Dev" label) for on-device widget testing without touching real data.

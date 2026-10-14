@@ -969,5 +969,7 @@
     "placeholders": {
       "time": {}
     }
-  }
+  },
+  "widgetCurrently": "Currently",
+  "@widgetCurrently": {}
 }

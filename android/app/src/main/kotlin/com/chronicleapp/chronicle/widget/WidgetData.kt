@@ -4,7 +4,6 @@
 package com.chronicleapp.chronicle.widget
 
 import android.content.SharedPreferences
-import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -78,7 +77,7 @@ object Keys {
     // class start/end instant never does).
     const val FMT_IN_MIN = "fmtInMin"
     const val FMT_IN_HOURS = "fmtInHours"
-    const val FMT_ENDS = "fmtEnds"
+    const val FMT_CURRENTLY = "fmtCurrently"
 }
 
 /** One timeline entry of the Next-class hero (and the hub class tab). */
@@ -140,7 +139,7 @@ data class WidgetSnapshot(
     /** Countdown templates (see Keys.FMT_*): pushed l10n with "{n}" slots. */
     val fmtInMin: String,
     val fmtInHours: String,
-    val fmtEnds: String,
+    val fmtCurrently: String,
 )
 
 // ---------------------------------------------------------------------------
@@ -196,7 +195,7 @@ fun SharedPreferences.snapshot(prefix: String): WidgetSnapshot {
         emptyText = str("$prefix.${Keys.EMPTY_TEXT}"),
         fmtInMin = str("$prefix.${Keys.FMT_IN_MIN}"),
         fmtInHours = str("$prefix.${Keys.FMT_IN_HOURS}"),
-        fmtEnds = str("$prefix.${Keys.FMT_ENDS}"),
+        fmtCurrently = str("$prefix.${Keys.FMT_CURRENTLY}"),
     )
 }
 
@@ -454,11 +453,10 @@ fun liveStatus(e: TimedEntry, snap: WidgetSnapshot, nowMs: Long): String {
                         snap.fmtInHours.replace("{n}", "${minsToStart / 60}")
                     }
                 }
-            } else if (nowMs < e.endMs && snap.fmtEnds.isNotEmpty()) {
-                val ends = DateFormat
-                    .getTimeInstance(DateFormat.SHORT, Locale.getDefault())
-                    .format(Date(e.endMs))
-                return snap.fmtEnds.replace("{n}", ends)
+            } else if (nowMs < e.endMs && snap.fmtCurrently.isNotEmpty()) {
+                // Running: plain "Currently" — the detail line already
+                // carries the time range, so no end-time suffix.
+                return snap.fmtCurrently
             }
         }
     }

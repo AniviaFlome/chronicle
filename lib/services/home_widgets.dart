@@ -205,7 +205,9 @@ Future<void> _push(ProviderContainer container) async {
           ? l10n.widgetInMin(mins)
           : l10n.widgetInHours(mins ~/ 60);
     }
-    return l10n.widgetCurrentlyEnds(hhmmLocale(o.endMinutes, locale));
+    // Running: plain "Currently" — the detail line already carries the
+    // time range, so an "ends {time}" suffix would repeat the end time.
+    return l10n.widgetCurrently;
   }
 
   // Hub class-tab lookahead rows: the classes after the hero entry,
@@ -491,6 +493,7 @@ Future<void> _push(ProviderContainer container) async {
     WidgetKeys.fmtInMin: l10n.widgetInMin('{n}'),
     WidgetKeys.fmtInHours: l10n.widgetInHours('{n}'),
     WidgetKeys.fmtEnds: l10n.widgetCurrentlyEnds('{n}'),
+    WidgetKeys.fmtCurrently: l10n.widgetCurrently,
   };
 
   Future<Map<String, Object?>> saveCommon(

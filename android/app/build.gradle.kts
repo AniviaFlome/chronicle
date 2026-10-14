@@ -64,6 +64,13 @@ android {
             signingConfig = signingConfigs.getByName(
                 if (!System.getenv("CHRONICLE_KEYSTORE").isNullOrEmpty()) "release" else "debug"
             )
+            // R8 keep rules for Glance ActionCallbacks (see
+            // proguard-rules.pro): release builds minify, and stripped
+            // callback constructors break every widget tap.
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     buildFeatures {

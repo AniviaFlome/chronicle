@@ -23,10 +23,12 @@ abstract final class WidgetKeys {
   static const staleClassName = 'staleClassName';
   static const emptyText = 'emptyText';
   // Render-time countdown templates (pushed l10n with a "{n}" slot filled
-  // natively by liveStatus in WidgetData.kt).
+  // natively by liveStatus in WidgetData.kt). widgetCurrently has no slot:
+  // running classes show it verbatim (the range already carries the time).
   static const fmtInMin = 'fmtInMin';
   static const fmtInHours = 'fmtInHours';
   static const fmtEnds = 'fmtEnds';
+  static const fmtCurrently = 'fmtCurrently';
 
   // NextClass (and hub class tab) timeline: a JSON object keyed by
   // epoch-millis strings `{"<epochMs>": {...}}`. Native renders the entry
