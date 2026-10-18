@@ -388,6 +388,72 @@ fun parseTimed(json: String, withThen: Boolean): List<TimedEntry> {
 fun resolveTimed(entries: List<TimedEntry>, nowMs: Long): TimedEntry? =
     entries.lastOrNull { it.at <= nowMs }
 
+// ---------------------------------------------------------------------------
+// Parse cache: hub resolveState runs once per size slot (8x per update)
+// with identical raw strings — cache hits skip re-parsing. All parse
+// functions are pure; synchronized on a private lock. Raw strings are the
+// cache keys: a push writes new strings, which naturally miss and re-parse.
+// ---------------------------------------------------------------------------
+
+private val hubParseLock = Any()
+private var cachedTimedRaw: String? = null
+private var cachedTimedThen: Boolean = true
+private var cachedTimedRows: List<TimedEntry> = emptyList()
+private var cachedTimeRowsRaw: String? = null
+private var cachedTimeRows: List<TimeRow> = emptyList()
+private var cachedTaskRowsRaw: String? = null
+private var cachedTaskRows: List<TaskRow> = emptyList()
+private var cachedMenuMealsRaw: String? = null
+private var cachedMenuMeals: List<MenuMeal> = emptyList()
+private var cachedStringsRaw: String? = null
+private var cachedStrings: List<String> = emptyList()
+
+fun cachedParseTimed(json: String, withThen: Boolean): List<TimedEntry> =
+    synchronized(hubParseLock) {
+        if (json == cachedTimedRaw && withThen == cachedTimedThen) return cachedTimedRows
+        val parsed = parseTimed(json, withThen)
+        cachedTimedRaw = json
+        cachedTimedThen = withThen
+        cachedTimedRows = parsed
+        parsed
+    }
+
+fun cachedParseTimeRows(json: String): List<TimeRow> =
+    synchronized(hubParseLock) {
+        if (json == cachedTimeRowsRaw) return cachedTimeRows
+        val parsed = parseTimeRows(json)
+        cachedTimeRowsRaw = json
+        cachedTimeRows = parsed
+        parsed
+    }
+
+fun cachedParseTaskRows(json: String): List<TaskRow> =
+    synchronized(hubParseLock) {
+        if (json == cachedTaskRowsRaw) return cachedTaskRows
+        val parsed = parseTaskRows(json)
+        cachedTaskRowsRaw = json
+        cachedTaskRows = parsed
+        parsed
+    }
+
+fun cachedParseMenuMeals(json: String): List<MenuMeal> =
+    synchronized(hubParseLock) {
+        if (json == cachedMenuMealsRaw) return cachedMenuMeals
+        val parsed = parseMenuMeals(json)
+        cachedMenuMealsRaw = json
+        cachedMenuMeals = parsed
+        parsed
+    }
+
+fun cachedParseStrings(json: String): List<String> =
+    synchronized(hubParseLock) {
+        if (json == cachedStringsRaw) return cachedStrings
+        val parsed = parseStrings(json)
+        cachedStringsRaw = json
+        cachedStrings = parsed
+        parsed
+    }
+
 /** The sentinel marks the end of the listed classes. */
 val TimedEntry.isSentinel: Boolean
     get() = className == "—" || className.isEmpty()

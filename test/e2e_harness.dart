@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:chronicle/app.dart';
 import 'package:chronicle/data/database.dart';
 import 'package:chronicle/data/repositories.dart';
@@ -6,6 +8,7 @@ import 'package:chronicle/main.dart';
 import 'package:chronicle/providers.dart';
 import 'package:chronicle/utils/time_format.dart';
 import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -56,6 +59,22 @@ Future<void> shutdownApp(WidgetTester tester, AppDatabase db) async {
   await tester.pumpWidget(const SizedBox.shrink());
   await tester.pumpAndSettle();
   await tester.runAsync(() => db.close());
+}
+
+/// Restarts the app against the same database file: closes [db], reopens
+/// it, and boots again. Returns the fresh database (the caller owns it
+/// and must eventually pass it to [shutdownApp]).
+Future<AppDatabase> restartApp(
+  WidgetTester tester,
+  AppDatabase db,
+  File file,
+) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pumpAndSettle();
+  await tester.runAsync(() => db.close());
+  final fresh = AppDatabase(NativeDatabase(file));
+  await bootApp(tester, fresh);
+  return fresh;
 }
 
 String todayIso() => isoFromDateTime(DateTime.now());
@@ -113,4 +132,20 @@ Future<void> goTab(WidgetTester tester, IconData icon) async {
   );
   await tester.pumpAndSettle();
   await pumpForAsync(tester);
+}
+
+/// Enables auto end time, then picks the start time in a class form via
+/// the time picker dialog (accepting the offered time). Copied from the
+/// screen-level suite: the end time auto-fills as start + default
+/// duration, so the form saves.
+Future<void> pickClassTimes(WidgetTester tester, AppDatabase db) async {
+  await tester.runAsync(() async {
+    final settings = SettingsRepository(db);
+    await settings.setAutoEndTime(true);
+    await settings.setDefaultDurationMinutes(60);
+  });
+  await tester.tap(find.text('Pick time').first);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('OK'));
+  await tester.pumpAndSettle();
 }

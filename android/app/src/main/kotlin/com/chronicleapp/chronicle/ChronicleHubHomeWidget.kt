@@ -19,7 +19,6 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
-import androidx.glance.action.NoRippleOverride
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.lazy.LazyColumn
@@ -48,13 +47,12 @@ import com.chronicleapp.chronicle.widget.Hairline
 import com.chronicleapp.chronicle.widget.fixedProvider
 import com.chronicleapp.chronicle.widget.HubDirectionKey
 import com.chronicleapp.chronicle.widget.HubClassExpandCallback
-import com.chronicleapp.chronicle.widget.HubMenuDishCallback
 import com.chronicleapp.chronicle.widget.HubTabCallback
 import com.chronicleapp.chronicle.widget.MenuMeal
 import com.chronicleapp.chronicle.widget.MenuStepArrow
 import com.chronicleapp.chronicle.widget.MoreIndicator
+import com.chronicleapp.chronicle.widget.NoPressFeedback
 import com.chronicleapp.chronicle.widget.Keys
-import com.chronicleapp.chronicle.widget.PageDots
 import com.chronicleapp.chronicle.widget.Samples
 import com.chronicleapp.chronicle.widget.SharedClassTab
 import com.chronicleapp.chronicle.widget.TabArrow
@@ -64,24 +62,24 @@ import com.chronicleapp.chronicle.widget.VerticalBucket
 import com.chronicleapp.chronicle.widget.VerticalShell
 import com.chronicleapp.chronicle.widget.WidgetSnapshot
 import com.chronicleapp.chronicle.widget.bool
+import com.chronicleapp.chronicle.widget.cachedParseMenuMeals
+import com.chronicleapp.chronicle.widget.cachedParseStrings
+import com.chronicleapp.chronicle.widget.cachedParseTaskRows
+import com.chronicleapp.chronicle.widget.cachedParseTimeRows
+import com.chronicleapp.chronicle.widget.cachedParseTimed
 import com.chronicleapp.chronicle.widget.currentVerticalBucket
 import com.chronicleapp.chronicle.widget.hubNavBump
+import com.chronicleapp.chronicle.widget.hubSizeSlots
 import com.chronicleapp.chronicle.widget.isNarrowSlot
 import com.chronicleapp.chronicle.widget.long
 import com.chronicleapp.chronicle.widget.int
 import com.chronicleapp.chronicle.widget.isSentinel
-import com.chronicleapp.chronicle.widget.parseMenuMeals
-import com.chronicleapp.chronicle.widget.parseStrings
-import com.chronicleapp.chronicle.widget.parseTaskRows
-import com.chronicleapp.chronicle.widget.parseTimeRows
-import com.chronicleapp.chronicle.widget.parseTimed
 import com.chronicleapp.chronicle.widget.resolveMenuMeal
 import com.chronicleapp.chronicle.widget.resolvePalette
 import com.chronicleapp.chronicle.widget.resolveTimed
 import com.chronicleapp.chronicle.widget.snapshot
 import com.chronicleapp.chronicle.widget.str
 import com.chronicleapp.chronicle.widget.TinyRow
-import com.chronicleapp.chronicle.widget.verticalSizeSlots
 
 import es.antonborri.home_widget.HomeWidgetGlanceStateDefinition
 import es.antonborri.home_widget.HomeWidgetPlugin
@@ -90,7 +88,7 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
     override val stateDefinition = HomeWidgetGlanceStateDefinition()
 
     // Portrait-first buckets: Compact / TallColumn / FullPortrait.
-    override val sizeMode = verticalSizeSlots
+    override val sizeMode = hubSizeSlots
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
@@ -169,9 +167,23 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
             val sel = enabled[pos]
 
             val now = System.currentTimeMillis()
-            val entries = parseTimed(prefs.str("$prefix.${Keys.TIMED_DATA}"), withThen = true)
-            val entry = resolveTimed(entries, now)
-            val menuMeals = parseMenuMeals(prefs.str("$prefix.${Keys.MENU_MEALS}"))
+            // Lazy per-tab parsing: a tap only shows one tab, so only that
+            // tab's JSON is parsed — and through the cache, so the 8 slot
+            // compositions per update parse once and hit 7 times. The old
+            // code parsed all four blobs on every slot (32 parses per tap).
+            val entry = if (sel == TAB_CLASS) {
+                resolveTimed(
+                    cachedParseTimed(prefs.str("$prefix.${Keys.TIMED_DATA}"), withThen = true),
+                    now,
+                )
+            } else {
+                null
+            }
+            val menuMeals = if (sel == TAB_MENU) {
+                cachedParseMenuMeals(prefs.str("$prefix.${Keys.MENU_MEALS}"))
+            } else {
+                emptyList()
+            }
             val menuMealDefault = prefs.int("$prefix.${Keys.MENU_MEAL_DEFAULT}", 0)
             val menuMealKind = prefs.str("$prefix.${Keys.MENU_MEAL_KIND}")
             val menuMealIdx = resolveMenuMeal(menuMeals, menuMealDefault, menuMealKind)
@@ -185,10 +197,26 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
                 looks = entry?.looks ?: emptyList(),
                 expanded = entry != null && !entry.isSentinel && !snap.stale &&
                     entry.at == prefs.long("$prefix.${Keys.EXPANDED_AT}", -1L),
-                dishIdx = prefs.int("$prefix.${Keys.MENU_DISH_IDX}", 0),
-                agendaRows = parseTimeRows(prefs.str("$prefix.${Keys.AGENDA_ROWS}")),
-                tasksRows = parseTaskRows(prefs.str("$prefix.${Keys.TASKS_ROWS}")),
-                menuRows = parseStrings(prefs.str("$prefix.${Keys.MENU_ROWS}")),
+                dishIdx = if (sel == TAB_MENU) {
+                    prefs.int("$prefix.${Keys.MENU_DISH_IDX}", 0)
+                } else {
+                    0
+                },
+                agendaRows = if (sel == TAB_AGENDA) {
+                    cachedParseTimeRows(prefs.str("$prefix.${Keys.AGENDA_ROWS}"))
+                } else {
+                    emptyList()
+                },
+                tasksRows = if (sel == TAB_TASKS) {
+                    cachedParseTaskRows(prefs.str("$prefix.${Keys.TASKS_ROWS}"))
+                } else {
+                    emptyList()
+                },
+                menuRows = if (sel == TAB_MENU) {
+                    cachedParseStrings(prefs.str("$prefix.${Keys.MENU_ROWS}"))
+                } else {
+                    emptyList()
+                },
                 menuMeals = menuMeals,
                 menuMealIdx = menuMealIdx,
                 titleClass = prefs.str("$prefix.${Keys.TITLE_CLASS}"),
@@ -453,50 +481,15 @@ private fun HubColumn(
                                 R.drawable.ic_widget_menu,
                                 data.emptyMenu.ifEmpty { data.snap.emptyText },
                             )
-                        } else if (compact) {
-                            // Short buckets keep the tappable one-line
-                            // summary (tap rotates the dish): there is no
-                            // room for a list here.
-                            val idx = data.dishIdx.coerceIn(dishes.indices)
-                            val joined = buildString {
-                                append("• ").append(dishes[idx])
-                                if (dishes.size > 1) {
-                                    append(" · ").append(
-                                        if (idx == 0) {
-                                            val remaining = dishes.size - 1
-                                            if (isNarrowSlot()) "+$remaining"
-                                            else "+$remaining more"
-                                        } else {
-                                            "${idx + 1}/${dishes.size}"
-                                        },
-                                    )
-                                }
-                            }
-                            Box(
-                                modifier = GlanceModifier
-                                    .fillMaxWidth()
-                                    .background(fixedProvider(0x00000000L))
-                                    .clickable(
-                                        onClick = actionRunCallback<HubMenuDishCallback>(),
-                                        rippleOverride = NoRippleOverride,
-                                    ),
-                                contentAlignment = Alignment.TopStart,
-                            ) {
-                                Text(
-                                    text = joined,
-                                    style = TextStyle(
-                                        color = palette.onSurface,
-                                        fontSize = if (isNarrowSlot()) 12.sp else 14.sp,
-                                    ),
-                                    maxLines = 1,
-                                    modifier = GlanceModifier.fillMaxWidth(),
-                                )
-                            }
                         } else {
-                            // Tall buckets list every dish: scrolling list,
-                            // same mechanism as the agenda/tasks tabs above
-                            // (weight-bound LazyColumn inside the bounded
-                            // tab body, items wrapped in their own Column).
+                            // Every bucket lists every dish in a scrolling
+                            // list (same mechanism as the agenda/tasks tabs
+                            // above: weight-bound LazyColumn inside the
+                            // bounded tab body, items wrapped in their own
+                            // Column). No capped summary: hosts can display
+                            // a small-slot composition in a much taller
+                            // widget, and a one-line "+N" summary would
+                            // orphan dishes with no way to reach them.
                             LazyColumn(modifier = GlanceModifier.defaultWeight()) {
                                 items(dishes.size) { i ->
                                     Column(modifier = GlanceModifier.fillMaxWidth()) {
@@ -527,29 +520,17 @@ private fun TabBar(palette: ChroniclePalette, data: HubContentData) {
     // Narrow slots (1-column widgets) cannot fit both 48dp chevrons plus
     // the dots (the trailing chevron gets dropped and tabs become
     // one-directional): there the whole bar is a single next-tab target.
-    // The tappable box wraps JUST the dots (centered): host-painted
-    // pressed states follow the clicked view's bounds, so a full-width
-    // target flashes a full-width grey bar on every tap (seen on-device).
+    // Each dots tap advances one tab (HubTabCallback, +1 wrap-around).
+    // The dots sit on an opaque tonal track: the host paints tap
+    // confirmation on the clicked view, and on transparent boxes that
+    // reads as a big grey rectangle (verified on-device across four
+    // recordings). Behind opaque pixels the flash never surfaces.
     if (isNarrowSlot()) {
         Box(
             modifier = GlanceModifier.fillMaxWidth(),
             contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = GlanceModifier
-                    .width(72.dp)
-                    .height(40.dp)
-                    .background(fixedProvider(0x00000000L))
-                    .clickable(
-                        onClick = actionRunCallback<HubTabCallback>(
-                            actionParametersOf(HubDirectionKey to 1),
-                        ),
-                        rippleOverride = NoRippleOverride,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                PageDots(palette, data.enabled.size, data.pos)
-            }
+            DotStrip(palette, data)
         }
         return
     }
@@ -557,31 +538,64 @@ private fun TabBar(palette: ChroniclePalette, data: HubContentData) {
     // flashes a full-width host-painted pressed bar on every tap, and the
     // user asked for zero press visuals. Taps between the arrows and the
     // dots fall through to the whole-widget tap (opens the app) instead.
-    // The dots box wraps its content for the same reason: host feedback
-    // follows the clicked view's bounds.
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TabArrow(palette, R.drawable.ic_widget_chevron_left, -1)
         Spacer(modifier = GlanceModifier.defaultWeight())
-        Box(
-            modifier = GlanceModifier
-                .width(72.dp)
-                .height(40.dp)
-                .background(fixedProvider(0x00000000L))
-                .clickable(
-                    onClick = actionRunCallback<HubTabCallback>(
-                        actionParametersOf(HubDirectionKey to 1),
-                    ),
-                    rippleOverride = NoRippleOverride,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            PageDots(palette, data.enabled.size, data.pos)
-        }
+        DotStrip(palette, data)
         Spacer(modifier = GlanceModifier.defaultWeight())
         TabArrow(palette, R.drawable.ic_widget_chevron_right, 1)
+    }
+}
+
+/**
+ * Page dots on an opaque tonal track: a single advance-on-tap target
+ * (HubTabCallback, +1 with wrap-around). The track MUST be opaque: the
+ * host paints tap confirmation on the clicked view, and on transparent
+ * boxes that reads as a big grey rectangle (seen on-device, three
+ * recordings). Behind opaque pixels the flash never surfaces — the same
+ * reason rail cells and filled rows never flash. Resting look is a
+ * standard page-control pill; size hugs the dots (no dead padding that
+ * would flash).
+ */
+@Composable
+private fun DotStrip(palette: ChroniclePalette, data: HubContentData) {
+    val count = data.enabled.size
+    if (count <= 1) return
+    val dotsWidth = 16 + (count.coerceAtMost(7) - 1) * 12
+    Box(
+        modifier = GlanceModifier
+            .width((dotsWidth + 24).dp)
+            .height(24.dp)
+            .background(palette.cardHigh)
+            .cornerRadius(50.dp)
+            .clickable(
+                onClick = actionRunCallback<HubTabCallback>(
+                    actionParametersOf(HubDirectionKey to 1),
+                ),
+                rippleOverride = NoPressFeedback,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            for (i in 0 until count.coerceAtMost(7)) {
+                if (i > 0) Spacer(modifier = GlanceModifier.width(6.dp))
+                Box(
+                    modifier = GlanceModifier
+                        .width(if (i == data.pos) 16.dp else 6.dp)
+                        .height(6.dp)
+                        .background(
+                            if (i == data.pos) palette.accent else palette.onSurfaceVariant
+                        )
+                        .cornerRadius(50.dp),
+                ) {}
+            }
+        }
     }
 }
 

@@ -34,7 +34,7 @@ jobs:
           mkdir -p android/keystore
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/keystore/chronicle-upload.jks
 
-      - name: Build signed universal APK
+      - name: Build signed split APKs
         env:
           CHRONICLE_KEYSTORE: ${{ github.workspace }}/android/keystore/chronicle-upload.jks
           CHRONICLE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -42,13 +42,17 @@ jobs:
           CHRONICLE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -f android/keystore/chronicle-upload.jks ]; then
-            flutter build apk --release
+            flutter build apk --release --split-per-abi
           else
             echo 'No keystore secret — building unsigned (debug keys).'
-            flutter build apk --release
+            flutter build apk --release --split-per-abi
           fi
-          cp build/app/outputs/flutter-apk/app-release.apk \
-            chronicle-${{ github.ref_name }}.apk
+          # Per-ABI splits (~28MB each) instead of one ~80MB universal:
+          # arm64-v8a covers virtually all current phones.
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            cp build/app/outputs/flutter-apk/app-${abi}-release.apk \
+              chronicle-${{ github.ref_name }}-${abi}.apk
+          done
 
       - name: Install Linux build deps
         run: >
@@ -122,7 +126,9 @@ jobs:
           name: ${{ github.ref_name }}
           body_path: /tmp/notes.md
           files: |
-            chronicle-${{ github.ref_name }}.apk
+            chronicle-${{ github.ref_name }}-arm64-v8a.apk
+            chronicle-${{ github.ref_name }}-armeabi-v7a.apk
+            chronicle-${{ github.ref_name }}-x86_64.apk
             chronicle-linux-${{ github.ref_name }}.tar.gz
             chronicle-${{ github.ref_name }}-x86_64.AppImage
             chronicle-${{ github.ref_name }}.flatpak

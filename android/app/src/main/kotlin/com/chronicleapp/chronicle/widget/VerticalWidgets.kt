@@ -17,7 +17,6 @@ import androidx.glance.GlanceModifier
 import androidx.glance.LocalSize
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
-import androidx.glance.action.NoRippleOverride
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.background
@@ -94,6 +93,26 @@ val weeklySizeSlots = SizeMode.Responsive(
     ),
 )
 
+/**
+ * Slim slot set for the hub: 8 entries instead of 13. Every widget update
+ * composes + translates one view PER SLOT, and tab switches pay that cost
+ * on every tap — the full set made them visibly laggy (same mechanism as
+ * the weekly feed, which got its slim set first). Buckets still resolve
+ * the same way; wide enlargements fall back to the nearest covering slot.
+ */
+val hubSizeSlots = SizeMode.Responsive(
+    setOf(
+        DpSize(40.dp, 40.dp),
+        DpSize(110.dp, 40.dp),
+        DpSize(40.dp, 110.dp),
+        DpSize(120.dp, 120.dp),
+        DpSize(120.dp, 240.dp),
+        DpSize(120.dp, 320.dp),
+        DpSize(260.dp, 240.dp),
+        DpSize(470.dp, 320.dp),
+    ),
+)
+
 /** Which portrait bucket the current LocalSize falls in. */
 enum class VerticalBucket { Tiny, Compact, TallColumn, FullPortrait }
 
@@ -147,7 +166,7 @@ fun VerticalShell(
             .cornerRadius(24.dp)
             .clickable(
                 onClick = actionStartActivity<MainActivity>(),
-                rippleOverride = NoRippleOverride,
+                rippleOverride = NoPressFeedback,
             ),
         contentAlignment = Alignment.TopStart,
     ) {

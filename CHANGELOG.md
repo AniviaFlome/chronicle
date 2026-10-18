@@ -1,9 +1,17 @@
 # Changelog
 
-## [1.11.1] - 2026-10-14
+## [Unreleased]
 
 ### Fixed
 - Release builds no longer break every widget tap: R8 strips the Glance `ActionCallback` no-arg constructors it can't see used (debug builds never minify), crashing taps with `NoSuchMethodException` — `proguard-rules.pro` now keeps every `*Callback` in the widget package.
+- Hub tab switches are faster: own slim 8-slot set (was 13 — every update composes/translates one view per slot) + per-tab lazy parsing with a raw-string cache (was: all four JSON blobs re-parsed on every slot).
+- Standalone menu widget always lists every dish (scrollable): the old Compact branch capped at 2 dishes + "+N more", and hosts can display that small-slot composition inside a much taller widget — orphaning dishes behind a dead indicator with a huge void below.
+- Hub menu tab likewise always lists every dish (was a one-line summary with "+N" in Compact); the now-dead dish-rotate tap callback is removed.
+- Hub dots no longer flash white/grey on tap: the dots sit on an opaque tonal track and tapping anywhere on it advances to the next tab, as before. Two stacked bugs fed the flash: Glance 1.2.0 `NoRippleOverride` is just int 0, which the translator maps to the DEFAULT ripple (verified from dex), and the first replacement was a `const` — the compile-time R class stubs every id as 0, so it baked in 0 and silently re-enabled the default ripple. `NoPressFeedback` (transparent drawable id via a runtime `val`) is now used on all 9 tap targets.
+
+### Changed
+- All widgets default to 2x2 (menu was 2x3, others already 2x2; compact rendering covers it: scrolling full lists, capped rows + indicators).
+- Release APKs are split per ABI (~28MB each) instead of one ~80MB universal APK.
 
 ## [1.11.0] - 2026-10-13
 
@@ -28,8 +36,6 @@
 - Menu food rows are bubble-free plain text with bullets (no tonal blocks), everywhere they appear.
 - NextClass location: room-less classes no longer show a "--" placeholder (null/blank/"--" rooms render time range only).
 - Lookahead time chips are fixed-width so class names start aligned in wide rows.
-- No press visuals anywhere on the widgets: `NoRippleOverride` on every clickable, explicit transparent backgrounds on bg-less tap targets, minimized tap boxes (host-painted pressed states follow the clicked view's bounds).
-- Weekly calendar updates faster: its own slim 8-slot responsive set (was sharing the 13-slot set — every update composes/translates one view per slot, and the 7-day feed is the heaviest composition).
 - Running classes show plain "Currently" (the time range already carries start/end — no repeated end time).
 
 ### Changed

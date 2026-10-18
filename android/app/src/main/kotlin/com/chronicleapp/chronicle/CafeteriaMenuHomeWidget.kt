@@ -5,11 +5,13 @@
 //
 // CafeteriaMenu vertical flow: meal title on top, dishes stacked below.
 // Row appears only inside DishRow (accent dot + name, inline metadata).
-// Buckets (verticalSizeSlots): Compact 120x120 title + first dish,
-// TallColumn 120x240 up to 3 dishes + "+X more", FullPortrait 260x240 up
-// to 8 dishes under a section header. Outer radius 24.dp, inner cards
-// 16.dp via shared components. Only androidx.glance.* composables (plus
-// compose unit / runtime primitives dp/sp/Composable).
+// Buckets (verticalSizeSlots): Tiny strips render one line; every other
+// bucket renders the title + full scrolling dish list (no cap, no "+N
+// more" — hosts can display a small-slot composition in a much taller
+// widget, and a capped take would orphan dishes with no way to reach
+// them). Outer radius 24.dp, inner cards 16.dp via shared components.
+// Only androidx.glance.* composables (plus compose unit / runtime
+// primitives dp/sp/Composable).
 package com.chronicleapp.chronicle
 
 import android.content.Context
@@ -43,7 +45,6 @@ import com.chronicleapp.chronicle.widget.MealSwitcher
 import com.chronicleapp.chronicle.widget.MenuMeal
 import com.chronicleapp.chronicle.widget.MenuMealDirectionKey
 import com.chronicleapp.chronicle.widget.menuNavBump
-import com.chronicleapp.chronicle.widget.MoreIndicator
 import com.chronicleapp.chronicle.widget.SectionHeader
 import com.chronicleapp.chronicle.widget.StandaloneMenuMealCallback
 import com.chronicleapp.chronicle.widget.VerticalBucket
@@ -51,7 +52,6 @@ import com.chronicleapp.chronicle.widget.VerticalShell
 import com.chronicleapp.chronicle.widget.WidgetSnapshot
 import com.chronicleapp.chronicle.widget.currentVerticalBucket
 import com.chronicleapp.chronicle.widget.int
-import com.chronicleapp.chronicle.widget.isNarrowSlot
 import com.chronicleapp.chronicle.widget.parseMenuMeals
 import com.chronicleapp.chronicle.widget.parseStrings
 import com.chronicleapp.chronicle.widget.resolveMenuMeal
@@ -170,7 +170,13 @@ private fun MenuContent(context: Context, state: CafeteriaMenuWidgetUiState) {
                 EmptyState(palette, R.drawable.ic_widget_menu, state.message)
             is CafeteriaMenuWidgetUiState.Success -> when (currentVerticalBucket()) {
                 VerticalBucket.Tiny -> Tiny(state, palette)
-                VerticalBucket.Compact -> Compact(state, palette)
+                // Compact renders the same full scrolling list as
+                // TallColumn: hosts can display a small-slot composition
+                // in a much taller widget (seen on-device: 120x120 pick
+                // in a ~280dp widget leaving a huge void), and a take(2)
+                // + "+N more" cap would orphan dishes with no way to reach
+                // them. Every dish stays reachable by scrolling instead.
+                VerticalBucket.Compact -> TallColumn(state, palette)
                 VerticalBucket.TallColumn -> TallColumn(state, palette)
                 VerticalBucket.FullPortrait -> FullPortrait(state, palette)
             }
@@ -187,47 +193,8 @@ private fun Tiny(
     TinyRow(palette, null, state.dishes.first())
 }
 
-/** Compact Square (2x2): meal title + two dishes, tight. */
-@Composable
-private fun Compact(
-    state: CafeteriaMenuWidgetUiState.Success,
-    palette: ChroniclePalette,
-) {
-    Column(modifier = GlanceModifier.fillMaxWidth()) {
-        if (state.title.isNotEmpty()) {
-            Text(
-                text = state.title,
-                style = TextStyle(
-                    color = palette.onSurfaceVariant,
-                    fontSize = if (isNarrowSlot()) 10.sp else 11.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
-                maxLines = 1,
-            )
-            Spacer(modifier = GlanceModifier.height(3.dp))
-        }
-        val rows = state.dishes.take(2)
-        for ((i, dish) in rows.withIndex()) {
-            if (i > 0) Spacer(modifier = GlanceModifier.height(3.dp))
-            Text(
-                text = "• $dish",
-                style = TextStyle(
-                    color = palette.onSurface,
-                    fontSize = if (isNarrowSlot()) 12.sp else 13.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
-                maxLines = 1,
-            )
-        }
-        val remaining = state.dishes.size - rows.size
-        if (remaining > 0) {
-            Spacer(modifier = GlanceModifier.height(3.dp))
-            MoreIndicator(palette, remaining)
-        }
-    }
-}
-
-/** Tall Vertical Column (2x3/2x4): title + up to 3 dishes + "+X more". */
+/** Tall Vertical Column (2x3/2x4 — and every Compact slot, see above):
+ * title + full scrolling dish list, no cap, no "+N more". */
 @Composable
 private fun TallColumn(
     state: CafeteriaMenuWidgetUiState.Success,

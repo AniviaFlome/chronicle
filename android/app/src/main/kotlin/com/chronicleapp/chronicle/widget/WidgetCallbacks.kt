@@ -143,7 +143,7 @@ private fun stepMenuMeal(prefs: SharedPreferences, prefix: String, direction: In
     // Same read-modify-write race as hub tabs (see hubTabLock): serialize
     // concurrent steps and commit synchronously.
     synchronized(menuMealLock) {
-        val meals = parseMenuMeals(prefs.str("$prefix.${Keys.MENU_MEALS}"))
+        val meals = cachedParseMenuMeals(prefs.str("$prefix.${Keys.MENU_MEALS}"))
         if (meals.size <= 1) return
         val stored = prefs.str("$prefix.${Keys.MENU_MEAL_KIND}")
         val current = meals.indexOfFirst { it.kind == stored }.takeIf { it >= 0 }
@@ -181,35 +181,6 @@ class StandaloneMenuMealCallback : ActionCallback {
         stepMenuMeal(widgetPrefs(context), Keys.CAFETERIA_MENU, direction)
         menuNavBump.intValue++
         CafeteriaMenuHomeWidget().update(context, glanceId)
-    }
-}
-
-/**
- * Hub menu summary tap: rotate which dish the one-line summary shows.
- * The summary is a single Text node (repeated rows and explicit
- * newlines both mismeasure on-device), so paging is done by swapping
- * its string: first tap keeps dish 0 with a "+N" tail, further taps
- * walk dish 1..N with a "k/N" position tail, then wrap around.
- */
-class HubMenuDishCallback : ActionCallback {
-    override suspend fun onAction(
-        context: Context,
-        glanceId: GlanceId,
-        parameters: ActionParameters,
-    ) {
-        val prefs = widgetPrefs(context)
-        val prefix = Keys.HUB
-        val meals = parseMenuMeals(prefs.str("$prefix.${Keys.MENU_MEALS}"))
-        val defaultIdx = prefs.int("$prefix.${Keys.MENU_MEAL_DEFAULT}", 0)
-        val kind = prefs.str("$prefix.${Keys.MENU_MEAL_KIND}")
-        val meal = resolveMenuMeal(meals, defaultIdx, kind)
-        val count = (meal?.dishes ?: parseStrings(prefs.str("$prefix.${Keys.MENU_ROWS}"))).size
-        if (count <= 1) return
-        val key = "$prefix.${Keys.MENU_DISH_IDX}"
-        val next = (prefs.int(key, 0) + 1) % count
-        prefs.edit().putInt(key, next).commit()
-        hubNavBump.intValue++
-        ChronicleHubHomeWidget().update(context, glanceId)
     }
 }
 

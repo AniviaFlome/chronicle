@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DIAG-PROBE 2: transparent RIPPLE (not shape) as the override. If the
+  flash vanishes, Glance's translator requires a RippleDrawable here and
+  was falling back to the default grey ripple for our shape. If the grey
+  flash persists, the host paints it regardless of our layer. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@android:color/transparent" />

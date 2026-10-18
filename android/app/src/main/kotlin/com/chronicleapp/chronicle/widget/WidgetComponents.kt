@@ -30,7 +30,6 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
-import androidx.glance.action.NoRippleOverride
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.cornerRadius
@@ -64,6 +63,25 @@ val HubDirectionKey = ActionParameters.Key<Int>("direction")
 
 /** ActionParameters key for the menu-meal arrow direction (+1 / -1). */
 val MenuMealDirectionKey = ActionParameters.Key<Int>("mealDirection")
+
+/**
+ * Ripple override that actually suppresses press visuals. Glance 1.2.0's
+ * `NoRippleOverride` is just int 0, which the appwidget translator maps to
+ * the DEFAULT ripple (verified from dex forensics:
+ * NormalizeCompositionTreeKt.transformBackgroundImageAndActionRipple uses the
+ * override id as the ripple drawable, falling back to `glance_ripple` when
+ * it is 0) — so `NoRippleOverride` never suppressed anything and every tap
+ * flashed the stock grey ripple. Pass this transparent drawable instead:
+ * a non-animating fill renders zero press visuals while the tap keeps
+ * working. Use on every tap target that must stay visually silent.
+ *
+ * Plain `val` with a getter, never `const`: the compile-time R class stubs
+ * every id as 0 (real ids only exist at runtime), so a `const` would bake
+ * in 0 and silently re-enable the default ripple — verified the hard way
+ * from the built dex.
+ */
+val NoPressFeedback: Int
+    get() = R.drawable.widget_no_feedback
 
 /**
  * Shared responsive slot grid for all four widgets. Proven on-device
@@ -127,7 +145,7 @@ fun WidgetShell(
             .widgetCornerRadius(context)
             .clickable(
                 onClick = actionStartActivity<MainActivity>(),
-                rippleOverride = NoRippleOverride,
+                rippleOverride = NoPressFeedback,
             ),
         contentAlignment = Alignment.TopStart,
     ) {
@@ -406,7 +424,7 @@ fun ThenLine(
                 modifier = GlanceModifier
                     .fillMaxWidth()
                     .background(fixedProvider(0x00000000L))
-                    .clickable(onClick = expandAction(), rippleOverride = NoRippleOverride),
+                    .clickable(onClick = expandAction(), rippleOverride = NoPressFeedback),
             ) {
                 FilledLookaheadRow(palette, entry.thenWhen, entry.thenName)
             }
@@ -451,7 +469,7 @@ fun ClassHero(
             modifier = GlanceModifier
                 .fillMaxWidth()
                 .background(fixedProvider(0x00000000L))
-                .clickable(onClick = expandAction(), rippleOverride = NoRippleOverride),
+                .clickable(onClick = expandAction(), rippleOverride = NoPressFeedback),
         ) {
             Column(modifier = GlanceModifier.fillMaxWidth()) { title() }
         }
@@ -1021,28 +1039,6 @@ fun WeekCellView(
     }
 }
 
-/** Page dots: selected = accent pill, rest = tonal dots. Centered Row. */
-@Composable
-fun PageDots(palette: ChroniclePalette, count: Int, selected: Int) {
-    if (count <= 1) return
-    Row(
-        modifier = GlanceModifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        for (i in 0 until count.coerceAtMost(7)) {
-            if (i > 0) Spacer(modifier = GlanceModifier.width(6.dp))
-            Box(
-                modifier = GlanceModifier
-                    .width(if (i == selected) 16.dp else 6.dp)
-                    .height(6.dp)
-                    .background(if (i == selected) palette.accent else palette.cardHigh)
-                    .cornerRadius(50.dp),
-            ) {}
-        }
-    }
-}
-
 /**
  * Hub tab arrow: 48.dp tappable chevron cycling enabled tabs.
  * Direction is +1 (next) or -1 (previous), wrap-around in HubTabCallback.
@@ -1085,7 +1081,7 @@ private fun MealArrow(
             .width(boxDp)
             .height(boxDp)
             .background(fixedProvider(0x00000000L))
-            .clickable(onClick = onClick(), rippleOverride = NoRippleOverride),
+            .clickable(onClick = onClick(), rippleOverride = NoPressFeedback),
         contentAlignment = Alignment.Center,
     ) {
         Image(
@@ -1118,7 +1114,7 @@ fun MealSwitcher(
         modifier = GlanceModifier
             .fillMaxWidth()
             .background(fixedProvider(0x00000000L))
-            .clickable(onClick = arrowAction(1), rippleOverride = NoRippleOverride),
+            .clickable(onClick = arrowAction(1), rippleOverride = NoPressFeedback),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showArrows) {

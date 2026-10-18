@@ -9,7 +9,7 @@
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:targetCellWidth="2"
-    android:targetCellHeight="3"
+    android:targetCellHeight="2"
     android:description="@string/home_widget_chronicle_hub_description"
 
     android:previewLayout="@layout/widget_preview_chronicle_hub"
