@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.12.0] - 2026-10-18
 
 ### Fixed
 - Release builds no longer break every widget tap: R8 strips the Glance `ActionCallback` no-arg constructors it can't see used (debug builds never minify), crashing taps with `NoSuchMethodException` — `proguard-rules.pro` now keeps every `*Callback` in the widget package.
