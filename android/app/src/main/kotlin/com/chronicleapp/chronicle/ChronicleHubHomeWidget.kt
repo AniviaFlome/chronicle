@@ -109,7 +109,6 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
                 entry = Samples.nextClass,
                 looks = Samples.looks,
                 expanded = false,
-                dishIdx = 0,
                 agendaRows = Samples.agenda,
                 tasksRows = Samples.tasks,
                 menuRows = Samples.menu,
@@ -196,11 +195,6 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
                 looks = entry?.looks ?: emptyList(),
                 expanded = entry != null && !entry.isSentinel && !snap.stale &&
                     entry.at == prefs.long("$prefix.${Keys.EXPANDED_AT}", -1L),
-                dishIdx = if (sel == TAB_MENU) {
-                    prefs.int("$prefix.${Keys.MENU_DISH_IDX}", 0)
-                } else {
-                    0
-                },
                 agendaRows = if (sel == TAB_AGENDA) {
                     cachedParseTimeRows(prefs.str("$prefix.${Keys.AGENDA_ROWS}"))
                 } else {

@@ -43,8 +43,6 @@ data class HubContentData(
     val looks: List<TimeRow>,
     /** Hero detail expanded (native-owned expand marker matches entry). */
     val expanded: Boolean,
-    /** Menu summary dish cursor (native-owned, rotated by tapping it). */
-    val dishIdx: Int,
     val agendaRows: List<TimeRow>,    val tasksRows: List<TaskRow>,
     val menuRows: List<String>,
     val menuMeals: List<MenuMeal>,
