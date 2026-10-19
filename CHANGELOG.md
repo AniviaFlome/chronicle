@@ -6,8 +6,8 @@
 - Hub dots on 1-column widgets: the whole bottom bar now advances to the next tab (was: a small centered track, so near-misses fell through to the whole-widget tap and opened the app instead of switching). The track keeps the small pill look — the earlier full-width bubble is gone.
 - Room placeholders ("--", "-") are normalized to empty everywhere: the ITU catalog mapping, class editor / quick-edit / slot dialog saves, plus a v13 migration cleaning existing rows (and bumping `updatedAt` so folder sync propagates the cleanup). Widgets and tiles already hide empty rooms.
 - Agenda and Due-tasks widgets can shrink to 1 column again (`minResizeWidth/Height` 180x110 → 40dp like the other widgets).
-- Every class row (hero, then-line, each lookahead row) is tappable to expand a full detail — teacher, room, building and time range — instead of some rows being dead and the rest showing teacher only. Rows with no detail stay plain. The expanded row owns the widget height (quiet copy and rows below drop until collapse) so the detail can never clip at a card edge.
-- Class rows show their location (room · building) under the name without expanding.
+- Next-class detail is always visible instead of hidden behind a tap: the hero shows status · time range · room plus teacher · building, and every row shows its own "time · room" meta. The tap-to-expand machinery is gone (its expansion marker, per-row toggles and grow rule all deleted).
+- 1-column hub: any tap on the widget body advances to the next tab (was: opening the app except on a tiny dots target). Tab content fills the card — the hero, the then-card and its location meta all fit without clipping (compact rows: name + "time · room", height-aware row budget).
 
 ## [1.12.0] - 2026-10-18
 

@@ -378,17 +378,24 @@ fun FilledLookaheadRow(
             Column(modifier = GlanceModifier.fillMaxWidth()) {
                 Text(
                     text = name,
-                    style = TextStyle(color = palette.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold),
-                    maxLines = 2,
+                    style = TextStyle(color = palette.onSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                    // 1 line: at 2 lines the card's meta line clips at the
+                    // widget edge (seen-on-device) — a truncated name + full
+                    // "time · room" meta beats a full name with no location.
+                    maxLines = 1,
                     modifier = GlanceModifier.fillMaxWidth(),
                 )
-                val meta = listOf(where, time).filter { it.isNotEmpty() }
+                val meta = listOf(time, where).filter { it.isNotEmpty() }
                     .joinToString(" · ")
                 if (meta.isNotEmpty()) {
                     Spacer(modifier = GlanceModifier.height(2.dp))
                     Text(
                         text = meta,
-                        style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp),
+                        // 10sp: at 11sp a "Mon 08:40 · C-K3-06[52]" meta
+                        // ellipsizes on a 1-column card (~100dp text) — the
+                        // room tail was the part that vanished (seen
+                        // on-device). Time leads so the "when" never cuts.
+                        style = TextStyle(color = palette.onSurfaceVariant, fontSize = 10.sp),
                         maxLines = 1,
                         modifier = GlanceModifier.fillMaxWidth(),
                     )
@@ -470,8 +477,10 @@ fun ClassHero(
     titleSizeSp: Int,
     thenRow: TimeRow? = null,
 ) {
-    // Narrow slots step the hero down 2sp so titles survive ~200dp widths.
-    val fittedTitleSp = if (isNarrowSlot()) (titleSizeSp - 2).coerceAtLeast(14) else titleSizeSp
+    // Narrow slots step the hero down 4sp so the name, meta and who lines
+    // plus the Then-card all fit a 1x2 body (at 18sp the Then-card's meta
+    // line clipped at the widget edge — seen-on-device).
+    val fittedTitleSp = if (isNarrowSlot()) (titleSizeSp - 4).coerceAtLeast(14) else titleSizeSp
     Text(
         text = entry.className,
         style = TextStyle(color = palette.onSurface, fontSize = fittedTitleSp.sp, fontWeight = FontWeight.Bold),
@@ -481,10 +490,13 @@ fun ClassHero(
         .filter { it.isNotEmpty() }
         .joinToString(" · ")
     if (meta.isNotEmpty()) {
-        Spacer(modifier = GlanceModifier.height(4.dp))
+        Spacer(modifier = GlanceModifier.height(2.dp))
         Text(
             text = meta,
-            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 13.sp),
+            // 10sp: at 11sp/13sp a narrow hero wraps status+range+room to 2
+            // lines and the Then-card's own meta clips below (seen-on-
+            // device); 10sp keeps it one line on 2-column, two on 1-column.
+            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 10.sp),
             maxLines = 2,
         )
     }
@@ -495,7 +507,10 @@ fun ClassHero(
         Spacer(modifier = GlanceModifier.height(2.dp))
         Text(
             text = who,
-            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp),
+            // 10sp, 2 lines: at 11sp/1 line a 1-column hero ellipsized the
+            // teacher ("…CANAR…") — the whole point of the expanded detail
+            // (seen-on-device).
+            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 10.sp),
             maxLines = 2,
             modifier = GlanceModifier.fillMaxWidth(),
         )
@@ -555,16 +570,19 @@ fun SharedClassTab(
     // seen-on-device as 1px rows). The take follows the vertical budget:
     // every shown row must have real room, or Glance squeezes it to a
     // sliver instead of clipping (seen-on-device).
-    val budget = lookRowBudget(leadDp = if (quiet) 86 else 160)
+    val budget = lookRowBudget(leadDp = if (quiet) 65 else 137)
     if (quiet) {
+        // 12sp keeps "No classes today" on one line in a 1-column card
+        // (15sp wrapped it to two and pushed the row budget to zero —
+        // seen-on-device as blank space under the card).
         Text(
             text = entry.className,
             style = TextStyle(
                 color = palette.onSurfaceVariant,
-                fontSize = 15.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
             ),
-            maxLines = 2,
+            maxLines = 1,
         )
         ThenLine(palette, entry, thenRow)
         val shown = next.take(budget)
@@ -598,15 +616,16 @@ fun SharedClassTab(
 /**
  * How many lookahead rows fit after the lead block (quiet copy + Then-card,
  * or the hero block + Then-card). Chrome = shell padding (24) + header (20)
- * + dots bar (48). A compact row measures ~60dp (name up to 2 lines + one
- * meta line + card padding). Rounded down hard: Glance squeezes overflow to
- * slivers instead of clipping (seen-on-device), so a row only renders when
- * it has real room.
+ * + dots bar (48). A compact narrow row measures ~45dp (name 1 line + one
+ * meta line + card padding); quiet lead = one-line copy (16) + Then-card
+ * (45) + gaps; hero lead = title + meta + who (~92) + Then-card (45).
+ * Rounded down hard: Glance squeezes overflow to slivers instead of
+ * clipping (seen-on-device), so a row only renders when it has real room.
  */
 @Composable
 private fun lookRowBudget(leadDp: Int): Int {
     val height = LocalSize.current.height.value
-    return ((height - 92 - leadDp) / 60).toInt().coerceIn(0, 3)
+    return ((height - 92 - leadDp) / 45).toInt().coerceIn(0, 3)
 }
 
 /** One lookahead row rendered through the shared class row. */
