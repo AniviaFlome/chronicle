@@ -263,6 +263,7 @@ void main() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             color_value INTEGER NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1,
             room TEXT,
             uuid TEXT,
             updated_at INTEGER
@@ -274,6 +275,7 @@ void main() {
             day_of_week INTEGER NOT NULL,
             start_minutes INTEGER NOT NULL,
             end_minutes INTEGER NOT NULL,
+            rotation TEXT NOT NULL DEFAULT 'weekly',
             room TEXT,
             uuid TEXT,
             updated_at INTEGER
