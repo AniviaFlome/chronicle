@@ -25,6 +25,7 @@ import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
@@ -358,109 +359,12 @@ fun FilledMiniRow(palette: ChroniclePalette, text: String, colorHex: String) {
  */
 fun lookaheadChipWidth(): Dp = 72.dp
 
-/**
- * Class detail under an expanded hero: teacher + "room · building ·
- * range" as ONE Text node (repeated sibling Texts mismeasure on-device —
- * seen as a squeezed sliver). Blank parts vanish from the join.
- */
-@Composable
-fun RowDetail(
-    palette: ChroniclePalette,
-    teacher: String,
-    room: String,
-    building: String,
-    range: String,
-) {
-    val text = detailText(teacher, room, building, range)
-    if (text.isEmpty()) return
-    Spacer(modifier = GlanceModifier.height(4.dp))
-    Text(
-        text = text,
-        style = TextStyle(color = palette.onSurfaceVariant, fontSize = 10.sp),
-        maxLines = 3,
-        modifier = GlanceModifier.fillMaxWidth(),
-    )
-}
-
-/**
- * One class row (time chip + name + optional where meta) with the shared
- * expand behaviour: tappable when it has any detail to reveal ([at] != 0),
- * tapping toggles a detail line below the card. Every class row in the
- * widgets goes through here so "some rows expand and some don't" can never
- * come back. Rows with no detail render plain (a tappable row that reveals
- * nothing reads as a dead tap). The detail is one Text sibling under the
- * card — inside the card it grows the fill only partially and the tail
- * clips at the card edge (seen-on-device). Safe here because the grow rule
- * in [SharedClassTab] drops the rows underneath first, so the line always
- * has its own room.
- */
-@Composable
-fun ClassDetailRow(
-    palette: ChroniclePalette,
-    time: String,
-    name: String,
-    chipWidth: Dp? = null,
-    at: Long = 0,
-    teacher: String = "",
-    room: String = "",
-    building: String = "",
-    range: String = "",
-    expanded: Boolean = false,
-    expandToggle: ((Long) -> Action)? = null,
-) {
-    // When expanded the detail line already carries room · building, so
-    // the compact where meta drops: it would repeat the room and, worse,
-    // the extra line tips a short widget into overflow (the tail clips at
-    // the card edge — seen-on-device).
-    val where = if (expanded) {
-        ""
-    } else {
-        listOf(room, building).filter { it.isNotEmpty() }.joinToString(" · ")
-    }
-    val detail = detailText(teacher, room, building, range)
-    val toggle = expandToggle
-    if (at == 0L || detail.isEmpty() || toggle == null) {
-        FilledLookaheadRow(palette, time, name, where = where, chipWidth = chipWidth)
-        return
-    }
-    val card: @Composable () -> Unit = {
-        FilledLookaheadRow(palette, time, name, where = where, chipWidth = chipWidth)
-    }
-    if (!expanded) {
-        // Collapsed: emit the card alone. The Column wrapper exists only to
-        // stack the detail under it — kept as a permanent level it squeezes
-        // the NEXT row in the list to a 5px sliver (seen-on-device).
-        Box(
-            modifier = GlanceModifier
-                .fillMaxWidth()
-                .background(fixedProvider(0x00000000L))
-                .clickable(onClick = toggle(at), rippleOverride = NoPressFeedback),
-        ) {
-            card()
-        }
-        return
-    }
-    Column(modifier = GlanceModifier.fillMaxWidth()) {
-        Box(
-            modifier = GlanceModifier
-                .fillMaxWidth()
-                .background(fixedProvider(0x00000000L))
-                .clickable(onClick = toggle(at), rippleOverride = NoPressFeedback),
-        ) {
-            card()
-        }
-        RowDetail(palette, teacher, room, building, range)
-    }
-}
-
-/** Structured lookahead row: tonal time chip + bold name + optional where
- * meta + optional expanded detail (one Text, inside the card). Wide slots
+/** Structured class row: name + one always-visible meta line in narrow
+ * slots ("room · time" — no stacked chip: the chip was a whole extra line
+ * and squeezed a 1x2 hub's second row off, seen on-device); wide slots
  * keep the compact horizontal form with a FIXED chip width so every name
  * in the list starts at the same x (weekday-prefixed chips like "Wed 13:40"
- * are wider than plain "08:40"); narrow slots (~145.dp columns) stack
- * vertically (full-width name first, chip below) because a weekday-prefixed
- * chip ("Mon 08:40") otherwise eats the whole row and the name collapses
- * into a 3-character sliver (seen on-device). */
+ * are wider than plain "08:40"). */
 @Composable
 fun FilledLookaheadRow(
     palette: ChroniclePalette,
@@ -468,7 +372,6 @@ fun FilledLookaheadRow(
     name: String,
     where: String = "",
     chipWidth: Dp? = null,
-    detail: String = "",
 ) {
     FilledBlock(palette, "", radius = 12.dp) {
         if (isNarrowSlot()) {
@@ -479,62 +382,40 @@ fun FilledLookaheadRow(
                     maxLines = 2,
                     modifier = GlanceModifier.fillMaxWidth(),
                 )
-                if (where.isNotEmpty()) {
+                val meta = listOf(where, time).filter { it.isNotEmpty() }
+                    .joinToString(" · ")
+                if (meta.isNotEmpty()) {
                     Spacer(modifier = GlanceModifier.height(2.dp))
                     Text(
-                        text = where,
+                        text = meta,
                         style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp),
                         maxLines = 1,
                         modifier = GlanceModifier.fillMaxWidth(),
                     )
                 }
-                if (time.isNotEmpty()) {
-                    Spacer(modifier = GlanceModifier.height(4.dp))
-                    TonalChip(palette, time)
-                }
-                if (detail.isNotEmpty()) {
-                    Spacer(modifier = GlanceModifier.height(3.dp))
-                    Text(
-                        text = detail,
-                        style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp),
-                        maxLines = 2,
-                        modifier = GlanceModifier.fillMaxWidth(),
-                    )
-                }
             }
         } else {
-            Column(modifier = GlanceModifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (time.isNotEmpty()) {
-                        TonalChip(palette, time, width = chipWidth)
-                        Spacer(modifier = GlanceModifier.width(6.dp))
-                    }
-                    Column(modifier = GlanceModifier.defaultWeight()) {
-                        Text(
-                            text = name,
-                            style = TextStyle(color = palette.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold),
-                            maxLines = 2,
-                            modifier = GlanceModifier.fillMaxWidth(),
-                        )
-                        if (where.isNotEmpty()) {
-                            Spacer(modifier = GlanceModifier.height(2.dp))
-                            Text(
-                                text = where,
-                                style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp),
-                                maxLines = 1,
-                                modifier = GlanceModifier.fillMaxWidth(),
-                            )
-                        }
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (time.isNotEmpty()) {
+                    TonalChip(palette, time, width = chipWidth)
+                    Spacer(modifier = GlanceModifier.width(6.dp))
                 }
-                if (detail.isNotEmpty()) {
-                    Spacer(modifier = GlanceModifier.height(3.dp))
+                Column(modifier = GlanceModifier.defaultWeight()) {
                     Text(
-                        text = detail,
-                        style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp),
+                        text = name,
+                        style = TextStyle(color = palette.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold),
                         maxLines = 2,
                         modifier = GlanceModifier.fillMaxWidth(),
                     )
+                    if (where.isNotEmpty()) {
+                        Spacer(modifier = GlanceModifier.height(2.dp))
+                        Text(
+                            text = where,
+                            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp),
+                            maxLines = 1,
+                            modifier = GlanceModifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }
@@ -544,39 +425,28 @@ fun FilledLookaheadRow(
 /**
  * Then-line for a timeline entry: structured name/when parts when pushed
  * (no baked-in "Then" prefix), legacy composed-string split as fallback
- * for old pushes. A full class row like any other: its expand key and
- * detail come from [thenRow] (the looks[0] duplicate — same class by
- * contract). Old pushes carry no row fields; quiet entries then fall back
- * to the entry-level teacher (which is the next class's teacher there).
+ * for old pushes. A plain class row like any other: its where meta comes
+ * from [thenRow] (the looks[0] duplicate — same class by contract), with
+ * the quiet entry's own fields as the old-push fallback (the quiet entry
+ * carries tomorrow's teacher/room there).
  */
 @Composable
 fun ThenLine(
     palette: ChroniclePalette,
     entry: TimedEntry,
     thenRow: TimeRow? = null,
-    expandedAt: Long = -1L,
-    expandToggle: ((Long) -> Action)? = null,
 ) {
     if (entry.thenName.isNotEmpty()) {
         Spacer(modifier = GlanceModifier.height(4.dp))
-        val row = thenRow?.takeIf { it.at != 0L }
         val quietFallback = entry.startLabel.isEmpty() && entry.teacher.isNotEmpty()
-        val at = row?.at ?: if (quietFallback) entry.at else 0L
-        val teacher = row?.teacher ?: if (quietFallback) entry.teacher else ""
-        val room = row?.room ?: if (quietFallback) entry.room else ""
-        val building = row?.building ?: if (quietFallback) entry.building else ""
-        val range = row?.range ?: if (quietFallback) entry.range else ""
-        ClassDetailRow(
+        val room = thenRow?.room ?: if (quietFallback) entry.room else ""
+        val building = thenRow?.building ?: if (quietFallback) entry.building else ""
+        FilledLookaheadRow(
             palette = palette,
             time = entry.thenWhen,
             name = entry.thenName,
-            at = at,
-            teacher = teacher,
-            room = room,
-            building = building,
-            range = range,
-            expanded = at != 0L && expandedAt == at,
-            expandToggle = expandToggle,
+            where = listOf(room, building).filter { it.isNotEmpty() }
+                .joinToString(" · "),
         )
     } else if (entry.thenLine.isNotEmpty()) {
         Spacer(modifier = GlanceModifier.height(4.dp))
@@ -585,11 +455,11 @@ fun ThenLine(
 }
 
 /**
- * Shared class hero: big title, gray status/time/room meta, then-line.
- * The lookahead list itself lives in [SharedClassTab] (scrollable or
- * static depending on bucket). Tapping the title toggles the hero's
- * detail (teacher + where + when) when it has any — rows without detail
- * render non-tappable instead of dead taps.
+ * Shared class hero: big title, gray status/time/room meta, an
+ * always-visible teacher · building line, then-line. The lookahead list
+ * itself lives in [SharedClassTab] (scrollable or static depending on
+ * bucket). Nothing hides behind a tap — every field the entry carries is
+ * on screen.
  */
 @Composable
 fun ClassHero(
@@ -599,35 +469,14 @@ fun ClassHero(
     nowMs: Long,
     titleSizeSp: Int,
     thenRow: TimeRow? = null,
-    expandedAt: Long = -1L,
-    expandToggle: ((Long) -> Action)? = null,
-    showThen: Boolean = true,
 ) {
     // Narrow slots step the hero down 2sp so titles survive ~200dp widths.
     val fittedTitleSp = if (isNarrowSlot()) (titleSizeSp - 2).coerceAtLeast(14) else titleSizeSp
-    val title = @Composable {
-        Text(
-            text = entry.className,
-            style = TextStyle(color = palette.onSurface, fontSize = fittedTitleSp.sp, fontWeight = FontWeight.Bold),
-            maxLines = 2,
-        )
-    }
-    val heroDetail = detailText(entry.teacher, entry.room, entry.building, entry.range)
-    val heroToggle = if (heroDetail.isEmpty()) null else expandToggle
-    // The whole title is the tap target (a bare Text takes no click
-    // action); without an action it renders as a plain title.
-    if (heroToggle == null) {
-        title()
-    } else {
-        Box(
-            modifier = GlanceModifier
-                .fillMaxWidth()
-                .background(fixedProvider(0x00000000L))
-                .clickable(onClick = heroToggle(entry.at), rippleOverride = NoPressFeedback),
-        ) {
-            Column(modifier = GlanceModifier.fillMaxWidth()) { title() }
-        }
-    }
+    Text(
+        text = entry.className,
+        style = TextStyle(color = palette.onSurface, fontSize = fittedTitleSp.sp, fontWeight = FontWeight.Bold),
+        maxLines = 2,
+    )
     val meta = listOf(liveStatus(entry, snap, nowMs), entry.detailLine)
         .filter { it.isNotEmpty() }
         .joinToString(" · ")
@@ -639,14 +488,19 @@ fun ClassHero(
             maxLines = 2,
         )
     }
-    if (heroToggle != null && expandedAt == entry.at) {
-        RowDetail(palette, entry.teacher, entry.room, entry.building, entry.range)
+    val who = listOf(entry.teacher, entry.building)
+        .filter { it.isNotEmpty() }
+        .joinToString(" · ")
+    if (who.isNotEmpty()) {
+        Spacer(modifier = GlanceModifier.height(2.dp))
+        Text(
+            text = who,
+            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp),
+            maxLines = 2,
+            modifier = GlanceModifier.fillMaxWidth(),
+        )
     }
-    // The then-line sits below the hero: when the hero itself is the
-    // expanded row it drops too (see the grow rule in SharedClassTab).
-    if (showThen) {
-        ThenLine(palette, entry, thenRow, expandedAt, expandToggle)
-    }
+    ThenLine(palette, entry, thenRow)
 }
 
 /**
@@ -671,8 +525,6 @@ fun SharedClassTab(
     nowMs: Long,
     looks: List<TimeRow>,
     compact: Boolean = false,
-    expandedAt: Long = -1L,
-    expandToggle: ((Long) -> Action)? = null,
 ) {
     if (entry == null || entry.isSentinel || snap.stale) {
         EmptyState(
@@ -690,72 +542,35 @@ fun SharedClassTab(
     // The quiet entry still carries tomorrow in thenName/thenWhen ("tomorrow
     // rides in the Then-line") plus the classes after that in looks — render
     // both, otherwise tall widgets show one line over a large blank void.
-    // Quiet always renders the static take-2 + "+N more" form (never the
-    // scrolling LazyColumn): the hub's tab container is wrap-content, where
-    // a weight-bound lazy list mismeasures rows past the first two
-    // (seen on-device: 1px-tall third row). Two rows + an indicator always
-    // fit and always measure. The hub's nested looks repeat tomorrow as
-    // looks[0], so drop rows duplicating the Then-line.
+    // The hub's nested looks repeat tomorrow as looks[0], so drop rows
+    // duplicating the Then-line.
     val quiet = entry.startLabel.isEmpty()
-    // The Then-line class rides in looks[0] (same class by contract) — its
-    // row carries the expand key + detail; old pushes fall back to the
-    // quiet entry's teacher (see ThenLine).
+    // The Then-line class rides in looks[0] (same class by contract) —
+    // its row carries the where meta; old pushes fall back to the quiet
+    // entry's own fields (see ThenLine).
     val thenRow = looks.firstOrNull { it.time == entry.thenWhen && it.name == entry.thenName }
-    // An expanded row owns the widget's height: rows BELOW it are dropped
-    // until collapse. A short widget cannot fit an expanded card plus the
-    // full list, and Glance squeezes the overflow to slivers instead of
-    // clipping (seen on-device: detail text cut at the card edge).
-    val thenAt = thenRow?.takeIf { it.at != 0L }?.at
-    val expandedThen = thenAt != null && expandedAt == thenAt
-    val expandedIdx = looks.indexOfFirst { it.at != 0L && it.at == expandedAt }
-    val heroExpanded = entry != null && !entry.isSentinel && expandedAt != 0L &&
-        expandedAt == entry.at
     val next = looks.filterNot { it.time == entry.thenWhen && it.name == entry.thenName }
-    val expandedNextIdx = next.indexOfFirst { it.at != 0L && it.at == expandedAt }
+    // Static takes (never a LazyColumn here: the hub's tab container
+    // mismeasures weight-bound lazy lists past the second row —
+    // seen-on-device as 1px rows). The take follows the vertical budget:
+    // every shown row must have real room, or Glance squeezes it to a
+    // sliver instead of clipping (seen-on-device).
+    val budget = lookRowBudget(leadDp = if (quiet) 86 else 160)
     if (quiet) {
-        // The quiet status copy ("No classes today") is the first thing to
-        // go when a row expands: the expanded card needs the height, and a
-        // short widget otherwise clips the detail tail (seen-on-device).
-        if (!(expandedThen || expandedNextIdx >= 0)) {
-            Text(
-                text = entry.className,
-                style = TextStyle(
-                    color = palette.onSurfaceVariant,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
-                maxLines = 2,
-            )
-        }
-        ThenLine(palette, entry, thenRow, expandedAt, expandToggle)
-        val nextVisible = when {
-            expandedThen -> emptyList()
-            expandedNextIdx >= 0 -> next.take(expandedNextIdx + 1)
-            else -> next
-        }
-        if (nextVisible.isNotEmpty()) {
+        Text(
+            text = entry.className,
+            style = TextStyle(
+                color = palette.onSurfaceVariant,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+            ),
+            maxLines = 2,
+        )
+        ThenLine(palette, entry, thenRow)
+        val shown = next.take(budget)
+        for ((i, row) in shown.withIndex()) {
             Spacer(modifier = GlanceModifier.height(6.dp))
-            // Narrow stacked rows are ~3x taller than wide horizontal ones:
-            // the Then-card already takes the one row a narrow widget fits,
-            // and a squeezed row mismeasures into a 5px sliver instead of
-            // clipping (seen-on-device), so narrow renders no further rows.
-            // Wide widgets keep two rows plus the indicator. An expanded row
-            // shows every row up to itself and no indicator.
-            val narrow = isNarrowSlot()
-            val growing = expandedThen || expandedNextIdx >= 0
-            val shown = if (growing) {
-                nextVisible
-            } else {
-                nextVisible.take(if (narrow) 0 else 2)
-            }
-            for ((i, row) in shown.withIndex()) {
-                if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
-                LookRow(palette, row, expandedAt, expandToggle)
-            }
-            if (!narrow && !growing) {
-                Spacer(modifier = GlanceModifier.height(6.dp))
-                MoreIndicator(palette, next.size - shown.size)
-            }
+            LookRow(palette, row)
         }
     } else {
         ClassHero(
@@ -765,84 +580,45 @@ fun SharedClassTab(
             nowMs = nowMs,
             titleSizeSp = 20,
             thenRow = thenRow,
-            expandedAt = expandedAt,
-            expandToggle = expandToggle,
-            showThen = !heroExpanded,
         )
         // The pushed looks start with the Then-line class itself
         // (looks[0] == thenName/thenWhen by contract), so drop it here —
         // otherwise the hero's Then-line and the first lookahead row show
-        // the same class twice (seen on-device: Viyolonsel I twice).
+        // the same class twice (seen-on-device: Viyolonsel I twice).
         // The quiet branch above already does the same filtering.
-        val upcoming = if (entry.thenName.isEmpty() && entry.thenWhen.isEmpty()) {
-            looks
-        } else {
-            looks.filterNot { it.time == entry.thenWhen && it.name == entry.thenName }
-        }
-        // Same grow rule as the quiet branch: an expanded row keeps rows
-        // up to itself and drops the ones below (the card grows; the tail
-        // would squeeze to slivers in a short widget).
-        val expandedUpcomingIdx = upcoming.indexOfFirst { it.at != 0L && it.at == expandedAt }
-        val growing = heroExpanded || expandedThen || expandedUpcomingIdx >= 0
-        val upcomingVisible = when {
-            heroExpanded || expandedThen -> emptyList()
-            expandedUpcomingIdx >= 0 -> upcoming.take(expandedUpcomingIdx + 1)
-            else -> upcoming
-        }
-        if (upcomingVisible.isNotEmpty()) {
+        val upcoming = next
+        val shown = upcoming.take(budget)
+        for ((i, row) in shown.withIndex()) {
             Spacer(modifier = GlanceModifier.height(6.dp))
-            if (compact) {
-                val shown = if (growing) upcomingVisible else upcomingVisible.take(2)
-                for ((i, row) in shown.withIndex()) {
-                    if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
-                    LookRow(palette, row, expandedAt, expandToggle)
-                }
-                if (!growing) {
-                    Spacer(modifier = GlanceModifier.height(6.dp))
-                    MoreIndicator(palette, upcoming.size - shown.size)
-                }
-            } else {
-                // Plain wrapper: it only exists so the weight below resolves
-                // inside a Column scope (a bare weight has no scope here).
-                // The weight itself binds against the outer bounded shell —
-                // the same arrangement the verified menu lists use. Items
-                // wrap in their own Column too: multi-root lazy items do
-                // not stack reliably (gap spacers collapse to zero).
-                Column(modifier = GlanceModifier.fillMaxWidth()) {
-                    LazyColumn(modifier = GlanceModifier.defaultWeight()) {
-                        items(upcomingVisible.size) { i ->
-                            Column(modifier = GlanceModifier.fillMaxWidth()) {
-                                if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
-                                LookRow(palette, upcomingVisible[i], expandedAt, expandToggle)
-                            }
-                        }
-                    }
-                }
-            }
+            LookRow(palette, row)
         }
     }
 }
 
-/** One lookahead row rendered through the shared expandable class row. */
+/**
+ * How many lookahead rows fit after the lead block (quiet copy + Then-card,
+ * or the hero block + Then-card). Chrome = shell padding (24) + header (20)
+ * + dots bar (48). A compact row measures ~60dp (name up to 2 lines + one
+ * meta line + card padding). Rounded down hard: Glance squeezes overflow to
+ * slivers instead of clipping (seen-on-device), so a row only renders when
+ * it has real room.
+ */
 @Composable
-private fun LookRow(
-    palette: ChroniclePalette,
-    row: TimeRow,
-    expandedAt: Long,
-    expandToggle: ((Long) -> Action)?,
-) {
-    ClassDetailRow(
+private fun lookRowBudget(leadDp: Int): Int {
+    val height = LocalSize.current.height.value
+    return ((height - 92 - leadDp) / 60).toInt().coerceIn(0, 3)
+}
+
+/** One lookahead row rendered through the shared class row. */
+@Composable
+private fun LookRow(palette: ChroniclePalette, row: TimeRow) {
+    FilledLookaheadRow(
         palette = palette,
         time = row.time,
         name = row.name,
+        where = listOf(row.room, row.building).filter { it.isNotEmpty() }
+            .joinToString(" · "),
         chipWidth = lookaheadChipWidth(),
-        at = row.at,
-        teacher = row.teacher,
-        room = row.room,
-        building = row.building,
-        range = row.range,
-        expanded = row.at != 0L && expandedAt == row.at,
-        expandToggle = expandToggle,
     )
 }
 

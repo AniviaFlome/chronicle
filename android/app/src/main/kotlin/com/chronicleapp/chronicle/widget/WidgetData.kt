@@ -30,9 +30,6 @@ object Keys {
 
     // NextClass.
     const val TIMED_DATA = "timedData"
-    // Native-owned expanded-entry marker (epoch-ms key of the expanded
-    // timeline entry, -1 = collapsed); never pushed, like SELECTED_TAB.
-    const val EXPANDED_AT = "expandedAt"
     // Native-owned hub menu dish cursor (index into the shown meal's
     // dishes, rotated by tapping the summary); never pushed.
     const val MENU_DISH_IDX = "menuDishIdx"
@@ -113,17 +110,6 @@ data class TimedEntry(
     val range: String = "",
 )
 
-/**
- * Class detail for expanded rows/heroes: teacher + "room · building ·
- * range" joined into ONE string (single Text nodes measure reliably;
- * repeated sibling Texts mismeasure — seen as a squeezed sliver). Blank
- * parts vanish from the join; empty when nothing is set.
- */
-fun detailText(teacher: String, room: String, building: String, range: String): String =
-    listOf(
-        teacher,
-        listOf(room, building, range).filter { it.isNotEmpty() }.joinToString(" · "),
-    ).filter { it.isNotEmpty() }.joinToString(" · ")
 
 /** Generic time+name row (agenda days, hub agenda/looks). */
 data class TimeRow(

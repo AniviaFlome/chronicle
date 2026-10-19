@@ -42,10 +42,8 @@ import com.chronicleapp.chronicle.widget.ChroniclePalette
 import com.chronicleapp.chronicle.widget.ClassRow
 import com.chronicleapp.chronicle.widget.DishRow
 import com.chronicleapp.chronicle.widget.EmptyState
-import com.chronicleapp.chronicle.widget.ExpandAtKey
 import com.chronicleapp.chronicle.widget.Hairline
 import com.chronicleapp.chronicle.widget.HubDirectionKey
-import com.chronicleapp.chronicle.widget.HubClassExpandCallback
 import com.chronicleapp.chronicle.widget.HubTabCallback
 import com.chronicleapp.chronicle.widget.MenuMeal
 import com.chronicleapp.chronicle.widget.MenuStepArrow
@@ -109,7 +107,6 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
                 sel = TAB_CLASS,
                 entry = Samples.nextClass,
                 looks = Samples.looks,
-                expandedAt = -1L,
                 agendaRows = Samples.agenda,
                 tasksRows = Samples.tasks,
                 menuRows = Samples.menu,
@@ -194,7 +191,6 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
                 sel = sel,
                 entry = entry,
                 looks = entry?.looks ?: emptyList(),
-                expandedAt = prefs.long("$prefix.${Keys.EXPANDED_AT}", -1L),
                 agendaRows = if (sel == TAB_AGENDA) {
                     cachedParseTimeRows(prefs.str("$prefix.${Keys.AGENDA_ROWS}"))
                 } else {
@@ -248,12 +244,25 @@ private fun HubContent(context: Context, state: HubWidgetUiState) {
     val barData = (state as? HubWidgetUiState.Success)
         ?.takeUnless { tiny }
         ?.content
+    // Narrow hub: a tap ANYWHERE (body, header, shell padding) advances one
+    // tab instead of opening the app — on a 1x2 there is no blank corner to
+    // spare for an app-open target, and near-miss taps were the whole
+    // "can't switch pages" complaint. The dots bar keeps its own +1 (same
+    // action). Wide hub keeps the app-open shell tap plus its chevrons.
+    val shellClick = if (isNarrowSlot() && barData != null) {
+        actionRunCallback<HubTabCallback>(
+            actionParametersOf(HubDirectionKey to 1),
+        )
+    } else {
+        null
+    }
     VerticalShell(
         context,
         palette,
         snap.opacity,
         paddingDp = if (tiny) 8 else 12,
         bottomBar = if (barData == null) null else ({ TabBar(context, palette, barData) }),
+        shellClick = shellClick,
     ) {
         when (state) {
             is HubWidgetUiState.Loading ->
@@ -398,16 +407,6 @@ private fun HubColumn(
                             nowMs,
                             data.looks,
                             compact = currentVerticalBucket() == VerticalBucket.Compact,
-                            expandedAt = data.expandedAt,
-                            expandToggle = data.entry
-                                ?.takeUnless { it.isSentinel || data.snap.stale }
-                                ?.let { _ ->
-                                    { at: Long ->
-                                        actionRunCallback<HubClassExpandCallback>(
-                                            actionParametersOf(ExpandAtKey to at),
-                                        )
-                                    }
-                                },
                         )
                     ChronicleHubHomeWidget.TAB_AGENDA ->
                         if (data.agendaRows.isEmpty()) {

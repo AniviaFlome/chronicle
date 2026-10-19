@@ -41,9 +41,6 @@ data class HubContentData(
     val sel: Int,
     val entry: TimedEntry?,
     val looks: List<TimeRow>,
-    /** Hero/row detail expanded: the native-owned expand marker value
-     *  (per-row keys); rows compare their own `at` against it. */
-    val expandedAt: Long,
     val agendaRows: List<TimeRow>,    val tasksRows: List<TaskRow>,
     val menuRows: List<String>,
     val menuMeals: List<MenuMeal>,

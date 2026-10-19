@@ -24,9 +24,7 @@ import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxWidth
 import com.chronicleapp.chronicle.widget.ChroniclePalette
 import com.chronicleapp.chronicle.widget.EmptyState
-import com.chronicleapp.chronicle.widget.ExpandAtKey
 import com.chronicleapp.chronicle.widget.Keys
-import com.chronicleapp.chronicle.widget.NextClassExpandCallback
 import com.chronicleapp.chronicle.widget.Samples
 import com.chronicleapp.chronicle.widget.SharedClassTab
 import com.chronicleapp.chronicle.widget.TimeRow
@@ -120,21 +118,6 @@ private fun NextClassContent(context: Context, state: NextClassWidgetUiState) {
     val palette = resolvePalette(context, snap.useYou, snap.themeCode)
     val tiny = state is NextClassWidgetUiState.Success &&
         currentVerticalBucket() == VerticalBucket.Tiny
-    // Hero/row expand state: native-owned marker (per-row epoch keys,
-    // -1 = collapsed). Tiny strips stay untappable one-liners.
-    val success = state as? NextClassWidgetUiState.Success
-    val hero = success?.hero
-    val expandedAt = HomeWidgetPlugin.getData(context)
-        .long("${Keys.NEXT_CLASS}.${Keys.EXPANDED_AT}", -1L)
-    val expandToggle: ((Long) -> Action)? = hero
-        ?.takeUnless { it.isSentinel }
-        ?.let { _ ->
-            { at: Long ->
-                actionRunCallback<NextClassExpandCallback>(
-                    actionParametersOf(ExpandAtKey to at),
-                )
-            }
-        }
     VerticalShell(context, palette, snap.opacity, paddingDp = if (tiny) 8 else 12) {
         when (state) {
             is NextClassWidgetUiState.Loading ->
@@ -145,9 +128,9 @@ private fun NextClassContent(context: Context, state: NextClassWidgetUiState) {
                 EmptyState(palette, R.drawable.ic_widget_event_available, state.message)
             is NextClassWidgetUiState.Success -> when (currentVerticalBucket()) {
                 VerticalBucket.Tiny -> Tiny(state, palette)
-                VerticalBucket.Compact -> Compact(state, palette, expandedAt, expandToggle)
-                VerticalBucket.TallColumn -> TallColumn(state, palette, expandedAt, expandToggle)
-                VerticalBucket.FullPortrait -> FullPortrait(state, palette, expandedAt, expandToggle)
+                VerticalBucket.Compact -> Compact(state, palette)
+                VerticalBucket.TallColumn -> TallColumn(state, palette)
+                VerticalBucket.FullPortrait -> FullPortrait(state, palette)
             }
         }
     }
@@ -167,13 +150,11 @@ private fun Tiny(
 private fun Compact(
     state: NextClassWidgetUiState.Success,
     palette: ChroniclePalette,
-    expandedAt: Long = -1L,
-    expandToggle: ((Long) -> Action)? = null,
 ) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
         SharedClassTab(
             palette, state.hero, state.snap, state.nowMs, state.upcoming,
-            compact = true, expandedAt = expandedAt, expandToggle = expandToggle,
+            compact = true,
         )
     }
 }
@@ -183,13 +164,10 @@ private fun Compact(
 private fun TallColumn(
     state: NextClassWidgetUiState.Success,
     palette: ChroniclePalette,
-    expandedAt: Long = -1L,
-    expandToggle: ((Long) -> Action)? = null,
 ) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
         SharedClassTab(
             palette, state.hero, state.snap, state.nowMs, state.upcoming,
-            expandedAt = expandedAt, expandToggle = expandToggle,
         )
     }
 }
@@ -199,13 +177,10 @@ private fun TallColumn(
 private fun FullPortrait(
     state: NextClassWidgetUiState.Success,
     palette: ChroniclePalette,
-    expandedAt: Long = -1L,
-    expandToggle: ((Long) -> Action)? = null,
 ) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
         SharedClassTab(
             palette, state.hero, state.snap, state.nowMs, state.upcoming,
-            expandedAt = expandedAt, expandToggle = expandToggle,
         )
     }
 }

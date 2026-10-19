@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalSize
+import androidx.glance.action.Action
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.SizeMode
@@ -149,6 +150,11 @@ fun isNarrowSlot(): Boolean = LocalSize.current.width < 200.dp
  * inset: fully flush bars get their dots clipped by some hosts).
  * Widgets without a bar pass null and get
  * the exact legacy tree (single padded box).
+ *
+ * [shellClick] replaces the whole-widget app-open tap when set — the
+ * narrow hub passes its next-tab action so a tap anywhere (including the
+ * shell padding) advances a page instead of opening the app. Child
+ * clickables (the dots bar) still win on their own bounds.
  */
 @Composable
 fun VerticalShell(
@@ -157,6 +163,7 @@ fun VerticalShell(
     opacity: Int,
     paddingDp: Int = 12,
     bottomBar: (@Composable () -> Unit)? = null,
+    shellClick: Action? = null,
     content: @Composable () -> Unit,
 ) {
     Box(
@@ -165,7 +172,7 @@ fun VerticalShell(
             .background(widgetBg(context, palette.bg, opacity))
             .cornerRadius(24.dp)
             .clickable(
-                onClick = actionStartActivity<MainActivity>(),
+                onClick = shellClick ?: actionStartActivity<MainActivity>(),
                 rippleOverride = NoPressFeedback,
             ),
         contentAlignment = Alignment.TopStart,
