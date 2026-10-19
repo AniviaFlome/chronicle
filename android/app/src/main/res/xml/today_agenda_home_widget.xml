@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Hand-maintained appwidget-provider (no codegen). Keep the preview* and
-     minResize* attributes in sync with the other three widget XMLs. -->
+     minResize* attributes in sync with the other widget XMLs (all 40dp:
+     narrow layouts degrade gracefully, and hosts must not refuse a
+     1-column shrink while other widgets allow it). -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:initialLayout="@layout/glance_default_loading_layout"
     android:minWidth="110dp"
@@ -14,6 +16,6 @@
 
     android:previewLayout="@layout/widget_preview_today_agenda"
     android:previewImage="@drawable/widget_preview_today_agenda_img"
-    android:minResizeWidth="180dp"
-    android:minResizeHeight="110dp"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
 />

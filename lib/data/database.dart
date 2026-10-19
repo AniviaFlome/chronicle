@@ -35,7 +35,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   static QueryExecutor _openConnection() {
     return driftDatabase(
@@ -216,6 +216,23 @@ class AppDatabase extends _$AppDatabase {
         // University course code on classes (nullable, no backfill:
         // null = no code entered, widgets show the name alone).
         await _addColumnIfMissing(m, classes, classes.courseCode);
+      }
+      if (from < 13) {
+        // Placeholder rooms ("--", "-") mean "no room": normalize to NULL
+        // so they never render. Bumps updatedAt so folder sync propagates
+        // the cleanup (equal updatedAt + different content would not
+        // merge). Idempotent: re-running matches zero rows.
+        final now = DateTime.now().millisecondsSinceEpoch;
+        await customStatement(
+          'UPDATE classes SET room = NULL, updated_at = ? '
+          "WHERE TRIM(room) IN ('--', '-')",
+          [now],
+        );
+        await customStatement(
+          'UPDATE schedule_items SET room = NULL, updated_at = ? '
+          "WHERE TRIM(room) IN ('--', '-')",
+          [now],
+        );
       }
     },
     beforeOpen: (_) => customStatement('PRAGMA foreign_keys = ON'),

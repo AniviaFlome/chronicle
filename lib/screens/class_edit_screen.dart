@@ -13,6 +13,7 @@ import '../services/course_catalog/course_catalog.dart';
 import '../services/course_catalog/itu_obs.dart';
 import '../theme.dart';
 import '../utils/time_format.dart';
+import '../utils/room_format.dart';
 import '../utils/ui_feedback.dart';
 import 'attachment_panel.dart';
 import 'error_dialog.dart';
@@ -282,8 +283,9 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
       if (_teacher.text.trim().isEmpty && section.instructor.isNotEmpty) {
         _teacher.text = section.instructor;
       }
-      if (_room.text.trim().isEmpty && section.room.isNotEmpty) {
-        _room.text = section.room;
+      final sectionRoom = cleanRoom(section.room);
+      if (_room.text.trim().isEmpty && sectionRoom != null) {
+        _room.text = sectionRoom;
       }
       if (_building.text.trim().isEmpty && section.building.isNotEmpty) {
         _building.text = section.building;
@@ -299,7 +301,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
             dayOfWeek: s.weekday,
             startMinutes: s.startMinutes,
             endMinutes: s.endMinutes,
-            room: s.room.isEmpty ? null : s.room,
+            room: cleanRoom(s.room),
           ),
       ];
     });
@@ -393,7 +395,7 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
       courseCode: Value(_emptyToNull(_courseCode.text)),
       teacher: Value(_emptyToNull(_teacher.text)),
       teacherEmail: Value(_emptyToNull(_email.text)),
-      room: Value(_emptyToNull(_room.text)),
+      room: Value(cleanRoom(_room.text)),
       building: Value(_emptyToNull(_building.text)),
       module: Value(_emptyToNull(_module.text)),
       onlineLink: Value(_emptyToNull(_onlineLink.text)),

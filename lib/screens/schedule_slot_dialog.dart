@@ -9,6 +9,7 @@ import '../data/tables.dart';
 import '../domain/schedule_models.dart' as engine;
 import '../l10n/l10n.dart';
 import '../providers.dart';
+import '../utils/room_format.dart';
 import '../utils/time_format.dart';
 
 /// In-memory meeting-time data collected by [ScheduleSlotDialog].
@@ -229,7 +230,7 @@ class _ScheduleSlotDialogState extends ConsumerState<ScheduleSlotDialog> {
         dayOfWeek: _dayOfWeek,
         startMinutes: startM,
         endMinutes: endM,
-        room: _room.text.trim().isEmpty ? null : _room.text.trim(),
+        room: cleanRoom(_room.text),
         rotation: _rotation,
         weekParity: _rotation == RotationKind.weekAb ? _parity : null,
         cycleLength: _rotation == RotationKind.custom ? _cycleLength : null,

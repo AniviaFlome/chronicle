@@ -252,4 +252,89 @@ void main() {
 
     await dir.delete(recursive: true);
   });
+
+  test('v13 normalizes placeholder rooms to null and bumps updatedAt', () async {
+    final dir = await Directory.systemTemp.createTemp('chronicle-mig13');
+    final path = '${dir.path}/v12.sqlite';
+    final setup = sqlite.sqlite3.open(path);
+    setup.execute('PRAGMA foreign_keys = OFF');
+    setup.execute('''
+          CREATE TABLE classes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            color_value INTEGER NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1,
+            room TEXT,
+            uuid TEXT,
+            updated_at INTEGER
+          )''');
+    setup.execute('''
+          CREATE TABLE schedule_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            class_id INTEGER NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
+            day_of_week INTEGER NOT NULL,
+            start_minutes INTEGER NOT NULL,
+            end_minutes INTEGER NOT NULL,
+            rotation TEXT NOT NULL DEFAULT 'weekly',
+            room TEXT,
+            uuid TEXT,
+            updated_at INTEGER
+          )''');
+    setup.execute(
+      "INSERT INTO classes (name, color_value, room, uuid, updated_at) VALUES "
+      "('Dash', 1, '--', 'u1', 1000), "
+      "('Single', 1, '-', 'u2', 1000), "
+      "('Padded', 1, ' -- ', 'u3', 1000), "
+      "('Real', 1, 'C-K3-08[60]', 'u4', 1000), "
+      "('Empty', 1, NULL, 'u5', 1000)",
+    );
+    setup.execute(
+      "INSERT INTO schedule_items (class_id, day_of_week, start_minutes, "
+      "end_minutes, room, uuid, updated_at) VALUES "
+      "(1, 1, 540, 600, '--', 's1', 1000), "
+      "(4, 1, 540, 600, 'C-K3-08[60]', 's2', 1000)",
+    );
+    setup.execute('PRAGMA user_version = 12');
+    setup.close();
+
+    final db = AppDatabase(NativeDatabase(File(path)));
+    addTearDown(db.close);
+
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data['user_version'], 13);
+
+    final classes = await db.select(db.classes).get();
+    final byName = {for (final c in classes) c.name: c};
+    expect(byName['Dash']!.room, isNull);
+    expect(byName['Single']!.room, isNull);
+    expect(byName['Padded']!.room, isNull);
+    expect(byName['Real']!.room, 'C-K3-08[60]');
+    expect(byName['Empty']!.room, isNull);
+    // Cleanup propagates through folder sync: the bump marks cleaned rows
+    // newer, untouched rows keep their stamp.
+    for (final name in ['Dash', 'Single', 'Padded']) {
+      expect(byName[name]!.updatedAt, greaterThan(1000));
+    }
+    expect(byName['Real']!.updatedAt, 1000);
+    expect(byName['Empty']!.updatedAt, 1000);
+
+    final slots = await db.select(db.scheduleItems).get();
+    final byUuid = {for (final s in slots) s.uuid: s};
+    expect(byUuid['s1']!.room, isNull);
+    expect(byUuid['s1']!.updatedAt, greaterThan(1000));
+    expect(byUuid['s2']!.room, 'C-K3-08[60]');
+    expect(byUuid['s2']!.updatedAt, 1000);
+
+    // Re-running the step is a no-op (idempotent for killed migrations).
+    final db2 = AppDatabase(NativeDatabase(File(path)));
+    addTearDown(db2.close);
+    final again = await db2.select(db2.classes).get();
+    expect(again, hasLength(5));
+    expect(
+      again.where((c) => c.room != null).map((c) => c.name),
+      ['Real'],
+    );
+
+    await dir.delete(recursive: true);
+  });
 }

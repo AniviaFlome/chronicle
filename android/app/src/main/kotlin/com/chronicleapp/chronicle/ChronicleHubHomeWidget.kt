@@ -44,7 +44,6 @@ import com.chronicleapp.chronicle.widget.DishRow
 import com.chronicleapp.chronicle.widget.EmptyState
 import com.chronicleapp.chronicle.widget.ExpandAtKey
 import com.chronicleapp.chronicle.widget.Hairline
-import com.chronicleapp.chronicle.widget.fixedProvider
 import com.chronicleapp.chronicle.widget.HubDirectionKey
 import com.chronicleapp.chronicle.widget.HubClassExpandCallback
 import com.chronicleapp.chronicle.widget.HubTabCallback
@@ -110,7 +109,6 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
                 entry = Samples.nextClass,
                 looks = Samples.looks,
                 expanded = false,
-                dishIdx = 0,
                 agendaRows = Samples.agenda,
                 tasksRows = Samples.tasks,
                 menuRows = Samples.menu,
@@ -197,11 +195,6 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
                 looks = entry?.looks ?: emptyList(),
                 expanded = entry != null && !entry.isSentinel && !snap.stale &&
                     entry.at == prefs.long("$prefix.${Keys.EXPANDED_AT}", -1L),
-                dishIdx = if (sel == TAB_MENU) {
-                    prefs.int("$prefix.${Keys.MENU_DISH_IDX}", 0)
-                } else {
-                    0
-                },
                 agendaRows = if (sel == TAB_AGENDA) {
                     cachedParseTimeRows(prefs.str("$prefix.${Keys.AGENDA_ROWS}"))
                 } else {
@@ -507,9 +500,10 @@ private fun HubColumn(
 
 /**
  * Bottom tab bar: previous arrow, centered page dots, next arrow.
- * Tappable views hug their content: host-painted pressed states follow
- * the clicked view's bounds, so full-width targets flash full-width
- * bars. Narrow slots collapse to dots-only (the chevrons don't fit).
+ * The narrow bar is full-width (anywhere on it advances a tab): a small
+ * centered target lets near-misses fall through to the whole-widget tap
+ * (opens the app, reads as "can't switch pages"). Wide slots keep the
+ * hugging track between the chevrons.
  */
 @Composable
 private fun TabBar(palette: ChroniclePalette, data: HubContentData) {
@@ -518,19 +512,32 @@ private fun TabBar(palette: ChroniclePalette, data: HubContentData) {
     // open the app instead of switching tabs. Child actions win over
     // the parent's, so arrows keep their own directions.
     // Narrow slots (1-column widgets) cannot fit both 48dp chevrons plus
-    // the dots (the trailing chevron gets dropped and tabs become
-    // one-directional): there the whole bar is a single next-tab target.
-    // Each dots tap advances one tab (HubTabCallback, +1 wrap-around).
-    // The dots sit on an opaque tonal track: the host paints tap
-    // confirmation on the clicked view, and on transparent boxes that
-    // reads as a big grey rectangle (verified on-device across four
-    // recordings). Behind opaque pixels the flash never surfaces.
+    // the dots (the trailing chevron gets dropped): the whole bar is a
+    // single full-width next-tab target. Full-width AND opaque, so taps
+    // land anywhere (no fall-through to the whole-widget tap, which reads
+    // as "can't switch pages") and the host confirmation has no
+    // transparent padding to flash on. Wide mode keeps the hugging track
+    // (its chevrons already give tappable affordances on both sides).
     if (isNarrowSlot()) {
-        Box(
-            modifier = GlanceModifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
-        ) {
-            DotStrip(palette, data)
+        // Single-tab widgets get no bar at all (same as before: the
+        // dots row early-returns under count <= 1).
+        if (data.enabled.size > 1) {
+            Box(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .background(palette.cardHigh)
+                    .cornerRadius(50.dp)
+                    .clickable(
+                        onClick = actionRunCallback<HubTabCallback>(
+                            actionParametersOf(HubDirectionKey to 1),
+                        ),
+                        rippleOverride = NoPressFeedback,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                DotRow(palette, data)
+            }
         }
         return
     }
@@ -579,22 +586,30 @@ private fun DotStrip(palette: ChroniclePalette, data: HubContentData) {
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            for (i in 0 until count.coerceAtMost(7)) {
-                if (i > 0) Spacer(modifier = GlanceModifier.width(6.dp))
-                Box(
-                    modifier = GlanceModifier
-                        .width(if (i == data.pos) 16.dp else 6.dp)
-                        .height(6.dp)
-                        .background(
-                            if (i == data.pos) palette.accent else palette.onSurfaceVariant
-                        )
-                        .cornerRadius(50.dp),
-                ) {}
-            }
+        DotRow(palette, data)
+    }
+}
+
+/** Bare dots row (no tap target): the visuals shared by both bar modes. */
+@Composable
+private fun DotRow(palette: ChroniclePalette, data: HubContentData) {
+    val count = data.enabled.size
+    if (count <= 1) return
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        for (i in 0 until count.coerceAtMost(7)) {
+            if (i > 0) Spacer(modifier = GlanceModifier.width(6.dp))
+            Box(
+                modifier = GlanceModifier
+                    .width(if (i == data.pos) 16.dp else 6.dp)
+                    .height(6.dp)
+                    .background(
+                        if (i == data.pos) palette.accent else palette.onSurfaceVariant
+                    )
+                    .cornerRadius(50.dp),
+            ) {}
         }
     }
 }
