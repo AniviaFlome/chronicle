@@ -310,16 +310,20 @@ void main() {
     expect(byName['Padded']!.room, isNull);
     expect(byName['Real']!.room, 'C-K3-08[60]');
     expect(byName['Empty']!.room, isNull);
-    // Cleanup propagates through folder sync: the bump marks rows newer.
-    for (final c in classes) {
-      expect(c.updatedAt, greaterThan(1000));
+    // Cleanup propagates through folder sync: the bump marks cleaned rows
+    // newer, untouched rows keep their stamp.
+    for (final name in ['Dash', 'Single', 'Padded']) {
+      expect(byName[name]!.updatedAt, greaterThan(1000));
     }
+    expect(byName['Real']!.updatedAt, 1000);
+    expect(byName['Empty']!.updatedAt, 1000);
 
     final slots = await db.select(db.scheduleItems).get();
     final byUuid = {for (final s in slots) s.uuid: s};
     expect(byUuid['s1']!.room, isNull);
     expect(byUuid['s1']!.updatedAt, greaterThan(1000));
     expect(byUuid['s2']!.room, 'C-K3-08[60]');
+    expect(byUuid['s2']!.updatedAt, 1000);
 
     // Re-running the step is a no-op (idempotent for killed migrations).
     final db2 = AppDatabase(NativeDatabase(File(path)));
