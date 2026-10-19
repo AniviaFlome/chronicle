@@ -79,6 +79,7 @@ import com.chronicleapp.chronicle.widget.resolveTimed
 import com.chronicleapp.chronicle.widget.snapshot
 import com.chronicleapp.chronicle.widget.str
 import com.chronicleapp.chronicle.widget.TinyRow
+import com.chronicleapp.chronicle.widget.widgetBg
 
 import es.antonborri.home_widget.HomeWidgetGlanceStateDefinition
 import es.antonborri.home_widget.HomeWidgetPlugin
@@ -108,7 +109,7 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
                 sel = TAB_CLASS,
                 entry = Samples.nextClass,
                 looks = Samples.looks,
-                expanded = false,
+                expandedAt = -1L,
                 agendaRows = Samples.agenda,
                 tasksRows = Samples.tasks,
                 menuRows = Samples.menu,
@@ -193,8 +194,7 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
                 sel = sel,
                 entry = entry,
                 looks = entry?.looks ?: emptyList(),
-                expanded = entry != null && !entry.isSentinel && !snap.stale &&
-                    entry.at == prefs.long("$prefix.${Keys.EXPANDED_AT}", -1L),
+                expandedAt = prefs.long("$prefix.${Keys.EXPANDED_AT}", -1L),
                 agendaRows = if (sel == TAB_AGENDA) {
                     cachedParseTimeRows(prefs.str("$prefix.${Keys.AGENDA_ROWS}"))
                 } else {
@@ -253,7 +253,7 @@ private fun HubContent(context: Context, state: HubWidgetUiState) {
         palette,
         snap.opacity,
         paddingDp = if (tiny) 8 else 12,
-        bottomBar = if (barData == null) null else ({ TabBar(palette, barData) }),
+        bottomBar = if (barData == null) null else ({ TabBar(context, palette, barData) }),
     ) {
         when (state) {
             is HubWidgetUiState.Loading ->
@@ -398,13 +398,13 @@ private fun HubColumn(
                             nowMs,
                             data.looks,
                             compact = currentVerticalBucket() == VerticalBucket.Compact,
-                            expanded = data.expanded,
-                            expandAction = data.entry
+                            expandedAt = data.expandedAt,
+                            expandToggle = data.entry
                                 ?.takeUnless { it.isSentinel || data.snap.stale }
-                                ?.let { entry ->
-                                    {
+                                ?.let { _ ->
+                                    { at: Long ->
                                         actionRunCallback<HubClassExpandCallback>(
-                                            actionParametersOf(ExpandAtKey to entry.at),
+                                            actionParametersOf(ExpandAtKey to at),
                                         )
                                     }
                                 },
@@ -500,34 +500,27 @@ private fun HubColumn(
 
 /**
  * Bottom tab bar: previous arrow, centered page dots, next arrow.
- * The narrow bar is full-width (anywhere on it advances a tab): a small
- * centered target lets near-misses fall through to the whole-widget tap
- * (opens the app, reads as "can't switch pages"). Wide slots keep the
- * hugging track between the chevrons.
+ * The narrow bar wraps the dots in a full-width tap row (anywhere on it
+ * advances a tab — a small centered target lets near-misses fall through
+ * to the whole-widget tap, reads as "can't switch pages"), but its fill
+ * matches the shell exactly so no bubble shows: the dots keep the small
+ * v1.12.0 pill look. Wide slots keep the hugging track between chevrons.
  */
 @Composable
-private fun TabBar(palette: ChroniclePalette, data: HubContentData) {
+private fun TabBar(context: Context, palette: ChroniclePalette, data: HubContentData) {
     // The row itself advances too: taps landing between the arrows and
     // the dots would otherwise fall through to the whole-widget tap and
     // open the app instead of switching tabs. Child actions win over
     // the parent's, so arrows keep their own directions.
-    // Narrow slots (1-column widgets) cannot fit both 48dp chevrons plus
-    // the dots (the trailing chevron gets dropped): the whole bar is a
-    // single full-width next-tab target. Full-width AND opaque, so taps
-    // land anywhere (no fall-through to the whole-widget tap, which reads
-    // as "can't switch pages") and the host confirmation has no
-    // transparent padding to flash on. Wide mode keeps the hugging track
-    // (its chevrons already give tappable affordances on both sides).
     if (isNarrowSlot()) {
-        // Single-tab widgets get no bar at all (same as before: the
-        // dots row early-returns under count <= 1).
+        // Single-tab widgets get no bar at all (the dots row early-returns
+        // under count <= 1).
         if (data.enabled.size > 1) {
             Box(
                 modifier = GlanceModifier
                     .fillMaxWidth()
                     .height(40.dp)
-                    .background(palette.cardHigh)
-                    .cornerRadius(50.dp)
+                    .background(widgetBg(context, palette.bg, data.snap.opacity))
                     .clickable(
                         onClick = actionRunCallback<HubTabCallback>(
                             actionParametersOf(HubDirectionKey to 1),
@@ -536,7 +529,7 @@ private fun TabBar(palette: ChroniclePalette, data: HubContentData) {
                     ),
                 contentAlignment = Alignment.Center,
             ) {
-                DotRow(palette, data)
+                DotStrip(palette, data)
             }
         }
         return

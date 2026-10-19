@@ -34,7 +34,8 @@ abstract final class WidgetKeys {
   // epoch-millis strings `{"<epochMs>": {...}}`. Native renders the entry
   // with the greatest key at or before now. Each entry:
   // {className, detailLine, statusLine, startLabel, thenLine, colorHex,
-  //  thenColorHex, teacher, startMs, endMs, looks: [{time, name, colorHex}]}.
+  //  thenColorHex, teacher, room, building, range, startMs, endMs,
+  //  looks: [{time, name, colorHex, at, teacher, room, building, range}]}.
   // startMs/endMs drive the render-time countdown; looks time carries a
   // weekday hint for cross-day rows ("Fri 18:09").
   // `looks` rides INSIDE each entry on purpose: the hub's lookahead rows

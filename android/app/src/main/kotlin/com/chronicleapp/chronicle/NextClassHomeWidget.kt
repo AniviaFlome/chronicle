@@ -120,19 +120,18 @@ private fun NextClassContent(context: Context, state: NextClassWidgetUiState) {
     val palette = resolvePalette(context, snap.useYou, snap.themeCode)
     val tiny = state is NextClassWidgetUiState.Success &&
         currentVerticalBucket() == VerticalBucket.Tiny
-    // Hero expand state: native-owned marker (epoch key, -1 = collapsed).
-    // Tiny strips stay untappable one-liners.
+    // Hero/row expand state: native-owned marker (per-row epoch keys,
+    // -1 = collapsed). Tiny strips stay untappable one-liners.
     val success = state as? NextClassWidgetUiState.Success
     val hero = success?.hero
-    val expanded = hero != null && !hero.isSentinel &&
-        hero.at == HomeWidgetPlugin.getData(context)
-            .long("${Keys.NEXT_CLASS}.${Keys.EXPANDED_AT}", -1L)
-    val expandAction: (() -> Action)? = hero
+    val expandedAt = HomeWidgetPlugin.getData(context)
+        .long("${Keys.NEXT_CLASS}.${Keys.EXPANDED_AT}", -1L)
+    val expandToggle: ((Long) -> Action)? = hero
         ?.takeUnless { it.isSentinel }
-        ?.let { h ->
-            {
+        ?.let { _ ->
+            { at: Long ->
                 actionRunCallback<NextClassExpandCallback>(
-                    actionParametersOf(ExpandAtKey to h.at),
+                    actionParametersOf(ExpandAtKey to at),
                 )
             }
         }
@@ -146,9 +145,9 @@ private fun NextClassContent(context: Context, state: NextClassWidgetUiState) {
                 EmptyState(palette, R.drawable.ic_widget_event_available, state.message)
             is NextClassWidgetUiState.Success -> when (currentVerticalBucket()) {
                 VerticalBucket.Tiny -> Tiny(state, palette)
-                VerticalBucket.Compact -> Compact(state, palette, expanded, expandAction)
-                VerticalBucket.TallColumn -> TallColumn(state, palette, expanded, expandAction)
-                VerticalBucket.FullPortrait -> FullPortrait(state, palette, expanded, expandAction)
+                VerticalBucket.Compact -> Compact(state, palette, expandedAt, expandToggle)
+                VerticalBucket.TallColumn -> TallColumn(state, palette, expandedAt, expandToggle)
+                VerticalBucket.FullPortrait -> FullPortrait(state, palette, expandedAt, expandToggle)
             }
         }
     }
@@ -168,13 +167,13 @@ private fun Tiny(
 private fun Compact(
     state: NextClassWidgetUiState.Success,
     palette: ChroniclePalette,
-    expanded: Boolean = false,
-    expandAction: (() -> Action)? = null,
+    expandedAt: Long = -1L,
+    expandToggle: ((Long) -> Action)? = null,
 ) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
         SharedClassTab(
             palette, state.hero, state.snap, state.nowMs, state.upcoming,
-            compact = true, expanded = expanded, expandAction = expandAction,
+            compact = true, expandedAt = expandedAt, expandToggle = expandToggle,
         )
     }
 }
@@ -184,13 +183,13 @@ private fun Compact(
 private fun TallColumn(
     state: NextClassWidgetUiState.Success,
     palette: ChroniclePalette,
-    expanded: Boolean = false,
-    expandAction: (() -> Action)? = null,
+    expandedAt: Long = -1L,
+    expandToggle: ((Long) -> Action)? = null,
 ) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
         SharedClassTab(
             palette, state.hero, state.snap, state.nowMs, state.upcoming,
-            expanded = expanded, expandAction = expandAction,
+            expandedAt = expandedAt, expandToggle = expandToggle,
         )
     }
 }
@@ -200,13 +199,13 @@ private fun TallColumn(
 private fun FullPortrait(
     state: NextClassWidgetUiState.Success,
     palette: ChroniclePalette,
-    expanded: Boolean = false,
-    expandAction: (() -> Action)? = null,
+    expandedAt: Long = -1L,
+    expandToggle: ((Long) -> Action)? = null,
 ) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
         SharedClassTab(
             palette, state.hero, state.snap, state.nowMs, state.upcoming,
-            expanded = expanded, expandAction = expandAction,
+            expandedAt = expandedAt, expandToggle = expandToggle,
         )
     }
 }

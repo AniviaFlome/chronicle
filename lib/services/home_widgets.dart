@@ -17,6 +17,7 @@ import '../l10n/app_localizations.dart';
 import '../providers.dart';
 import './menu/menu_provider.dart';
 import '../utils/time_format.dart';
+import '../utils/room_format.dart';
 import '../utils/ui_feedback.dart';
 import './menu/menu_sources.dart';
 import 'widget_push.dart';
@@ -183,13 +184,19 @@ Future<void> _push(ProviderContainer container) async {
     return l10n.widgetThen(displayNameOf(listed[i + 1]), whenOf(listed[i + 1]));
   }
 
+  /// Resolved room for an occurrence (slot override wins, class fallback),
+  /// placeholder-cleaned; null when absent.
+  String? roomOf(engine.ClassOccurrence o) =>
+      cleanRoom(o.room ?? byId[o.classId]?.room);
+
+  /// Class building ("C Blok"); empty when unset.
+  String buildingOf(engine.ClassOccurrence o) =>
+      byId[o.classId]?.building?.trim() ?? '';
+
   String detailLineFor(engine.ClassOccurrence o) {
-    final room = o.room ?? byId[o.classId]?.room;
     final range = rangeFor(o);
-    final roomText = room?.trim();
-    // A bare "--" (placeholder users type for "no room") reads as noise
-    // on the widget; treat it like an absent room.
-    if (roomText == null || roomText.isEmpty || roomText == '--') return range;
+    final roomText = roomOf(o);
+    if (roomText == null) return range;
     return '$range · $roomText';
   }
 
@@ -213,7 +220,10 @@ Future<void> _push(ProviderContainer container) async {
   // Hub class-tab lookahead rows: the classes after the hero entry,
   // display names with course codes (no Then/Later prefix — the native
   // side lays out time and name separately). Rides inside each timeline
-  // entry so the native side can slice it at render time.
+  // entry so the native side can slice it at render time. Each row also
+  // carries its expand key (`at`, negated class start so it can never
+  // collide with a timeline entry key) plus the detail fields shown when
+  // tapped (teacher / room / building / range).
   List<Map<String, Object?>> looksFor(int i) => [
     for (var j = i + 1; j < listed.length && j <= i + 2; j++)
       {
@@ -224,6 +234,11 @@ Future<void> _push(ProviderContainer container) async {
             : '${shortWeekdayName(listed[j].date.weekday, locale)} ${hhmmLocale(listed[j].startMinutes, locale)}',
         'name': displayNameOf(listed[j]),
         'colorHex': colorOf(listed[j]),
+        'at': -listed[j].start.millisecondsSinceEpoch,
+        'teacher': teacherOf(listed[j]),
+        'room': roomOf(listed[j]) ?? '',
+        'building': buildingOf(listed[j]),
+        'range': rangeFor(listed[j]),
       },
   ];
 
@@ -238,6 +253,9 @@ Future<void> _push(ProviderContainer container) async {
     required String colorHex,
     required String thenColorHex,
     required String teacher,
+    String room = '',
+    String building = '',
+    String range = '',
     required List<Map<String, Object?>> looks,
     // Class start/end instants (epoch ms) for the render-time countdown;
     // 0 on synthetic entries (no-classes/sentinel).
@@ -254,6 +272,9 @@ Future<void> _push(ProviderContainer container) async {
     'colorHex': colorHex,
     'thenColorHex': thenColorHex,
     'teacher': teacher,
+    'room': room,
+    'building': building,
+    'range': range,
     'looks': looks,
     'startMs': startMs,
     'endMs': endMs,
@@ -277,6 +298,9 @@ Future<void> _push(ProviderContainer container) async {
       colorHex: '',
       thenColorHex: colorOf(listed[0]),
       teacher: teacherOf(listed[0]),
+      room: roomOf(listed[0]) ?? '',
+      building: buildingOf(listed[0]),
+      range: rangeFor(listed[0]),
       looks: looksFor(-1),
       startMs: 0,
       endMs: 0,
@@ -297,6 +321,9 @@ Future<void> _push(ProviderContainer container) async {
       colorHex: colorOf(o),
       thenColorHex: next == null ? '' : colorOf(next),
       teacher: teacherOf(o),
+      room: roomOf(o) ?? '',
+      building: buildingOf(o),
+      range: rangeFor(o),
       looks: looksFor(i),
       startMs: o.start.millisecondsSinceEpoch,
       endMs: o.end.millisecondsSinceEpoch,

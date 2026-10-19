@@ -104,13 +104,40 @@ data class TimedEntry(
     val endMs: Long = 0,
     /** Teacher name for the expandable hero detail; empty when unset. */
     val teacher: String = "",
+    /** Room for the expandable detail ("C-K2-09[102]"); empty when unset. */
+    val room: String = "",
+    /** Building for the expandable detail ("C Blok"); empty when unset. */
+    val building: String = "",
+    /** Time range for the expandable detail ("08:40–10:30"); empty on
+     *  synthetic entries. */
+    val range: String = "",
 )
+
+/**
+ * Class detail for expanded rows/heroes: teacher + "room · building ·
+ * range" joined into ONE string (single Text nodes measure reliably;
+ * repeated sibling Texts mismeasure — seen as a squeezed sliver). Blank
+ * parts vanish from the join; empty when nothing is set.
+ */
+fun detailText(teacher: String, room: String, building: String, range: String): String =
+    listOf(
+        teacher,
+        listOf(room, building, range).filter { it.isNotEmpty() }.joinToString(" · "),
+    ).filter { it.isNotEmpty() }.joinToString(" · ")
 
 /** Generic time+name row (agenda days, hub agenda/looks). */
 data class TimeRow(
     val time: String,
     val name: String,
     val colorHex: String,
+    /** Expand key for class rows (negated class start epoch so it can never
+     *  collide with a timeline entry key); 0 = not expandable (agenda rows,
+     *  old pushes). */
+    val at: Long = 0,
+    val teacher: String = "",
+    val room: String = "",
+    val building: String = "",
+    val range: String = "",
 )
 
 /** Task row (due-tasks widget, hub tasks tab). */
@@ -337,7 +364,18 @@ private fun parseLooksArr(arr: JSONArray?): List<TimeRow> {
     return buildList {
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
-            add(TimeRow(o.s("time"), o.s("name"), o.s("colorHex")))
+            add(
+                TimeRow(
+                    o.s("time"),
+                    o.s("name"),
+                    o.s("colorHex"),
+                    at = o.optLong("at", 0),
+                    teacher = o.s("teacher"),
+                    room = o.s("room"),
+                    building = o.s("building"),
+                    range = o.s("range"),
+                ),
+            )
         }
     }
 }
@@ -370,6 +408,9 @@ fun parseTimed(json: String, withThen: Boolean): List<TimedEntry> {
                         startMs = o.optLong("startMs", 0),
                         endMs = o.optLong("endMs", 0),
                         teacher = o.s("teacher"),
+                        room = o.s("room"),
+                        building = o.s("building"),
+                        range = o.s("range"),
                     ),
                 )
             }
