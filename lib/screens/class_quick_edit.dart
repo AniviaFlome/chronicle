@@ -6,6 +6,7 @@ import '../data/database.dart';
 import '../l10n/l10n.dart';
 import '../providers.dart';
 import '../theme.dart';
+import '../utils/room_format.dart';
 import 'error_dialog.dart';
 
 /// Opens the quick-edit sheet for one class: color dots plus room, teacher,
@@ -118,7 +119,7 @@ class _ClassQuickEditSheetState extends ConsumerState<_ClassQuickEditSheet> {
           .read(classRepositoryProvider)
           .update(
             row.copyWith(
-              room: Value(_emptyToNull(_room.text)),
+              room: Value(cleanRoom(_room.text)),
               teacher: Value(_emptyToNull(_teacher.text)),
               reminderMinutes: Value(int.tryParse(_reminder.text.trim())),
               notes: Value(_emptyToNull(_notes.text)),

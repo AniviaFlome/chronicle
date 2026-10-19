@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Hub dots on 1-column widgets: the whole bottom bar now advances to the next tab (was: a small centered track, so near-misses fell through to the whole-widget tap and opened the app instead of switching).
+- Room placeholders ("--", "-") are normalized to empty everywhere: the ITU catalog mapping, class editor / quick-edit / slot dialog saves, plus a v13 migration cleaning existing rows (and bumping `updatedAt` so folder sync propagates the cleanup). Widgets and tiles already hide empty rooms.
+- Agenda and Due-tasks widgets can shrink to 1 column again (`minResizeWidth/Height` 180x110 → 40dp like the other widgets).
+
 ## [1.12.0] - 2026-10-18
 
 ### Fixed

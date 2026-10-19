@@ -3,6 +3,7 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 
 import '../menu/menu_provider.dart' show decodeMenuBody, menuHttpHeaders;
+import '../../utils/room_format.dart';
 import 'course_catalog.dart';
 
 /// ITU course lookup over the public ÖBS pages (no login required):
@@ -311,7 +312,7 @@ class ItuObsCatalog {
             weekday: weekday,
             startMinutes: range.$1,
             endMinutes: range.$2,
-            room: i < rooms.length ? rooms[i] : '',
+            room: cleanRoom(i < rooms.length ? rooms[i] : null) ?? '',
           ),
         );
       }
@@ -324,7 +325,7 @@ class ItuObsCatalog {
           name: cells[2].text.trim(),
           instructor: cells[4].text.trim(),
           building: buildings.isNotEmpty ? buildings.first : '',
-          room: rooms.isNotEmpty ? rooms.first : '',
+          room: cleanRoom(rooms.isNotEmpty ? rooms.first : null) ?? '',
           slots: slots,
           method: method.isEmpty ? null : method,
           prerequisites: prereq == '-' || prereq.isEmpty ? null : prereq,
