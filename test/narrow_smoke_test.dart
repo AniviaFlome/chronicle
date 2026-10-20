@@ -20,7 +20,7 @@ Future<void> narrow(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('probe dashboard populated 360px', (tester) async {
+  testWidgets('narrow dashboard renders with populated class', (tester) async {
     await narrow(tester);
     final db = AppDatabase(NativeDatabase.memory());
     await tester.runAsync(() async {
@@ -51,7 +51,7 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
-  testWidgets('probe slot dialog 360px', (tester) async {
+  testWidgets('narrow schedule slot dialog opens', (tester) async {
     await narrow(tester);
     final db = AppDatabase(NativeDatabase.memory());
     await tester.pumpWidget(
@@ -79,7 +79,7 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
-  testWidgets('probe year dialog 360px', (tester) async {
+  testWidgets('narrow year dialog opens', (tester) async {
     await narrow(tester);
     final db = AppDatabase(NativeDatabase.memory());
     await tester.pumpWidget(
@@ -102,7 +102,7 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
-  testWidgets('probe grades + settings-fixed-editor 360px', (tester) async {
+  testWidgets('narrow grades and fixed-marker settings render', (tester) async {
     await narrow(tester);
     final db = AppDatabase(NativeDatabase.memory());
     await tester.runAsync(() async {
@@ -132,7 +132,7 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
-  testWidgets('probe class form 360px', (tester) async {
+  testWidgets('narrow class form renders', (tester) async {
     await narrow(tester);
     final db = AppDatabase(NativeDatabase.memory());
     await tester.pumpWidget(
