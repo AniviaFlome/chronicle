@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.os.ConfigurationCompat
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.LocalSize
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -35,6 +36,7 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.width
+import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
@@ -42,6 +44,7 @@ import com.chronicleapp.chronicle.widget.ChroniclePalette
 import com.chronicleapp.chronicle.widget.ClassRow
 import com.chronicleapp.chronicle.widget.DishRow
 import com.chronicleapp.chronicle.widget.EmptyState
+import com.chronicleapp.chronicle.widget.FilledLookaheadRow
 import com.chronicleapp.chronicle.widget.Hairline
 import com.chronicleapp.chronicle.widget.HubDirectionKey
 import com.chronicleapp.chronicle.widget.HubTabCallback
@@ -54,7 +57,10 @@ import com.chronicleapp.chronicle.widget.Samples
 import com.chronicleapp.chronicle.widget.SharedClassTab
 import com.chronicleapp.chronicle.widget.TabArrow
 import com.chronicleapp.chronicle.widget.TaskRow
+import com.chronicleapp.chronicle.widget.ThenLine
 import com.chronicleapp.chronicle.widget.WidgetHeader
+import com.chronicleapp.chronicle.widget.liveStatus
+import com.chronicleapp.chronicle.widget.lookaheadChipWidth
 import com.chronicleapp.chronicle.widget.VerticalBucket
 import com.chronicleapp.chronicle.widget.VerticalShell
 import com.chronicleapp.chronicle.widget.WidgetSnapshot
@@ -238,6 +244,14 @@ private fun HubContent(context: Context, state: HubWidgetUiState) {
     val palette = resolvePalette(context, snap.useYou, snap.themeCode)
     val tiny = state is HubWidgetUiState.Success &&
         currentVerticalBucket() == VerticalBucket.Tiny
+    // Short strips (Compact bucket, ~110-150dp tall): the dots bar + header
+    // + padding eat ~100dp, leaving ~10dp for content — a stock Compact
+    // squeezes rows to textless slivers (seen-on-device). Short widgets get
+    // a slim layout instead: header + fitting rows, no bar. Paging still
+    // works everywhere via the shell/body tap; the bar returns at
+    // TallColumn and up. All Compact slots are narrow, so shellClick stays.
+    val short = state is HubWidgetUiState.Success &&
+        currentVerticalBucket() == VerticalBucket.Compact
     // The tab bar lives in the shell's flush bottom slot (not in the padded
     // body), so dots + arrows sit stationary at the very bottom edge on
     // every tab and every size. Tiny strips have no bar.
@@ -263,8 +277,8 @@ private fun HubContent(context: Context, state: HubWidgetUiState) {
         context,
         palette,
         snap.opacity,
-        paddingDp = if (tiny) 8 else 12,
-        bottomBar = if (barData == null) null else ({ TabBar(context, palette, barData) }),
+        paddingDp = if (tiny || short) 8 else 12,
+        bottomBar = if (barData == null || short) null else ({ TabBar(context, palette, barData) }),
         shellClick = shellClick,
     ) {
         when (state) {
@@ -301,7 +315,7 @@ private fun HubBody(
         VerticalBucket.Tiny ->
             Tiny(palette, data)
         VerticalBucket.Compact ->
-            HubColumn(context, palette, data, nowMs, hairline = false)
+            ShortHubColumn(context, palette, data, nowMs)
         VerticalBucket.TallColumn ->
             HubColumn(context, palette, data, nowMs, hairline = true)
         VerticalBucket.FullPortrait ->
@@ -536,6 +550,188 @@ private fun HubColumn(
                     }
                 }
             }
+    }
+}
+
+/**
+ * Slim layout for short strips (Compact bucket, ~110-150dp tall): header +
+ * fitting rows, no dots bar. A stock Compact (bar + header + full rows)
+ * leaves ~10dp for content at 110dp and squeezes rows to textless slivers
+ * (seen-on-device). Paging works via the shell tap; the bar returns at
+ * TallColumn and up. Fixed takes only (never lazy: weight-bound lazy lists
+ * mismeasure in short bodies) with one height gate at 135dp so taller
+ * shorts fill up instead of idling.
+ */
+@Composable
+private fun ShortHubColumn(
+    context: Context,
+    palette: ChroniclePalette,
+    data: HubContentData,
+    nowMs: Long,
+) {
+    val iconRes = when (data.sel) {
+        ChronicleHubHomeWidget.TAB_CLASS -> R.drawable.ic_widget_school
+        ChronicleHubHomeWidget.TAB_AGENDA -> R.drawable.ic_widget_event
+        ChronicleHubHomeWidget.TAB_TASKS -> R.drawable.ic_widget_task
+        else -> R.drawable.ic_widget_menu
+    }
+    val title = when (data.sel) {
+        ChronicleHubHomeWidget.TAB_CLASS -> data.titleClass
+        ChronicleHubHomeWidget.TAB_AGENDA -> data.titleAgenda
+        ChronicleHubHomeWidget.TAB_TASKS -> data.tasksTitle
+        // Short strips give the title ~20dp next to the steppers (seen as
+        // "B…"): with several meals the steppers alone identify the
+        // switcher, so the title yields. Single meals keep their title.
+        else -> if (data.menuMeals.size > 1) "" else HubMenuMeal(data)?.title ?: data.menuTitle
+    }
+    val trailing: (@Composable () -> Unit)? =
+        if (data.sel == ChronicleHubHomeWidget.TAB_MENU && data.menuMeals.size > 1) {
+            {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    MenuStepArrow(palette, R.drawable.ic_widget_chevron_left, -1)
+                    MenuStepArrow(palette, R.drawable.ic_widget_chevron_right, 1)
+                }
+            }
+        } else {
+            null
+        }
+    // Taller shorts (drawn ~135dp+) take one more row instead of idling.
+    val roomy = LocalSize.current.height.value >= 135
+
+    Column(modifier = GlanceModifier.fillMaxSize()) {
+        WidgetHeader(
+            palette = palette,
+            iconRes = iconRes,
+            title = title,
+            trailing = trailing,
+        )
+        Spacer(modifier = GlanceModifier.height(6.dp))
+        Column(
+            modifier = GlanceModifier
+                .defaultWeight()
+                .fillMaxWidth(),
+        ) {
+            when (data.sel) {
+                ChronicleHubHomeWidget.TAB_CLASS -> {
+                    val entry = data.entry
+                    if (entry == null || entry.isSentinel || data.snap.stale) {
+                        EmptyState(
+                            palette,
+                            R.drawable.ic_widget_event_available,
+                            data.snap.emptyText,
+                        )
+                    } else if (entry.startLabel.isEmpty()) {
+                        // Quiet: copy + Then-line (the SharedClassTab quiet
+                        // lead, ~61dp). Taller shorts add one lookahead row.
+                        Text(
+                            text = entry.className,
+                            style = TextStyle(
+                                color = palette.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                            maxLines = 1,
+                        )
+                        val thenRow = data.looks.firstOrNull {
+                            it.time == entry.thenWhen && it.name == entry.thenName
+                        }
+                        ThenLine(palette, entry, thenRow)
+                        if (roomy) {
+                            val extra = data.looks.filterNot {
+                                it.time == entry.thenWhen && it.name == entry.thenName
+                            }.take(1)
+                            for (row in extra) {
+                                Spacer(modifier = GlanceModifier.height(4.dp))
+                                FilledLookaheadRow(
+                                    palette = palette,
+                                    time = row.time,
+                                    name = row.name,
+                                    where = listOf(row.room, row.building)
+                                        .filter { it.isNotEmpty() }
+                                        .joinToString(" · "),
+                                    chipWidth = lookaheadChipWidth(),
+                                )
+                            }
+                        }
+                    } else {
+                        // Hero-short: name + status/range/room meta only. No
+                        // teacher line, no Then-line: neither fits ~110dp
+                        // (seen-on-device). Tall widgets show the full hero.
+                        // 15sp keeps name + 2-line meta inside a 110dp card
+                        // with margin (16sp ran ~3dp over the drawn box).
+                        Text(
+                            text = entry.className,
+                            style = TextStyle(
+                                color = palette.onSurface,
+                                fontSize = if (isNarrowSlot()) 15.sp else 20.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                            maxLines = 2,
+                        )
+                        val meta = listOf(
+                            liveStatus(entry, data.snap, nowMs),
+                            entry.detailLine,
+                        ).filter { it.isNotEmpty() }.joinToString(" · ")
+                        if (meta.isNotEmpty()) {
+                            Spacer(modifier = GlanceModifier.height(2.dp))
+                            Text(
+                                text = meta,
+                                style = TextStyle(
+                                    color = palette.onSurfaceVariant,
+                                    fontSize = 10.sp,
+                                ),
+                                maxLines = 2,
+                            )
+                        }
+                    }
+                }
+                ChronicleHubHomeWidget.TAB_AGENDA ->
+                    if (data.agendaRows.isEmpty()) {
+                        EmptyState(
+                            palette,
+                            R.drawable.ic_widget_event_available,
+                            data.snap.staleName.ifEmpty { data.snap.emptyText },
+                        )
+                    } else {
+                        val shown = data.agendaRows.take(if (roomy) 2 else 1)
+                        for ((i, row) in shown.withIndex()) {
+                            if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
+                            ClassRow(context, palette, row.time, row.name, row.colorHex)
+                        }
+                    }
+                ChronicleHubHomeWidget.TAB_TASKS ->
+                    if (data.tasksRows.isEmpty()) {
+                        EmptyState(
+                            palette,
+                            R.drawable.ic_widget_done_all,
+                            data.emptyTasks.ifEmpty { data.snap.emptyText },
+                        )
+                    } else {
+                        val shown = data.tasksRows.take(if (roomy) 2 else 1)
+                        for ((i, task) in shown.withIndex()) {
+                            if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
+                            TaskRow(palette, task.title, task.date, task.urgent)
+                        }
+                    }
+                else -> {
+                    val meal = HubMenuMeal(data)
+                    val dishes = meal?.dishes ?: data.menuRows
+                    if (dishes.isEmpty()) {
+                        EmptyState(
+                            palette,
+                            R.drawable.ic_widget_menu,
+                            data.emptyMenu.ifEmpty { data.snap.emptyText },
+                        )
+                    } else {
+                        val shown = dishes.take(if (roomy) 3 else 2)
+                        for ((i, dish) in shown.withIndex()) {
+                            if (i > 0) Spacer(modifier = GlanceModifier.height(4.dp))
+                            DishRow(palette, dish)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

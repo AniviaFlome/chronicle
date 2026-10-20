@@ -106,6 +106,12 @@ val hubSizeSlots = SizeMode.Responsive(
         DpSize(40.dp, 40.dp),
         DpSize(110.dp, 40.dp),
         DpSize(40.dp, 110.dp),
+        // Short 1-column slots: hosts can report ~140-150x110 for a short
+        // wide strip (seen-on-device); without a slot covering that size
+        // the pick falls back to a Tiny slot and one centered line floats
+        // in the drawn card. Decisive test for report-vs-tiebreak.
+        DpSize(140.dp, 110.dp),
+        DpSize(150.dp, 110.dp),
         DpSize(120.dp, 120.dp),
         DpSize(120.dp, 240.dp),
         DpSize(120.dp, 320.dp),
