@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Code cleanup (no behavior changes): removed dead widget code (`SegmentedTabs` + `HubTabSelectCallback`, `DatePillar`, `CountdownHero`, `MetaRow`, hub dead Compact/hairline paths); shared header model for hub tall/short layouts; dropped unused `riverpod_generator`; renamed the 360px probe suite to `narrow_smoke_test`; extracted `_computeGridGeometry`, `_collectIcsEvents`, `_loadValue`, `_dayAt`, `_rowDeleter`, `tombstoneAndDeleteRow`, `deleteAttachmentRow`, `matchesYear`, `_getBool/_setBool`, `_readDecoded`, partition helpers.
+
 ### Fixed
 - 1-column hub: any tap on the widget body advances to the next tab (was: opening the app except on a tiny dots target); the track keeps the small pill look (the earlier full-width bubble is gone). Tab content fills the card — the hero, the then-card and its location meta all fit without clipping (compact rows: name + "time · room", height-aware row budget).
 - Hub paging no longer depends on the matched size slot: tiny strips (which have no dots bar at all — every tap opened the app and the one visible line was a dead end) now switch tabs on tap, and the tab body advances on every size (wide keeps app-open on the header only). A short hub showing a single dish is a one-line strip by physics — resize it taller for the scrollable full dish list.
