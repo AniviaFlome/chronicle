@@ -514,7 +514,8 @@ final dayRangeProvider = FutureProvider<({int start, int end})>((ref) async {
 
 /// Per-class quota state derived from classes + absences. Quotas are
 /// total-based against the single absence limit; theory/practical tags on
-/// records are informational only.
+/// records are informational only. A limit of 0 means "none allowed"
+/// (null maxAbsences rows never reach here: the producer skips them).
 class QuotaWarning {
   final ClassesData classRow;
   final int unexcused;

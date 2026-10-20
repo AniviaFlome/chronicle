@@ -204,10 +204,14 @@ class FolderSyncController {
   /// Gate: import when the manifest differs from the last seen one, or
   /// when any synced file is newer than our last export/import (catches
   /// Syncthing files arriving after the manifest). Equality-based, so
-  /// cross-device clock skew can't hide peer data.
+  /// cross-device clock skew can't hide peer data. Skips the round while
+  /// a fresh export lock is present (an exporter is mid-generation);
+  /// manual imports bypass the gate on purpose (explicit user intent,
+  /// and any mixed read self-heals on the next auto pass).
   Future<bool> _importNewerInternal() async {
     final dir = await service.dataDir();
     if (dir == null || _disposed) return false;
+    if (await service.exportInProgress(dir)) return false;
     final manifest = await service.readManifest(dir);
     if (manifest == null) return false;
     final exportedAt = manifest['exportedAt'];

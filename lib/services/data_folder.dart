@@ -40,6 +40,17 @@ class DataFolderService {
   /// `<stem>_<shortid>.<ext>` (human-readable, collision-free).
   static const filesDir = 'files';
 
+  /// Export lock file: present (and fresh) while an export is writing
+  /// files. A concurrent auto-import skips its poll instead of merging a
+  /// half-written generation (per-file writes below are already atomic
+  /// tmp+renames; this covers the between-files window). Content is a
+  /// {startedAt} map; locks older than [exportLockStaleMs] are ignored,
+  /// so a crashed export can only delay imports, never block them.
+  /// Synced peers see the file too, which equally protects them from
+  /// reading a partial generation mid-upload.
+  static const exportLockFile = 'export.lock';
+  static const exportLockStaleMs = 10 * 60 * 1000;
+
   /// Content-blob file name for an attachment: sanitized original stem plus
   /// the first 8 uuid hex chars, so names stay readable and unique, e.g.
   /// `syllabus_a1b2c3d4.pdf`. Lower-cased for case-insensitive filesystems.
@@ -174,6 +185,20 @@ class DataFolderService {
     try {
       await ensureSyncIdentity();
       if (!await dir.exists()) await dir.create(recursive: true);
+      // Best-effort export lock so concurrent auto-imports skip this
+      // generation instead of merging half-written tables (per-file
+      // writes below are atomic tmp+renames; this covers the
+      // between-files window). Never fails the export.
+      try {
+        final lockTarget = File('${dir.path}/$exportLockFile');
+        final lockTmp = File('${lockTarget.path}.tmp');
+        await lockTmp.writeAsString(
+          jsonEncode({
+            'startedAt': DateTime.now().millisecondsSinceEpoch,
+          }),
+        );
+        await lockTmp.rename(lockTarget.path);
+      } catch (_) {}
       // One batch: all table scans plus tombstones run concurrently
       // instead of 15 sequential round-trips (drift serializes them safely).
       final scansFuture = Future.wait([
@@ -318,6 +343,11 @@ class DataFolderService {
         await settings.setDataSyncError('$e');
       } catch (_) {}
       return result;
+    } finally {
+      // Best-effort: a leftover lock only delays imports until stale.
+      try {
+        await File('${dir.path}/$exportLockFile').delete();
+      } catch (_) {}
     }
   }
 
@@ -471,6 +501,22 @@ class DataFolderService {
   /// Subdirectory holding preserved conflict snapshots
   /// (`conflict_<table>_<uuid>_<at>.json` with `{local, incoming}`).
   static const conflictsDir = 'conflicts';
+
+  /// True when a fresh export lock is present: an exporter (here or a
+  /// peer mid-upload) is mid-generation. Callers should skip this round
+  /// and retry later; stale locks are ignored (see [exportLockStaleMs]).
+  /// Never throws.
+  Future<bool> exportInProgress(Directory dir) async {
+    try {
+      final lock = await _readDecoded(dir, exportLockFile);
+      final startedAt = lock is Map ? lock['startedAt'] : null;
+      if (startedAt is! int) return false;
+      return DateTime.now().millisecondsSinceEpoch - startedAt <
+          exportLockStaleMs;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// True when any synced file (manifest, tables, tombstones, blobs) was
   /// modified after [sinceMs]. Compares local filesystem mtimes, so peer

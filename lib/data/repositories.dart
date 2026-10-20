@@ -134,6 +134,12 @@ class ClassRepository {
       )..where((y) => y.id.equals(id))).getSingleOrNull();
       if (row != null) {
         await recordTombstone(db, SyncTables.years, row.uuid, now);
+        // Belt and braces over the FK set-null: stamp the nulling so
+        // newer-wins merge propagates it even where FK cascades are
+        // disabled or a peer processes rows out of order.
+        await (db.update(db.classes)..where((c) => c.yearId.equals(id))).write(
+          ClassesCompanion(yearId: const Value(null), updatedAt: Value(now)),
+        );
         try {
           final files = await YearFileRepository(db).forYear(id);
           for (final f in files) {
