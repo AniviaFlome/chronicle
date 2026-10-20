@@ -925,9 +925,16 @@ class SettingsRepository {
   Future<void> _setBool(String key, bool value) =>
       set(key, value ? 'true' : 'false');
 
+  static final _anchorFallback = DateTime(2026, 9, 7);
+
   Future<DateTime> weekABAnchor() async {
     final v = await get('week_ab_anchor');
-    return v == null ? DateTime(2026, 9, 7) : DateTime.parse(v);
+    if (v == null) return _anchorFallback;
+    try {
+      return DateTime.parse(v);
+    } catch (_) {
+      return _anchorFallback;
+    }
   }
 
   Future<int> weekStartDay() async =>

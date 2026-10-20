@@ -306,9 +306,7 @@ class DataFolderService {
         'formatVersion': formatVersion,
         'exportedAt': exportedAt,
       });
-      await settings.setDataLastExportAt(
-        DateTime.now().millisecondsSinceEpoch,
-      );
+      await settings.setDataLastExportAt(exportedAt);
       // Mark our own manifest seen so auto-import never re-imports it.
       await settings.setDataLastSeenExportedAt(exportedAt);
       await settings.setDataSyncError(null);
@@ -1153,15 +1151,18 @@ class DataFolderService {
       if (!wonTasks.contains(uuid)) continue;
       final linkedFile = m['linkedExamId'];
       if (linkedFile == null) continue;
-      final linkedLocal = remapFileId(
-        taskUuids,
-        taskMap,
-        (linkedFile as num).toInt(),
-      );
+      final linkedNum = linkedFile is num
+          ? linkedFile.toInt()
+          : int.tryParse('$linkedFile');
+      if (linkedNum == null) continue;
+      final linkedLocal = remapFileId(taskUuids, taskMap, linkedNum);
       if (linkedLocal == null) continue;
       final local = taskMap[uuid]!;
       await (db.update(db.tasks)..where((t) => t.id.equals(local.id))).write(
-        TasksCompanion(linkedExamId: Value(linkedLocal)),
+        TasksCompanion(
+          linkedExamId: Value(linkedLocal),
+          updatedAt: Value(syncNow()),
+        ),
       );
     }
 

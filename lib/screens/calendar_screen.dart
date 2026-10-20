@@ -2521,6 +2521,10 @@ class _AdjustTimeSheetState extends State<_AdjustTimeSheet> {
   });
 
   void _shiftEnd(int delta) => setState(() {
+    // _start comes from existing data; if it is corrupt (>= 23:45)
+    // there is no valid end to shift to, so leave the value untouched
+    // instead of throwing inside clamp (min > max is an ArgumentError).
+    if (_start > 24 * 60 - 15) return;
     _end = (_end + delta).clamp(_start + 15, 24 * 60);
   });
 
@@ -2596,9 +2600,15 @@ class _AdjustTimeSheetState extends State<_AdjustTimeSheet> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
-                    onPressed: () =>
-                        Navigator.of(context)
-                            .pop((start: _snap5(_start), end: _snap5(_end))),
+                    onPressed: () {
+                      final s = _snap5(_start);
+                      var e = _snap5(_end);
+                      // Snapping can shrink the stepper-enforced 15-minute
+                      // gap (a 12-minute span snaps to 10): hold the end
+                      // out instead of saving a sub-minimum slot.
+                      if (e - s < 15) e = (s + 15).clamp(0, 24 * 60);
+                      Navigator.of(context).pop((start: s, end: e));
+                    },
                     child: Text(context.l10n.save),
                   ),
                 ),

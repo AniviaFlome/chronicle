@@ -306,20 +306,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(dataFolderStatusProvider);
       final container = ProviderScope.containerOf(context);
-      ref.read(folderSyncControllerProvider).importIfNewer().then((ran) async {
-        if (ran && mounted) {
-          ref.invalidate(engineProvider);
-          ref.invalidate(classesByIdProvider);
-          ref.invalidate(dataFolderStatusProvider);
-          // Widgets snapshot at push time: push after the import lands,
-          // otherwise they keep the pre-import snapshot.
-          try {
-            await refreshHomeWidgets(container);
-          } catch (e) {
-            logLoadFailure('Post-import home widgets', e);
-          }
-        }
-      });
+      ref
+          .read(folderSyncControllerProvider)
+          .importIfNewer()
+          .then((ran) async {
+            if (ran && mounted) {
+              ref.invalidate(engineProvider);
+              ref.invalidate(classesByIdProvider);
+              ref.invalidate(dataFolderStatusProvider);
+              // Widgets snapshot at push time: push after the import lands,
+              // otherwise they keep the pre-import snapshot.
+              try {
+                await refreshHomeWidgets(container);
+              } catch (e) {
+                logLoadFailure('Post-import home widgets', e);
+              }
+            }
+          })
+          .catchError((e) {
+            logLoadFailure('Background import check', e);
+          });
     }
   }
 
@@ -592,8 +598,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Future<void> _clearDataFolder() async {
-    await ref.read(settingsRepositoryProvider).setDataFolder(null);
-    ref.invalidate(dataFolderStatusProvider);
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(settingsRepositoryProvider).setDataFolder(null);
+      ref.invalidate(dataFolderStatusProvider);
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _refreshAfterDataChange(int upserted, int deleted) async {
@@ -832,6 +847,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     try {
       final events = parseIcs(utf8.decode(bytes));
       final repo = ref.read(xtraRepositoryProvider);
+      var imported = 0;
       for (final e in events.take(1000)) {
         final day = DateTime(e.start.year, e.start.month, e.start.day);
         final allDay =
@@ -853,8 +869,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             notes: Value(e.description),
           ),
         );
+        imported++;
       }
-      _snack(l10n.importedEvents(events.length));
+      _snack(l10n.importedEvents(imported));
     } catch (e) {
       _snack(l10n.couldNotImportCalendar('$e'));
     } finally {
