@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-10-20
+
 ### Changed
 - Code cleanup: removed dead widget code (`SegmentedTabs` + `HubTabSelectCallback`, `DatePillar`, `CountdownHero`, `MetaRow`, hub dead Compact/hairline paths); shared header model for hub tall/short layouts; dropped unused `riverpod_generator`; renamed the 360px probe suite to `narrow_smoke_test`; extracted `_computeGridGeometry`, `_collectIcsEvents`, `_loadValue`, `_dayAt`, `_rowDeleter`, `tombstoneAndDeleteRow`, `deleteAttachmentRow`, `_getBool/_setBool`, `_readDecoded`, partition helpers; DB-side year filters, concurrent merge prefetch, atomic delete-all.
 
