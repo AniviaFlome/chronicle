@@ -972,24 +972,38 @@ class DataFolderService {
       };
     }
 
-    final yearMap = await localMap(() => db.select(db.academicYears).get());
-    final classMap = await localMap(() => db.select(db.classes).get());
-    final itemMap = await localMap(() => db.select(db.scheduleItems).get());
-    final taskMap = await localMap(() => db.select(db.tasks).get());
+    // Local uuid → (id, updatedAt) per table. The 12 table scans are
+    // independent reads, so they run concurrently; the per-row merges
+    // below stay synchronous map lookups either way.
+    final localMaps = await Future.wait([
+      localMap(() => db.select(db.academicYears).get()),
+      localMap(() => db.select(db.classes).get()),
+      localMap(() => db.select(db.scheduleItems).get()),
+      localMap(() => db.select(db.tasks).get()),
+      localMap(() => db.select(db.scheduleExceptions).get()),
+      localMap(() => db.select(db.holidays).get()),
+      localMap(() => db.select(db.absences).get()),
+      localMap(() => db.select(db.subtasks).get()),
+      localMap(() => db.select(db.taskReminders).get()),
+      localMap(() => db.select(db.grades).get()),
+      localMap(() => db.select(db.pomodoroSessions).get()),
+      localMap(() => db.select(db.xtraEvents).get()),
+    ]);
+    final yearMap = localMaps[0];
+    final classMap = localMaps[1];
+    final itemMap = localMaps[2];
+    final taskMap = localMaps[3];
     // Prefetched once so per-row merges below are map lookups instead
     // of one SELECT per incoming row (steady-state imports are
     // overwhelmingly already-known rows).
-    final exceptionMap =
-        await localMap(() => db.select(db.scheduleExceptions).get());
-    final holidayMap = await localMap(() => db.select(db.holidays).get());
-    final absenceMap = await localMap(() => db.select(db.absences).get());
-    final subtaskMap = await localMap(() => db.select(db.subtasks).get());
-    final reminderMap =
-        await localMap(() => db.select(db.taskReminders).get());
-    final gradeMap = await localMap(() => db.select(db.grades).get());
-    final pomodoroMap =
-        await localMap(() => db.select(db.pomodoroSessions).get());
-    final xtraMap = await localMap(() => db.select(db.xtraEvents).get());
+    final exceptionMap = localMaps[4];
+    final holidayMap = localMaps[5];
+    final absenceMap = localMaps[6];
+    final subtaskMap = localMaps[7];
+    final reminderMap = localMaps[8];
+    final gradeMap = localMaps[9];
+    final pomodoroMap = localMaps[10];
+    final xtraMap = localMaps[11];
 
     final fileYears = listOf('academicYears');
     final fileClasses = listOf('classes');

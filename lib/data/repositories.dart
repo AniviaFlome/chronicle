@@ -77,6 +77,20 @@ class ClassRepository {
     return query.watch();
   }
 
+  /// Same as [watchAll] but keeps only rows of [yearId] (plus rows with
+  /// no year, which stay visible everywhere). Filters in SQL instead of
+  /// discarding rows in Dart after every emission.
+  Stream<List<ClassesData>> watchAllForYear(
+    int yearId, {
+    bool includeInactive = false,
+  }) {
+    final query = db.select(db.classes);
+    if (!includeInactive) query.where((c) => c.active.equals(true));
+    query.where((c) => c.yearId.isNull() | c.yearId.equals(yearId));
+    query.orderBy([(c) => OrderingTerm.asc(c.name)]);
+    return query.watch();
+  }
+
   Future<List<ClassesData>> all() => db.select(db.classes).get();
 
   Future<ClassesData> byId(int id) =>
@@ -222,10 +236,16 @@ class ClassRepository {
   /// Returns the deleted count.
   Future<int> deleteAll() async {
     final rows = await db.select(db.classes).get();
-    for (final row in rows) {
-      await delete(row.id);
-    }
-    return rows.length;
+    // One outer transaction instead of one per row: drift nests inner
+    // transactions as savepoints, so this stays correct while committing
+    // once, and a mid-loop failure rolls everything back instead of
+    // leaving half the classes deleted.
+    return db.transaction(() async {
+      for (final row in rows) {
+        await delete(row.id);
+      }
+      return rows.length;
+    });
   }
 
   // --- Schedule items ---
@@ -380,6 +400,7 @@ class TaskRepository {
     TaskKind? type,
     bool onlyOpen = false,
     int? classId,
+    int? yearId,
   }) {
     final query = db.select(db.tasks).join([
       leftOuterJoin(db.classes, db.classes.id.equalsExp(db.tasks.classId)),
@@ -387,6 +408,13 @@ class TaskRepository {
     if (type != null) query.where(db.tasks.type.equalsValue(type));
     if (onlyOpen) query.where(db.tasks.isDone.equals(false));
     if (classId != null) query.where(db.tasks.classId.equals(classId));
+    // Year filter on the joined class (null class/year rows stay visible,
+    // mirroring the old in-Dart filter exactly).
+    if (yearId != null) {
+      query.where(
+        db.classes.yearId.isNull() | db.classes.yearId.equals(yearId),
+      );
+    }
     query.orderBy([
       OrderingTerm.desc(db.tasks.isDone),
       OrderingTerm.asc(db.tasks.dueDate),

@@ -124,11 +124,10 @@ final reminderSchedulerProvider = Provider(
 
 final classesStreamProvider = StreamProvider((ref) {
   final yearId = ref.watch(activeYearIdProvider).value;
-  final stream = ref.watch(classRepositoryProvider).watchAll();
-  if (yearId == null) return stream;
-  return stream.map(
-    (list) => list.where((c) => matchesYear(c.yearId, yearId)).toList(),
-  );
+  if (yearId == null) {
+    return ref.watch(classRepositoryProvider).watchAll();
+  }
+  return ref.watch(classRepositoryProvider).watchAllForYear(yearId);
 });
 
 /// Selected academic year for filtering, or null for all years.
@@ -266,17 +265,8 @@ final activeYearProvider = FutureProvider<AcademicYear?>((ref) async {
 
 final tasksStreamProvider = StreamProvider((ref) {
   final yearId = ref.watch(activeYearIdProvider).value;
-  final stream = ref.watch(taskRepositoryProvider).watchAll();
-  if (yearId == null) return stream;
-  return stream.map(
-    (list) => list.where((t) => matchesYear(t.classRow?.yearId, yearId)).toList(),
-  );
+  return ref.watch(taskRepositoryProvider).watchAll(yearId: yearId);
 });
-
-/// Year filter shared by the year-scoped stream providers. Rows without a
-/// year stay visible everywhere; rows with one must match the active year.
-bool matchesYear(int? rowYearId, int activeYearId) =>
-    rowYearId == null || rowYearId == activeYearId;
 
 /// Loads the occurrence engine once (re-created on invalidation).
 final engineProvider = FutureProvider<ScheduleOccurrenceEngine>((ref) async {
