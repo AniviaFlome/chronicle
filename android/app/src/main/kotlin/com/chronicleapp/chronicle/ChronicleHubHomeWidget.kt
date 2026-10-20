@@ -15,8 +15,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.os.ConfigurationCompat
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.LocalSize
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
@@ -372,6 +375,59 @@ private fun Tiny(palette: ChroniclePalette, data: HubContentData) {
     TinyRow(palette, dot, line.ifEmpty { data.snap.emptyText })
 }
 
+/**
+ * Hub header: WidgetHeader, except the menu tab with meal steppers, which
+ * pins everything to the top edge. Centered 40dp stepper boxes stretch the
+ * header row to 40dp and the shared centered header floats the 16dp icon
+ * ~10dp below every other tab's icon (seen-on-device); top-pinning keeps
+ * the icon (and the title's top edge) exactly where the other tabs put
+ * them, and the steppers grow downward when meal data arrives instead of
+ * shoving the icon down. Other widgets keep the shared header untouched.
+ */
+@Composable
+private fun HubHeaderRow(
+    palette: ChroniclePalette,
+    iconRes: Int,
+    title: String,
+    showSteppers: Boolean,
+) {
+    if (!showSteppers) {
+        WidgetHeader(
+            palette = palette,
+            iconRes = iconRes,
+            title = title,
+            trailing = null,
+        )
+        return
+    }
+    Row(
+        modifier = GlanceModifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Image(
+            provider = ImageProvider(iconRes),
+            contentDescription = null,
+            modifier = GlanceModifier.width(16.dp).height(16.dp),
+            colorFilter = ColorFilter.tint(palette.accent),
+        )
+        Spacer(modifier = GlanceModifier.width(6.dp))
+        Box(modifier = GlanceModifier.defaultWeight()) {
+            Text(
+                text = title,
+                style = TextStyle(
+                    color = palette.onSurface,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                maxLines = 1,
+            )
+        }
+        Spacer(modifier = GlanceModifier.width(6.dp))
+        MenuStepArrow(palette, R.drawable.ic_widget_chevron_left, -1)
+        MenuStepArrow(palette, R.drawable.ic_widget_chevron_right, 1)
+    }
+}
+
 @Composable
 private fun HubColumn(
     context: Context,
@@ -392,20 +448,12 @@ private fun HubColumn(
         ChronicleHubHomeWidget.TAB_TASKS -> data.tasksTitle
         else -> HubMenuMeal(data)?.title ?: data.menuTitle
     }
-    // Meal steppers live in the header's trailing slot, NOT in the tab
-    // body: a switcher Row above the dish list makes the translator drop
-    // everything below it on-device (blank tab under the switcher).
-    val trailing: (@Composable () -> Unit)? =
-        if (data.sel == ChronicleHubHomeWidget.TAB_MENU && data.menuMeals.size > 1) {
-            {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    MenuStepArrow(palette, R.drawable.ic_widget_chevron_left, -1)
-                    MenuStepArrow(palette, R.drawable.ic_widget_chevron_right, 1)
-                }
-            }
-        } else {
-            null
-        }
+    // Meal steppers pin to the header's top edge (see HubHeaderRow), NOT
+    // the tab body: a switcher Row above the dish list makes the
+    // translator drop everything below it on-device (blank tab under the
+    // switcher).
+    val showSteppers =
+        data.sel == ChronicleHubHomeWidget.TAB_MENU && data.menuMeals.size > 1
 
     // fillMaxSize + weight spacer pins the tab bar to the bottom edge;
     // the weight collapses to zero when content fills the widget.
@@ -414,11 +462,11 @@ private fun HubColumn(
     // Taller buckets scroll the full list instead.
     val compact = currentVerticalBucket() == VerticalBucket.Compact
     Column(modifier = GlanceModifier.fillMaxSize()) {
-        WidgetHeader(
+        HubHeaderRow(
                 palette = palette,
                 iconRes = iconRes,
                 title = title,
-                trailing = trailing,
+                showSteppers = showSteppers,
             )
             // Breathing room between the header and the body in every
             // bucket (Compact previously glued them together).
@@ -584,26 +632,17 @@ private fun ShortHubColumn(
         // switcher, so the title yields. Single meals keep their title.
         else -> if (data.menuMeals.size > 1) "" else HubMenuMeal(data)?.title ?: data.menuTitle
     }
-    val trailing: (@Composable () -> Unit)? =
-        if (data.sel == ChronicleHubHomeWidget.TAB_MENU && data.menuMeals.size > 1) {
-            {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    MenuStepArrow(palette, R.drawable.ic_widget_chevron_left, -1)
-                    MenuStepArrow(palette, R.drawable.ic_widget_chevron_right, 1)
-                }
-            }
-        } else {
-            null
-        }
+    val showSteppers =
+        data.sel == ChronicleHubHomeWidget.TAB_MENU && data.menuMeals.size > 1
     // Taller shorts (drawn ~135dp+) take one more row instead of idling.
     val roomy = LocalSize.current.height.value >= 135
 
     Column(modifier = GlanceModifier.fillMaxSize()) {
-        WidgetHeader(
+        HubHeaderRow(
             palette = palette,
             iconRes = iconRes,
             title = title,
-            trailing = trailing,
+            showSteppers = showSteppers,
         )
         Spacer(modifier = GlanceModifier.height(6.dp))
         Column(
