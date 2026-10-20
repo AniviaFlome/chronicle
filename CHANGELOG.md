@@ -3,7 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
-- Hub dots on 1-column widgets: the whole bottom bar now advances to the next tab (was: a small centered track, so near-misses fell through to the whole-widget tap and opened the app instead of switching). The track keeps the small pill look — the earlier full-width bubble is gone.
+- 1-column hub: any tap on the widget body advances to the next tab (was: opening the app except on a tiny dots target). The track keeps the small pill look — the earlier full-width bubble is gone.
+- Hub paging no longer depends on the matched size slot: tiny strips (which have no dots bar at all — every tap opened the app and the one visible line was a dead end) now switch tabs on tap, and the tab body advances on every size (wide keeps app-open on the header only). A short hub showing a single dish is a one-line strip by physics — resize it taller for the scrollable full dish list.
 - Room placeholders ("--", "-") are normalized to empty everywhere: the ITU catalog mapping, class editor / quick-edit / slot dialog saves, plus a v13 migration cleaning existing rows (and bumping `updatedAt` so folder sync propagates the cleanup). Widgets and tiles already hide empty rooms.
 - Agenda and Due-tasks widgets can shrink to 1 column again (`minResizeWidth/Height` 180x110 → 40dp like the other widgets).
 - Next-class detail is always visible instead of hidden behind a tap: the hero shows status · time range · room plus teacher · building, and every row shows its own "time · room" meta. The tap-to-expand machinery is gone (its expansion marker, per-row toggles and grow rule all deleted).

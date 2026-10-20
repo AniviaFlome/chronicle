@@ -244,12 +244,15 @@ private fun HubContent(context: Context, state: HubWidgetUiState) {
     val barData = (state as? HubWidgetUiState.Success)
         ?.takeUnless { tiny }
         ?.content
-    // Narrow hub: a tap ANYWHERE (body, header, shell padding) advances one
-    // tab instead of opening the app — on a 1x2 there is no blank corner to
-    // spare for an app-open target, and near-miss taps were the whole
-    // "can't switch pages" complaint. The dots bar keeps its own +1 (same
-    // action). Wide hub keeps the app-open shell tap plus its chevrons.
-    val shellClick = if (isNarrowSlot() && barData != null) {
+    // Narrow hub: a tap ANYWHERE (body, header, shell padding, tiny strip)
+    // advances one tab instead of opening the app — on a 1x2 there is no
+    // blank corner to spare for an app-open target, and near-miss taps were
+    // the whole "can't switch pages" complaint. Tiny strips get it too:
+    // they have no dots bar, so without this every tap opens the app and
+    // the single visible line (e.g. one dish) is a dead end. The dots bar
+    // keeps its own +1 (same action). Wide hub keeps the app-open shell
+    // tap, but the tab body below advances (see HubColumn).
+    val shellClick = if (isNarrowSlot()) {
         actionRunCallback<HubTabCallback>(
             actionParametersOf(HubDirectionKey to 1),
         )
@@ -390,10 +393,23 @@ private fun HubColumn(
             // below an interactive Row (seen on-device as a blank menu tab
             // under the meal switcher), and weight-bound lazy lists need a
             // bound anyway. Same arrangement as the standalone widgets.
+            // The body itself advances a tab on tap, on EVERY size: paging
+            // must not depend on which slot the host matched (a 1-column
+            // widget rendering a wide slot kept the app-open shell and its
+            // tiny dots target — "can't switch pages"). Child clickables
+            // (tab arrows, meal steppers, agenda rail cells) win on their
+            // own bounds; the header above has none, so it still falls
+            // through to the shell (app-open on wide, +1 on narrow).
             Column(
                 modifier = GlanceModifier
                     .defaultWeight()
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .clickable(
+                        onClick = actionRunCallback<HubTabCallback>(
+                            actionParametersOf(HubDirectionKey to 1),
+                        ),
+                        rippleOverride = NoPressFeedback,
+                    ),
             ) {
                 when (data.sel) {
                     // Compact renders whole rows only (static take + "+N
