@@ -401,7 +401,10 @@ private fun HubHeaderRow(
         return
     }
     Row(
-        modifier = GlanceModifier.fillMaxWidth(),
+        // +1dp: WidgetHeader centers its 16dp icon in a ~20dp row, so the
+        // icon sits ~1dp below the row top; match that exactly or the menu
+        // icon floats a hair above every other tab's (seen-on-device).
+        modifier = GlanceModifier.fillMaxWidth().padding(top = 1.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Image(
