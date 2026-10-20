@@ -30,6 +30,23 @@ const _gutterWidth = 38.0;
 const _slotRadius = 4.0;
 const _slotGap = 1.0;
 
+/// Splits xtra events into untimed (all-day) and timed, preserving order.
+/// A null startMinutes is what makes an event all-day.
+({List<XtraEvent> allDay, List<XtraEvent> timed}) partitionXtra(
+  Iterable<XtraEvent> xtra,
+) {
+  final allDay = <XtraEvent>[];
+  final timed = <XtraEvent>[];
+  for (final x in xtra) {
+    if (x.startMinutes == null) {
+      allDay.add(x);
+    } else {
+      timed.add(x);
+    }
+  }
+  return (allDay: allDay, timed: timed);
+}
+
 /// Week view: seven day columns with the week's class meetings,
 /// either as stacked lists or as a time grid.
 class CalendarScreen extends ConsumerStatefulWidget {
@@ -401,14 +418,9 @@ class _DayColumn extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final allDay = [
-      for (final x in xtra)
-        if (x.startMinutes == null) x,
-    ];
-    final timed = [
-      for (final x in xtra)
-        if (x.startMinutes != null) x,
-    ];
+    final parts = partitionXtra(xtra);
+    final allDay = parts.allDay;
+    final timed = parts.timed;
     return Container(
       width: dayWidth,
       margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -549,6 +561,214 @@ class _DayHeader extends StatelessWidget {
   }
 }
 
+/// Geometry for the week time grid, extracted from [_WeekGridState.build]
+/// so the build reads as inputs -> geometry -> layout. Pure function of its
+/// inputs: range extension, hour height, pixel metrics, gutter marks,
+/// slot warping and the 7 days.
+({
+  int rangeStart,
+  int rangeEnd,
+  double hourHeight,
+  double pxPerMin,
+  double totalHeight,
+  double gridTotalHeight,
+  List<({int start, int end})> breaks,
+  List<int> hourly,
+  List<int> hourlyLabels,
+  List<({int start, int end})>? slotRanges,
+  double Function(int)? slotY,
+  bool showFixed,
+  List<DateTime> days,
+}) _computeGridGeometry({
+  required Map<DateTime, List<engine.ClassOccurrence>> byDay,
+  required DateTime start,
+  required ({int start, int end}) range,
+  required String mode,
+  required (
+    {List<int> boundaries, List<({int start, int end})> breaks}
+  ) fixed,
+  required double? viewportHeight,
+}) {
+  final showFixed = mode == 'fixed' && fixed.boundaries.isNotEmpty;
+  // Single pass over occurrences for the visible-range extension; avoids
+  // materializing the flattened list plus two extra map/reduce passes.
+  var rangeStart = range.start;
+  var rangeEnd = range.end;
+  var hasOccurrences = false;
+  var minStart = 0;
+  var maxEnd = 0;
+  for (final dayList in byDay.values) {
+    for (final o in dayList) {
+      if (!hasOccurrences) {
+        hasOccurrences = true;
+        minStart = o.startMinutes;
+        maxEnd = o.endMinutes;
+      } else {
+        if (o.startMinutes < minStart) minStart = o.startMinutes;
+        if (o.endMinutes > maxEnd) maxEnd = o.endMinutes;
+      }
+    }
+  }
+  if (hasOccurrences) {
+    // Stretch just enough to fit out-of-range classes — no extra
+    // padding, so a custom day start/end is followed as closely as
+    // the timetable allows.
+    rangeStart = min(range.start, minStart).clamp(0, 1439);
+    rangeEnd = max(range.end, maxEnd).clamp(rangeStart + 120, 1440);
+  }
+  // Fixed-grid boundaries extend the shown range so none are cut off.
+  if (showFixed) {
+    rangeStart = min(rangeStart, fixed.boundaries.first).clamp(
+      0,
+      rangeStart,
+    );
+    rangeEnd = max(rangeEnd, fixed.boundaries.last).clamp(
+      rangeEnd,
+      1440,
+    );
+    if (rangeEnd <= rangeStart) {
+      rangeEnd = (rangeStart + 120).clamp(0, 1440);
+    }
+  }
+  var hourHeight = _hourHeight;
+  final viewport = viewportHeight;
+  if (viewport != null) {
+    // Header, spacing and padding above the time area.
+    const chrome = 200.0;
+    final spanHours = (rangeEnd - rangeStart) / 60.0;
+    if (spanHours > 0) {
+      final stretched = (viewport - chrome) / spanHours;
+      if (stretched > hourHeight) hourHeight = stretched;
+    }
+  }
+  final pxPerMin = hourHeight / 60;
+  final totalHeight = (rangeEnd - rangeStart) * pxPerMin;
+  final breaks = showFixed ? fixed.breaks : const <({int start, int end})>[];
+  // Gutter/grid marks follow the markers mode: class-times uses the
+  // visible week's occurrence start/end minutes (clamped to the range),
+  // fixed uses the configured slot boundaries. Whole hours remain the
+  // fallback when the mark list is empty.
+  final markSet = <int>{};
+  if (mode == 'fixed') {
+    for (final b in fixed.boundaries) {
+      if (b >= rangeStart && b <= rangeEnd) markSet.add(b);
+    }
+  } else {
+    for (final dayList in byDay.values) {
+      for (final o in dayList) {
+        if (o.startMinutes >= rangeStart && o.startMinutes <= rangeEnd) {
+          markSet.add(o.startMinutes);
+        }
+        if (o.endMinutes >= rangeStart && o.endMinutes <= rangeEnd) {
+          markSet.add(o.endMinutes);
+        }
+      }
+    }
+  }
+  final hourly = markSet.toList()..sort();
+  if (hourly.isEmpty) {
+    for (var h = 0; h <= 24; h++) {
+      final m = h * 60;
+      if (m >= rangeStart && m <= rangeEnd) hourly.add(m);
+    }
+  }
+  // Ensure custom start/end edges are drawn even when off-mark.
+  if (hourly.isEmpty || hourly.first != rangeStart) {
+    hourly.insert(0, rangeStart);
+  }
+  if (hourly.last != rangeEnd) hourly.add(rangeEnd);
+  // In fixed mode the generator knows which boundaries start a lesson
+  // (the first boundary plus every break end). When an end/start pair
+  // collides inside the ~16px label window, the start wins so the
+  // gutter reads like the timetable sheet. Grid lines still draw for
+  // every mark; only labels are filtered. Class-times mode has no
+  // lesson structure, so every mark stays labelable there. Preferred
+  // marks outside the visible list can't bully anyone.
+  final preferredStarts = <int>{
+    if (showFixed) ...[
+      if (fixed.boundaries.isNotEmpty &&
+          hourly.contains(fixed.boundaries.first))
+        fixed.boundaries.first,
+      for (final b in fixed.breaks)
+        if (hourly.contains(b.end)) b.end,
+    ],
+  };
+  final hourlyLabels = <int>[];
+  for (final m in hourly) {
+    if (preferredStarts.contains(m)) {
+      hourlyLabels.add(m);
+      continue;
+    }
+    var bullied = false;
+    for (final s in preferredStarts) {
+      if ((m - s).abs() * pxPerMin < 16) {
+        bullied = true;
+        break;
+      }
+    }
+    if (!bullied) hourlyLabels.add(m);
+  }
+
+  // Slot grid (fixed mode only): lesson slots are the fixed-rhythm
+  // boundary segments that are not breaks. Each slot becomes one
+  // uniform row; breaks collapse to zero space, like the sheet. slotY
+  // warps minutes to pixels (linear inside a slot, clamped outside);
+  // class-times mode leaves it null and keeps the exact-time layout.
+  List<({int start, int end})>? slotRanges;
+  double Function(int)? slotY;
+  var gridTotalHeight = totalHeight;
+  if (showFixed && fixed.boundaries.length >= 2) {
+    final slots = <({int start, int end})>[];
+    // Out-of-rhythm edges become their own rows so out-of-range
+    // classes stay visible (absorbed) instead of collapsing to a line.
+    if (rangeStart < fixed.boundaries.first) {
+      slots.add((start: rangeStart, end: fixed.boundaries.first));
+    }
+    for (var i = 0; i + 1 < fixed.boundaries.length; i++) {
+      final s = fixed.boundaries[i];
+      final e = fixed.boundaries[i + 1];
+      if (e <= s) continue;
+      final isBreak = fixed.breaks.any((b) => b.start == s && b.end == e);
+      if (!isBreak) slots.add((start: s, end: e));
+    }
+    if (rangeEnd > fixed.boundaries.last) {
+      slots.add((start: fixed.boundaries.last, end: rangeEnd));
+    }
+    if (slots.isNotEmpty) {
+      slotRanges = slots;
+      gridTotalHeight = slots.length * hourHeight;
+      slotY = (int t) {
+        if (t <= slots.first.start) return 0.0;
+        for (var i = 0; i < slots.length; i++) {
+          if (t < slots[i].end) {
+            final s = slots[i];
+            final frac = ((t - s.start) / (s.end - s.start)).clamp(0.0, 1.0);
+            return (i + frac) * hourHeight;
+          }
+        }
+        return slots.length * hourHeight;
+      };
+    }
+  }
+
+  final days = [for (var i = 0; i < 7; i++) shiftDays(start, i)];
+  return (
+    rangeStart: rangeStart,
+    rangeEnd: rangeEnd,
+    hourHeight: hourHeight,
+    pxPerMin: pxPerMin,
+    totalHeight: totalHeight,
+    gridTotalHeight: gridTotalHeight,
+    breaks: breaks,
+    hourly: hourly,
+    hourlyLabels: hourlyLabels,
+    slotRanges: slotRanges,
+    slotY: slotY,
+    showFixed: showFixed,
+    days: days,
+  );
+}
+
 /// Classic calendar time grid: single left gutter, sticky header row,
 // and hourly lines only.
 class _WeekGrid extends ConsumerStatefulWidget {
@@ -653,175 +873,32 @@ class _WeekGridState extends ConsumerState<_WeekGrid> {
     final fixed =
         ref.watch(fixedGridProvider).value ??
         (boundaries: const <int>[], breaks: const <({int start, int end})>[]);
-    final showFixed = mode == 'fixed' && fixed.boundaries.isNotEmpty;
-    // Single pass over occurrences for the visible-range extension; avoids
-    // materializing the flattened list plus two extra map/reduce passes.
-    var rangeStart = range.start;
-    var rangeEnd = range.end;
-    var hasOccurrences = false;
-    var minStart = 0;
-    var maxEnd = 0;
-    for (final dayList in byDay.values) {
-      for (final o in dayList) {
-        if (!hasOccurrences) {
-          hasOccurrences = true;
-          minStart = o.startMinutes;
-          maxEnd = o.endMinutes;
-        } else {
-          if (o.startMinutes < minStart) minStart = o.startMinutes;
-          if (o.endMinutes > maxEnd) maxEnd = o.endMinutes;
-        }
-      }
-    }
-    if (hasOccurrences) {
-      // Stretch just enough to fit out-of-range classes — no extra
-      // padding, so a custom day start/end is followed as closely as
-      // the timetable allows.
-      rangeStart = min(range.start, minStart).clamp(0, 1439);
-      rangeEnd = max(range.end, maxEnd).clamp(rangeStart + 120, 1440);
-    }
-    // Fixed-grid boundaries extend the shown range so none are cut off.
-    if (showFixed) {
-      rangeStart = min(rangeStart, fixed.boundaries.first).clamp(
-        0,
-        rangeStart,
-      );
-      rangeEnd = max(rangeEnd, fixed.boundaries.last).clamp(
-        rangeEnd,
-        1440,
-      );
-      if (rangeEnd <= rangeStart) {
-        rangeEnd = (rangeStart + 120).clamp(0, 1440);
-      }
-    }
-    var hourHeight = _hourHeight;
-    final viewport = viewportHeight;
-    if (viewport != null) {
-      // Header, spacing and padding above the time area.
-      const chrome = 200.0;
-      final spanHours = (rangeEnd - rangeStart) / 60.0;
-      if (spanHours > 0) {
-        final stretched = (viewport - chrome) / spanHours;
-        if (stretched > hourHeight) hourHeight = stretched;
-      }
-    }
-    final pxPerMin = hourHeight / 60;
-    final totalHeight = (rangeEnd - rangeStart) * pxPerMin;
-    final breaks = showFixed ? fixed.breaks : const <({int start, int end})>[];
-    // Gutter/grid marks follow the markers mode: class-times uses the
-    // visible week's occurrence start/end minutes (clamped to the range),
-    // fixed uses the configured slot boundaries. Whole hours remain the
-    // fallback when the mark list is empty.
-    final markSet = <int>{};
-    if (mode == 'fixed') {
-      for (final b in fixed.boundaries) {
-        if (b >= rangeStart && b <= rangeEnd) markSet.add(b);
-      }
-    } else {
-      for (final dayList in byDay.values) {
-        for (final o in dayList) {
-          if (o.startMinutes >= rangeStart && o.startMinutes <= rangeEnd) {
-            markSet.add(o.startMinutes);
-          }
-          if (o.endMinutes >= rangeStart && o.endMinutes <= rangeEnd) {
-            markSet.add(o.endMinutes);
-          }
-        }
-      }
-    }
-    final hourly = markSet.toList()..sort();
-    if (hourly.isEmpty) {
-      for (var h = 0; h <= 24; h++) {
-        final m = h * 60;
-        if (m >= rangeStart && m <= rangeEnd) hourly.add(m);
-      }
-    }
-    // Ensure custom start/end edges are drawn even when off-mark.
-    if (hourly.isEmpty || hourly.first != rangeStart) {
-      hourly.insert(0, rangeStart);
-    }
-    if (hourly.last != rangeEnd) hourly.add(rangeEnd);
-    // In fixed mode the generator knows which boundaries start a lesson
-    // (the first boundary plus every break end). When an end/start pair
-    // collides inside the ~16px label window, the start wins so the
-    // gutter reads like the timetable sheet. Grid lines still draw for
-    // every mark; only labels are filtered. Class-times mode has no
-    // lesson structure, so every mark stays labelable there. Preferred
-    // marks outside the visible list can't bully anyone.
-    final preferredStarts = <int>{
-      if (showFixed) ...[
-        if (fixed.boundaries.isNotEmpty &&
-            hourly.contains(fixed.boundaries.first))
-          fixed.boundaries.first,
-        for (final b in fixed.breaks)
-          if (hourly.contains(b.end)) b.end,
-      ],
-    };
-    final hourlyLabels = <int>[];
-    for (final m in hourly) {
-      if (preferredStarts.contains(m)) {
-        hourlyLabels.add(m);
-        continue;
-      }
-      var bullied = false;
-      for (final s in preferredStarts) {
-        if ((m - s).abs() * pxPerMin < 16) {
-          bullied = true;
-          break;
-        }
-      }
-      if (!bullied) hourlyLabels.add(m);
-    }
-
-    // Slot grid (fixed mode only): lesson slots are the fixed-rhythm
-    // boundary segments that are not breaks. Each slot becomes one
-    // uniform row; breaks collapse to zero space, like the sheet. slotY
-    // warps minutes to pixels (linear inside a slot, clamped outside);
-    // class-times mode leaves it null and keeps the exact-time layout.
-    List<({int start, int end})>? slotRanges;
-    double Function(int)? slotY;
-    var gridTotalHeight = totalHeight;
-    if (showFixed && fixed.boundaries.length >= 2) {
-      final slots = <({int start, int end})>[];
-      // Out-of-rhythm edges become their own rows so out-of-range
-      // classes stay visible (absorbed) instead of collapsing to a line.
-      if (rangeStart < fixed.boundaries.first) {
-        slots.add((start: rangeStart, end: fixed.boundaries.first));
-      }
-      for (var i = 0; i + 1 < fixed.boundaries.length; i++) {
-        final s = fixed.boundaries[i];
-        final e = fixed.boundaries[i + 1];
-        if (e <= s) continue;
-        final isBreak = fixed.breaks.any((b) => b.start == s && b.end == e);
-        if (!isBreak) slots.add((start: s, end: e));
-      }
-      if (rangeEnd > fixed.boundaries.last) {
-        slots.add((start: fixed.boundaries.last, end: rangeEnd));
-      }
-      if (slots.isNotEmpty) {
-        slotRanges = slots;
-        gridTotalHeight = slots.length * hourHeight;
-        slotY = (int t) {
-          if (t <= slots.first.start) return 0.0;
-          for (var i = 0; i < slots.length; i++) {
-            if (t < slots[i].end) {
-              final s = slots[i];
-              final frac = ((t - s.start) / (s.end - s.start)).clamp(0.0, 1.0);
-              return (i + frac) * hourHeight;
-            }
-          }
-          return slots.length * hourHeight;
-        };
-      }
-    }
-
-    final days = [for (var i = 0; i < 7; i++) shiftDays(start, i)];
+    final (
+      :rangeStart,
+      :rangeEnd,
+      :hourHeight,
+      :pxPerMin,
+      :totalHeight,
+      :gridTotalHeight,
+      :breaks,
+      :hourly,
+      :hourlyLabels,
+      :slotRanges,
+      :slotY,
+      :showFixed,
+      :days,
+    ) = _computeGridGeometry(
+      byDay: byDay,
+      start: start,
+      range: range,
+      mode: mode,
+      fixed: fixed,
+      viewportHeight: viewportHeight,
+    );
 
     Widget headerCell(DateTime day, {double? width}) {
-      final allDay = [
-        for (final x in xtraByDay[day] ?? const <XtraEvent>[])
-          if (x.startMinutes == null) x,
-      ];
+      final allDay =
+          partitionXtra(xtraByDay[day] ?? const <XtraEvent>[]).allDay;
       return Container(
         width: width ?? dayWidth,
         margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -1258,10 +1335,7 @@ class _GridDayColumn extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final locale = Localizations.localeOf(context).languageCode;
-    final timedXtra = [
-      for (final x in xtra)
-        if (x.startMinutes != null) x,
-    ];
+    final timedXtra = partitionXtra(xtra).timed;
     final ranges = [
       for (final occ in occurrences) (occ.startMinutes, occ.endMinutes),
       for (final x in timedXtra)
@@ -1470,7 +1544,7 @@ class _XtraGridBlock extends StatelessWidget {
   final VoidCallback onTap;
   final double blockHeight;
 
-  /// Slot mode renders sheet-style rectangles (no radius).
+  /// Slot mode renders sheet-style rectangles (near-square _slotRadius).
   final bool square;
 
   const _XtraGridBlock({
@@ -1581,7 +1655,7 @@ class _GridBlock extends StatelessWidget {
   final bool absent;
   final double blockHeight;
 
-  /// Slot mode renders sheet-style rectangles (no radius).
+  /// Slot mode renders sheet-style rectangles (near-square _slotRadius).
   final bool square;
 
   const _GridBlock({
@@ -1938,10 +2012,7 @@ class _WeekSkeleton extends StatelessWidget {
                                         margin: const EdgeInsets.symmetric(
                                           horizontal: 3,
                                         ),
-                                        child: _SkeletonLane(
-                                          index: i,
-                                          ticks: const _SkeletonTicks(),
-                                        ),
+                                        child: _SkeletonLane(index: i),
                                       ),
                                   ],
                                 ),
@@ -1994,16 +2065,15 @@ class _SkeletonTicks extends StatelessWidget {
 /// staggered fractions so the week reads as loading, not empty.
 class _SkeletonLane extends StatelessWidget {
   final int index;
-  final Widget ticks;
 
-  const _SkeletonLane({required this.index, required this.ticks});
+  const _SkeletonLane({required this.index});
 
   @override
   Widget build(BuildContext context) {
     final i = index;
     return Stack(
       children: [
-        ticks,
+        const _SkeletonTicks(),
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
