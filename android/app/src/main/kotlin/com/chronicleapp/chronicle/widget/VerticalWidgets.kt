@@ -24,7 +24,6 @@ import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
-import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
@@ -95,11 +94,13 @@ val weeklySizeSlots = SizeMode.Responsive(
 )
 
 /**
- * Slim slot set for the hub: 8 entries instead of 13. Every widget update
+ * Slim slot set for the hub: 10 entries instead of 13. Every widget update
  * composes + translates one view PER SLOT, and tab switches pay that cost
  * on every tap — the full set made them visibly laggy (same mechanism as
- * the weekly feed, which got its slim set first). Buckets still resolve
- * the same way; wide enlargements fall back to the nearest covering slot.
+ * the weekly feed, which got its slim set first). The two short 1-column
+ * slots (140x110/150x110) match real short strips that otherwise fall back
+ * to Tiny; buckets still resolve the same way. Stays under the framework
+ * MAX_INIT_VIEW_COUNT=16 cap — do not grow past 16.
  */
 val hubSizeSlots = SizeMode.Responsive(
     setOf(
@@ -320,38 +321,5 @@ fun ChunkedRows(
                 }
             }
         }
-    }
-}
-
-/**
- * Inline metadata row (allowed Row under the vertical-flow rule):
- * [clock "10:30 AM"] or [room tag + status badge]. Never primary content.
- */
-@Composable
-fun MetaRow(
-    palette: ChroniclePalette,
-    left: String,
-    right: String = "",
-) {
-    // When the detail already opens with the chip text ("17:11" vs
-    // "17:11–20:11"), the chip is redundant — show the detail alone.
-    if (left.isNotEmpty() && (right.isEmpty() || !right.startsWith(left))) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TonalChip(palette, left)
-            if (right.isNotEmpty()) {
-                Spacer(modifier = GlanceModifier.width(6.dp))
-                Text(
-                    text = right,
-                    style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp),
-                    maxLines = 2,
-                )
-            }
-        }
-    } else if (right.isNotEmpty()) {
-        Text(
-            text = right,
-            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp),
-            maxLines = 2,
-        )
     }
 }

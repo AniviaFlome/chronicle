@@ -56,9 +56,6 @@ import com.chronicleapp.chronicle.R
 /** ActionParameters key for the agenda rail day index (letter strip cells). */
 val AgendaDayKey = ActionParameters.Key<Int>("dayIdx")
 
-/** ActionParameters key for the hub segmented-tab index. */
-val HubTabKey = ActionParameters.Key<Int>("tabIdx")
-
 /** ActionParameters key for the hub tab arrow direction (+1 / -1). */
 val HubDirectionKey = ActionParameters.Key<Int>("direction")
 
@@ -769,113 +766,6 @@ fun LetterRail(palette: ChroniclePalette, week: List<WeekCell>, sel: Int) {
                     )
                 }
             }
-        }
-    }
-}
-
-/**
- * Hub segmented tab bar: tonal track, selected tab = filled accent pill.
- * Direct tab select (replaces the chevron arrows).
- */
-@Composable
-fun SegmentedTabs(palette: ChroniclePalette, tabs: List<String>, selected: Int) {
-    if (tabs.isEmpty()) return
-    Row(
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .background(palette.cardHigh)
-            .cornerRadius(50.dp)
-            .padding(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        for (idx in tabs.indices) {
-            val isSel = idx == selected
-            Box(modifier = GlanceModifier.defaultWeight().padding(horizontal = 2.dp)) {
-                Box(
-                    modifier = GlanceModifier
-                        .fillMaxWidth()
-                        .background(if (isSel) palette.accentContainer else palette.cardHigh)
-                        .cornerRadius(50.dp)
-                        .padding(vertical = 6.dp)
-                        .clickable(
-                            onClick = actionRunCallback<HubTabSelectCallback>(
-                                actionParametersOf(HubTabKey to idx),
-                            ),
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = tabs[idx],
-                        style = TextStyle(
-                            color = if (isSel) palette.onAccentContainer else palette.onSurfaceVariant,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                        ),
-                        maxLines = 1,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** Agenda date pillar: weekday over a giant day number. */
-@Composable
-fun DatePillar(palette: ChroniclePalette, label: String, num: String) {
-    Column(
-        modifier = GlanceModifier.width(64.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = label,
-            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 12.sp),
-            maxLines = 1,
-        )
-        Text(
-            text = num,
-            style = TextStyle(
-                color = palette.onSurface,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-            ),
-            maxLines = 1,
-        )
-    }
-}
-
-/** Hero countdown: prefix + huge numeral + unit on ONE baseline row
- * ("in 17 h") — never stacked, never clipped. */
-@Composable
-fun CountdownHero(palette: ChroniclePalette, prefix: String, number: String, suffix: String) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        if (prefix.trim().isNotEmpty()) {
-            Text(
-                text = prefix.trim(),
-                style = TextStyle(color = palette.onSurfaceVariant, fontSize = 14.sp),
-                maxLines = 1,
-            )
-            Spacer(modifier = GlanceModifier.width(6.dp))
-        }
-        Text(
-            text = number,
-            style = TextStyle(
-                color = palette.onSurface,
-                fontSize = 44.sp,
-                fontWeight = FontWeight.Bold,
-            ),
-            maxLines = 1,
-        )
-        if (suffix.trim().isNotEmpty()) {
-            Spacer(modifier = GlanceModifier.width(6.dp))
-            Text(
-                text = suffix.trim(),
-                style = TextStyle(
-                    color = palette.onSurface,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
-                maxLines = 1,
-            )
         }
     }
 }

@@ -416,10 +416,14 @@ fun resolveTimed(entries: List<TimedEntry>, nowMs: Long): TimedEntry? =
     entries.lastOrNull { it.at <= nowMs }
 
 // ---------------------------------------------------------------------------
-// Parse cache: hub resolveState runs once per size slot (8x per update)
+// Parse cache: hub resolveState runs once per size slot (10x per update)
 // with identical raw strings — cache hits skip re-parsing. All parse
 // functions are pure; synchronized on a private lock. Raw strings are the
 // cache keys: a push writes new strings, which naturally miss and re-parse.
+// Single-entry per shape: entries hold one widget's strings at a time,
+// which is exactly the within-update sharing pattern (10 slot
+// compositions, one parse); cross-widget updates re-parse once each,
+// never more than uncached code would.
 // ---------------------------------------------------------------------------
 
 private val hubParseLock = Any()

@@ -107,28 +107,6 @@ class HubTabCallback : ActionCallback {
     }
 }
 
-/** Hub segmented tab: jump directly to the tapped enabled tab. */
-class HubTabSelectCallback : ActionCallback {
-    override suspend fun onAction(
-        context: Context,
-        glanceId: GlanceId,
-        parameters: ActionParameters,
-    ) {
-        val idx = parameters[HubTabKey] ?: return
-        val prefs = widgetPrefs(context)
-        val enabled = buildList {
-            if (prefs.bool("${Keys.HUB}.${Keys.TAB_CLASS}", true)) add(0)
-            if (prefs.bool("${Keys.HUB}.${Keys.TAB_AGENDA}", true)) add(1)
-            if (prefs.bool("${Keys.HUB}.${Keys.TAB_TASKS}", true)) add(2)
-            if (prefs.bool("${Keys.HUB}.${Keys.TAB_MENU}", true)) add(3)
-        }.ifEmpty { listOf(0) }
-        if (idx !in enabled.indices) return
-        prefs.edit().putInt("${Keys.HUB}.${Keys.SELECTED_TAB}", idx).commit()
-        hubNavBump.intValue++
-        ChronicleHubHomeWidget().update(context, glanceId)
-    }
-}
-
 /** SharedPreferences shared with the home_widget plugin's storage. */
 internal fun widgetPrefs(context: Context) =
     es.antonborri.home_widget.HomeWidgetPlugin.getData(context)

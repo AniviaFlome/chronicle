@@ -53,7 +53,6 @@ import com.chronicleapp.chronicle.widget.HubDirectionKey
 import com.chronicleapp.chronicle.widget.HubTabCallback
 import com.chronicleapp.chronicle.widget.MenuMeal
 import com.chronicleapp.chronicle.widget.MenuStepArrow
-import com.chronicleapp.chronicle.widget.MoreIndicator
 import com.chronicleapp.chronicle.widget.NoPressFeedback
 import com.chronicleapp.chronicle.widget.Keys
 import com.chronicleapp.chronicle.widget.Samples
@@ -311,18 +310,18 @@ private fun HubBody(
     data: HubContentData,
     nowMs: Long,
 ) {
-    // Portrait buckets: Tiny collapses to one quiet line; lists scroll in
-    // every other bucket, so short widgets clip nothing and tall ones
-    // fill up. Compact drops the hairline.
+    // Portrait buckets: Tiny collapses to one quiet line; shorts get a
+    // slim header + rows layout with no tab bar; lists scroll in the
+    // taller buckets so nothing clips and tall ones fill up.
     when (currentVerticalBucket()) {
         VerticalBucket.Tiny ->
             Tiny(palette, data)
         VerticalBucket.Compact ->
             ShortHubColumn(context, palette, data, nowMs)
         VerticalBucket.TallColumn ->
-            HubColumn(context, palette, data, nowMs, hairline = true)
+            HubColumn(context, palette, data, nowMs)
         VerticalBucket.FullPortrait ->
-            HubColumn(context, palette, data, nowMs, hairline = true)
+            HubColumn(context, palette, data, nowMs)
     }
 }
 
@@ -373,6 +372,38 @@ private fun Tiny(palette: ChroniclePalette, data: HubContentData) {
         else -> null
     }
     TinyRow(palette, dot, line.ifEmpty { data.snap.emptyText })
+}
+
+/** Header model shared by HubColumn and ShortHubColumn: icon + title +
+ * whether the meal steppers show. Short menu titles yield to the steppers
+ * (compactTitle): ~20dp next to 40dp arrows truncates to "B…"
+ * (seen-on-device); tall headers have room for both. */
+private data class HubHeaderData(
+    val iconRes: Int,
+    val title: String,
+    val showSteppers: Boolean,
+)
+
+private fun hubHeaderData(data: HubContentData, compactTitle: Boolean): HubHeaderData {
+    // Meal steppers pin to the header's top edge (see HubHeaderRow), NOT
+    // the tab body: a switcher Row above the dish list makes the
+    // translator drop everything below it on-device (blank tab under the
+    // switcher).
+    val showSteppers =
+        data.sel == ChronicleHubHomeWidget.TAB_MENU && data.menuMeals.size > 1
+    val title = when (data.sel) {
+        ChronicleHubHomeWidget.TAB_CLASS -> data.titleClass
+        ChronicleHubHomeWidget.TAB_AGENDA -> data.titleAgenda
+        ChronicleHubHomeWidget.TAB_TASKS -> data.tasksTitle
+        else -> if (compactTitle && showSteppers) "" else HubMenuMeal(data)?.title ?: data.menuTitle
+    }
+    val iconRes = when (data.sel) {
+        ChronicleHubHomeWidget.TAB_CLASS -> R.drawable.ic_widget_school
+        ChronicleHubHomeWidget.TAB_AGENDA -> R.drawable.ic_widget_event
+        ChronicleHubHomeWidget.TAB_TASKS -> R.drawable.ic_widget_task
+        else -> R.drawable.ic_widget_menu
+    }
+    return HubHeaderData(iconRes, title, showSteppers)
 }
 
 /**
@@ -437,48 +468,25 @@ private fun HubColumn(
     palette: ChroniclePalette,
     data: HubContentData,
     nowMs: Long,
-    hairline: Boolean,
 ) {
-    val iconRes = when (data.sel) {
-        ChronicleHubHomeWidget.TAB_CLASS -> R.drawable.ic_widget_school
-        ChronicleHubHomeWidget.TAB_AGENDA -> R.drawable.ic_widget_event
-        ChronicleHubHomeWidget.TAB_TASKS -> R.drawable.ic_widget_task
-        else -> R.drawable.ic_widget_menu
-    }
-    val title = when (data.sel) {
-        ChronicleHubHomeWidget.TAB_CLASS -> data.titleClass
-        ChronicleHubHomeWidget.TAB_AGENDA -> data.titleAgenda
-        ChronicleHubHomeWidget.TAB_TASKS -> data.tasksTitle
-        else -> HubMenuMeal(data)?.title ?: data.menuTitle
-    }
-    // Meal steppers pin to the header's top edge (see HubHeaderRow), NOT
-    // the tab body: a switcher Row above the dish list makes the
-    // translator drop everything below it on-device (blank tab under the
-    // switcher).
-    val showSteppers =
-        data.sel == ChronicleHubHomeWidget.TAB_MENU && data.menuMeals.size > 1
+    val header = hubHeaderData(data, compactTitle = false)
 
     // fillMaxSize + weight spacer pins the tab bar to the bottom edge;
     // the weight collapses to zero when content fills the widget.
-    // Compact buckets render whole rows only (static take + "+N more"):
-    // a short widget must never show a row that cannot be fully seen.
-    // Taller buckets scroll the full list instead.
-    val compact = currentVerticalBucket() == VerticalBucket.Compact
+    // Taller buckets scroll the full list; shorts never reach here
+    // (ShortHubColumn owns the Compact bucket).
     Column(modifier = GlanceModifier.fillMaxSize()) {
         HubHeaderRow(
                 palette = palette,
-                iconRes = iconRes,
-                title = title,
-                showSteppers = showSteppers,
+                iconRes = header.iconRes,
+                title = header.title,
+                showSteppers = header.showSteppers,
             )
-            // Breathing room between the header and the body in every
-            // bucket (Compact previously glued them together).
+            // Breathing room between the header and the body.
             Spacer(modifier = GlanceModifier.height(6.dp))
-            if (hairline) {
-                Spacer(modifier = GlanceModifier.height(4.dp))
-                Hairline(palette)
-                Spacer(modifier = GlanceModifier.height(6.dp))
-            }
+            Spacer(modifier = GlanceModifier.height(4.dp))
+            Hairline(palette)
+            Spacer(modifier = GlanceModifier.height(6.dp))
             // The tab body takes the remaining shell space with a bound
             // (not wrap-content): unbounded bodies mismeasure everything
             // below an interactive Row (seen on-device as a blank menu tab
@@ -503,9 +511,9 @@ private fun HubColumn(
                     ),
             ) {
                 when (data.sel) {
-                    // Compact renders whole rows only (static take + "+N
-                    // more"); taller buckets scroll the full list. True
-                    // strips never reach here (Tiny renders one-liners).
+                    // Tall buckets scroll the full list. True strips never
+                    // reach here (Tiny renders one-liners, shorts render
+                    // ShortHubColumn).
                     ChronicleHubHomeWidget.TAB_CLASS ->
                         SharedClassTab(
                             palette,
@@ -513,7 +521,6 @@ private fun HubColumn(
                             data.snap,
                             nowMs,
                             data.looks,
-                            compact = currentVerticalBucket() == VerticalBucket.Compact,
                         )
                     ChronicleHubHomeWidget.TAB_AGENDA ->
                         if (data.agendaRows.isEmpty()) {
@@ -522,14 +529,6 @@ private fun HubColumn(
                                 R.drawable.ic_widget_event_available,
                                 data.snap.staleName.ifEmpty { data.snap.emptyText },
                             )
-                        } else if (compact) {
-                            val shown = data.agendaRows.take(2)
-                            for ((i, row) in shown.withIndex()) {
-                                if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
-                                ClassRow(context, palette, row.time, row.name, row.colorHex)
-                            }
-                            Spacer(modifier = GlanceModifier.height(6.dp))
-                            MoreIndicator(palette, data.agendaRows.size - shown.size)
                         } else {
                             // Scrollable rows: every class reachable at any
                             // height, nothing clips mid-row, no "+N more".
@@ -551,14 +550,6 @@ private fun HubColumn(
                                 R.drawable.ic_widget_done_all,
                                 data.emptyTasks.ifEmpty { data.snap.emptyText },
                             )
-                        } else if (compact) {
-                            val shown = data.tasksRows.take(2)
-                            for ((i, task) in shown.withIndex()) {
-                                if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
-                                TaskRow(palette, task.title, task.date, task.urgent)
-                            }
-                            Spacer(modifier = GlanceModifier.height(6.dp))
-                            MoreIndicator(palette, data.tasksRows.size - shown.size)
                         } else {
                             // Scrollable rows, same mechanism as above.
                             LazyColumn(modifier = GlanceModifier.defaultWeight()) {
@@ -620,32 +611,16 @@ private fun ShortHubColumn(
     data: HubContentData,
     nowMs: Long,
 ) {
-    val iconRes = when (data.sel) {
-        ChronicleHubHomeWidget.TAB_CLASS -> R.drawable.ic_widget_school
-        ChronicleHubHomeWidget.TAB_AGENDA -> R.drawable.ic_widget_event
-        ChronicleHubHomeWidget.TAB_TASKS -> R.drawable.ic_widget_task
-        else -> R.drawable.ic_widget_menu
-    }
-    val title = when (data.sel) {
-        ChronicleHubHomeWidget.TAB_CLASS -> data.titleClass
-        ChronicleHubHomeWidget.TAB_AGENDA -> data.titleAgenda
-        ChronicleHubHomeWidget.TAB_TASKS -> data.tasksTitle
-        // Short strips give the title ~20dp next to the steppers (seen as
-        // "B…"): with several meals the steppers alone identify the
-        // switcher, so the title yields. Single meals keep their title.
-        else -> if (data.menuMeals.size > 1) "" else HubMenuMeal(data)?.title ?: data.menuTitle
-    }
-    val showSteppers =
-        data.sel == ChronicleHubHomeWidget.TAB_MENU && data.menuMeals.size > 1
+    val header = hubHeaderData(data, compactTitle = true)
     // Taller shorts (drawn ~135dp+) take one more row instead of idling.
     val roomy = LocalSize.current.height.value >= 135
 
     Column(modifier = GlanceModifier.fillMaxSize()) {
         HubHeaderRow(
             palette = palette,
-            iconRes = iconRes,
-            title = title,
-            showSteppers = showSteppers,
+            iconRes = header.iconRes,
+            title = header.title,
+            showSteppers = header.showSteppers,
         )
         Spacer(modifier = GlanceModifier.height(6.dp))
         Column(
