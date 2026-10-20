@@ -309,20 +309,46 @@ private fun HubBody(
     }
 }
 
-/** Tiny strip (1x1/2x1): dense dot + first line of the active tab. */
+/** Tiny strip (1x1/2x1): dense dot + first line of the active tab.
+ * The line carries a meta suffix (time/count/next) because a lone name in
+ * a stretched tiny card reads as "too little info": hosts can report a
+ * much smaller size than they draw (seen-on-device: slot 110x40 drawn at
+ * ~150x115), and one centered line over that void is all Tiny can ever
+ * afford — so the line itself must say more. All maxLines=1, safe on true
+ * strips via ellipsis. */
 @Composable
 private fun Tiny(palette: ChroniclePalette, data: HubContentData) {
     val line = when (data.sel) {
-        ChronicleHubHomeWidget.TAB_CLASS -> data.entry
-            ?.takeUnless { it.isSentinel || data.snap.stale }
-            ?.className ?: data.snap.staleName.ifEmpty { data.snap.emptyText }
+        ChronicleHubHomeWidget.TAB_CLASS -> {
+            val entry = data.entry?.takeUnless { it.isSentinel || data.snap.stale }
+            when {
+                entry == null -> data.snap.staleName.ifEmpty { data.snap.emptyText }
+                // Hero: name + live status ("in 7 h"); quiet: state copy +
+                // tomorrow's class (ellipsized to what fits).
+                entry.startLabel.isNotEmpty() ->
+                    "${entry.className} · ${entry.startLabel}"
+                entry.thenName.isNotEmpty() ->
+                    "${entry.className} · ${entry.thenName} ${entry.thenWhen}"
+                else -> entry.className
+            }
+        }
         ChronicleHubHomeWidget.TAB_AGENDA -> data.agendaRows.firstOrNull()
             ?.let { "${it.time} · ${it.name}" }
             ?: data.snap.staleName.ifEmpty { data.snap.emptyText }
-        ChronicleHubHomeWidget.TAB_TASKS -> data.tasksRows.firstOrNull()?.title
+        ChronicleHubHomeWidget.TAB_TASKS -> data.tasksRows.firstOrNull()
+            ?.let { task ->
+                if (task.date.isNotEmpty()) "${task.title} · ${task.date}"
+                else task.title
+            }
             ?: data.emptyTasks.ifEmpty { data.snap.emptyText }
-        else -> HubMenuMeal(data)?.dishes?.firstOrNull()
-            ?: data.emptyMenu.ifEmpty { data.snap.emptyText }
+        else -> {
+            val dishes = HubMenuMeal(data)?.dishes ?: data.menuRows
+            val first = dishes.firstOrNull()
+                ?: data.emptyMenu.ifEmpty { data.snap.emptyText }
+            // "+N" answers "lunch menu only shows one" at a glance: the
+            // rest is one resize away (tall menu lists every dish).
+            if (dishes.size > 1) "$first · +${dishes.size - 1}" else first
+        }
     }
     val dot = when (data.sel) {
         ChronicleHubHomeWidget.TAB_CLASS -> data.entry?.colorHex
