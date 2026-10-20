@@ -14,6 +14,7 @@ import '../app.dart';
 import '../data/database.dart';
 import '../data/repositories.dart';
 import '../data/schedule_repository.dart';
+import '../domain/schedule_occurrence_engine.dart';
 import '../providers.dart';
 import '../l10n/l10n.dart';
 import '../theme.dart';
@@ -29,6 +30,12 @@ import '../utils/ui_feedback.dart';
 import 'bilsis_import_dialog.dart';
 import 'schedule_slot_dialog.dart';
 import 'year_widgets.dart';
+
+/// Horizontal card padding with the standard 12dp section gap below.
+const _kSectionPadding = EdgeInsets.fromLTRB(16, 0, 16, 12);
+
+/// Horizontal card padding with a tight 4dp gap below.
+const _kTightPadding = EdgeInsets.fromLTRB(16, 0, 16, 4);
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -81,18 +88,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     _loadWidgetOpacity();
   }
 
-  Future<void> _loadCalendarOrientation() async {
-    try {
-      final value = await ref
-          .read(settingsRepositoryProvider)
-          .calendarOrientation();
-      if (!mounted) return;
-      setState(() => _calendarOrientation = value);
+  Future<void> _loadCalendarOrientation() => _loadValue(
+    'Load calendar layout',
+    () => ref.read(settingsRepositoryProvider).calendarOrientation(),
+    (value) {
+      _calendarOrientation = value;
       ref.read(initialCalendarOrientationProvider.notifier).set(value);
-    } catch (e) {
-      logLoadFailure('Load calendar layout', e);
-    }
-  }
+    },
+  );
 
   Future<void> _setCalendarOrientation(String value) async {
     setState(() => _calendarOrientation = value);
@@ -103,17 +106,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
-  Future<void> _loadStartCalendarOnToday() async {
-    try {
-      final value = await ref
-          .read(settingsRepositoryProvider)
-          .startCalendarOnToday();
-      if (!mounted) return;
-      setState(() => _startCalendarOnToday = value);
-    } catch (e) {
-      logLoadFailure('Load start calendar on today', e);
-    }
-  }
+  Future<void> _loadStartCalendarOnToday() => _loadValue(
+    'Load start calendar on today',
+    () => ref.read(settingsRepositoryProvider).startCalendarOnToday(),
+    (value) => _startCalendarOnToday = value,
+  );
 
   Future<void> _toggleStartCalendarOnToday(bool value) async {
     setState(() => _startCalendarOnToday = value);
@@ -172,15 +169,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
-  Future<void> _loadWidgetStyle() async {
-    try {
-      final value = await ref.read(settingsRepositoryProvider).widgetStyle();
-      if (!mounted) return;
-      setState(() => _widgetStyle = value == 'you' ? 'you' : 'app');
-    } catch (e) {
-      logLoadFailure('Load widget style', e);
-    }
-  }
+  Future<void> _loadWidgetStyle() => _loadValue(
+    'Load widget style',
+    () => ref.read(settingsRepositoryProvider).widgetStyle(),
+    (value) => _widgetStyle = value == 'you' ? 'you' : 'app',
+  );
 
   Future<void> _setWidgetStyle(String value) async {
     setState(() => _widgetStyle = value);
@@ -194,15 +187,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
-  Future<void> _loadWidgetOpacity() async {
-    try {
-      final value = await ref.read(settingsRepositoryProvider).widgetOpacity();
-      if (!mounted) return;
-      setState(() => _widgetOpacity = value.clamp(0, 2));
-    } catch (e) {
-      logLoadFailure('Load widget opacity', e);
-    }
-  }
+  Future<void> _loadWidgetOpacity() => _loadValue(
+    'Load widget opacity',
+    () => ref.read(settingsRepositoryProvider).widgetOpacity(),
+    (value) => _widgetOpacity = value.clamp(0, 2),
+  );
 
   Future<void> _setWidgetOpacity(int value) async {
     setState(() => _widgetOpacity = value.clamp(0, 2));
@@ -216,27 +205,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
-  Future<void> _loadPortraitLock() async {
-    try {
-      final value = await ref.read(settingsRepositoryProvider).portraitLock();
-      if (!mounted) return;
-      setState(() => _portraitLock = value);
-    } catch (e) {
-      logLoadFailure('Load portrait lock', e);
-    }
-  }
+  Future<void> _loadPortraitLock() => _loadValue(
+    'Load portrait lock',
+    () => ref.read(settingsRepositoryProvider).portraitLock(),
+    (value) => _portraitLock = value,
+  );
 
-  Future<void> _loadMenuProvider() async {
-    try {
-      final value = await ref.read(settingsRepositoryProvider).menuProviderId();
-      if (!mounted) return;
-      setState(
-        () => _menuProviderId = menuSources.containsKey(value) ? value : '',
-      );
-    } catch (e) {
-      logLoadFailure('Load menu source', e);
-    }
-  }
+  Future<void> _loadMenuProvider() => _loadValue(
+    'Load menu source',
+    () => ref.read(settingsRepositoryProvider).menuProviderId(),
+    (value) => _menuProviderId = menuSources.containsKey(value) ? value : '',
+  );
 
   Future<void> _setMenuProvider(String value) async {
     setState(() => _menuProviderId = value);
@@ -246,17 +225,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
-  Future<void> _loadCatalogSource() async {
-    try {
-      final value = await ref.read(settingsRepositoryProvider).catalogSource();
-      if (!mounted) return;
-      setState(
-        () => _catalogSource = catalogSourceIds.contains(value) ? value : '',
-      );
-    } catch (e) {
-      logLoadFailure('Load catalog source', e);
-    }
-  }
+  Future<void> _loadCatalogSource() => _loadValue(
+    'Load catalog source',
+    () => ref.read(settingsRepositoryProvider).catalogSource(),
+    (value) => _catalogSource = catalogSourceIds.contains(value) ? value : '',
+  );
 
   Future<void> _setCatalogSource(String value) async {
     setState(() => _catalogSource = value);
@@ -278,15 +251,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
   }
 
-  Future<void> _loadLocale() async {
-    try {
-      final value = await ref.read(settingsRepositoryProvider).localeOverride();
-      if (!mounted) return;
-      setState(() => _localeOverride = value);
-    } catch (e) {
-      logLoadFailure('Load locale', e);
-    }
-  }
+  Future<void> _loadLocale() => _loadValue(
+    'Load locale',
+    () => ref.read(settingsRepositoryProvider).localeOverride(),
+    (value) => _localeOverride = value,
+  );
 
   Future<void> _setLocale(String value) async {
     setState(() => _localeOverride = value);
@@ -395,6 +364,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     } catch (e) {
       if (!mounted) return;
       showErrorSnack(context, message('$e'));
+    }
+  }
+
+  /// Shared async-load shape behind the `_loadX` family: read, bail when
+  /// unmounted, apply under setState, log on failure. The [apply] closure
+  /// runs inside setState and may also poke notifiers (ref.read is safe
+  /// there); multi-read loaders (hub tabs, schedule defaults) stay custom.
+  Future<void> _loadValue<T>(
+    String label,
+    Future<T> Function() read,
+    void Function(T) apply,
+  ) async {
+    try {
+      final value = await read();
+      if (!mounted) return;
+      setState(() => apply(value));
+    } catch (e) {
+      logLoadFailure(label, e);
     }
   }
 
@@ -747,6 +734,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     return files.first.xFile.readAsBytes();
   }
 
+  /// Pure list-building half of [_exportCalendar]: occurrences + open
+  /// tasks due in range + xtra events, each as one ICS event.
+  List<IcsEvent> _collectIcsEvents({
+    required ScheduleOccurrenceEngine engine,
+    required Map<int, ClassesData> classesById,
+    required List<TaskWithDetails> tasks,
+    required List<XtraEvent> xtra,
+    required DateTime today,
+    required DateTime end,
+    required String endIso,
+    required String classFallback,
+  }) {
+    return <IcsEvent>[
+      for (final o in engine.occurrences(rangeStart: today, rangeEnd: end))
+        IcsEvent(
+          title: classesById[o.classId]?.name ?? classFallback,
+          start: o.start,
+          end: o.end,
+          location: o.room ?? classesById[o.classId]?.room,
+        ),
+      for (final t in tasks)
+        if (t.task.dueDate != null &&
+            !t.task.isDone &&
+            t.task.dueDate!.compareTo(endIso) <= 0)
+          IcsEvent(
+            title: t.task.title,
+            start: _dayAt(t.task.dueDate!, t.task.dueMinutes),
+            end: null,
+            location: t.classRow?.name,
+          ),
+      for (final x in xtra)
+        IcsEvent(
+          title: x.title,
+          start: _dayAt(x.date, x.startMinutes),
+          end: x.endMinutes == null
+              ? null
+              : _dayAt(x.date, x.endMinutes),
+          location: x.location,
+          description: x.notes,
+        ),
+    ];
+  }
+
   Future<void> _exportCalendar() async {
     final l10n = context.l10n;
     if (_busy) return;
@@ -763,39 +793,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           .range(isoDate(today), isoDate(end));
       final engine = await engineFuture;
       final classesById = await classesFuture;
-      final occs = engine.occurrences(rangeStart: today, rangeEnd: end);
       final tasks = await tasksFuture;
       final xtra = await xtraFuture;
       final endIso = isoDate(end);
-      final events = <IcsEvent>[
-        for (final o in occs)
-          IcsEvent(
-            title: classesById[o.classId]?.name ?? l10n.classFallback,
-            start: o.start,
-            end: o.end,
-            location: o.room ?? classesById[o.classId]?.room,
-          ),
-        for (final t in tasks)
-          if (t.task.dueDate != null &&
-              !t.task.isDone &&
-              t.task.dueDate!.compareTo(endIso) <= 0)
-            IcsEvent(
-              title: t.task.title,
-              start: _dueMoment(t.task.dueDate!, t.task.dueMinutes),
-              end: null,
-              location: t.classRow?.name,
-            ),
-        for (final x in xtra)
-          IcsEvent(
-            title: x.title,
-            start: _xtraMoment(x.date, x.startMinutes),
-            end: x.endMinutes == null
-                ? null
-                : _xtraMoment(x.date, x.endMinutes),
-            location: x.location,
-            description: x.notes,
-          ),
-      ];
+      final events = _collectIcsEvents(
+        engine: engine,
+        classesById: classesById,
+        tasks: tasks,
+        xtra: xtra,
+        today: today,
+        end: end,
+        endIso: endIso,
+        classFallback: l10n.classFallback,
+      );
       await _exportFile(
         fileName: 'chronicle-calendar.ics',
         bytes: utf8.encode(buildIcs(events: events)),
@@ -807,13 +817,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
   }
 
-  DateTime _dueMoment(String iso, int? minutes) {
-    final day = DateTime.parse(iso);
-    if (minutes == null) return day;
-    return DateTime(day.year, day.month, day.day, minutes ~/ 60, minutes % 60);
-  }
-
-  DateTime _xtraMoment(String iso, int? minutes) {
+  DateTime _dayAt(String iso, int? minutes) {
     final day = DateTime.parse(iso);
     if (minutes == null) return DateTime(day.year, day.month, day.day);
     return DateTime(day.year, day.month, day.day, minutes ~/ 60, minutes % 60);
@@ -1024,7 +1028,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   // renders with its label already floated: the maintained
                   // subtree would otherwise replay the float animation.
                   key: ValueKey('default-limit-$_defaultLimitLoaded'),
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                  padding: _kTightPadding,
                   child: Form(
                     key: _defaultLimitFormKey,
                     child: Row(
@@ -1186,7 +1190,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               // exists for narrow phone screens, not desktop windows.
               if (Platform.isAndroid || Platform.isIOS)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  padding: _kSectionPadding,
                   child: DropdownButtonFormField<String>(
                     initialValue: _calendarOrientation,
                     decoration: InputDecoration(
@@ -1208,11 +1212,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   ),
                 ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                padding: _kSectionPadding,
                 child: _DayRangePicker(),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                padding: _kTightPadding,
                 child: _GridMarkersPicker(),
               ),
               SwitchListTile(
@@ -1229,7 +1233,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             title: context.l10n.menuSourceTitle,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                padding: _kTightPadding,
                 child: DropdownButtonFormField<String>(
                   initialValue: _menuProviderId,
                   decoration: InputDecoration(
@@ -1258,7 +1262,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             title: context.l10n.catalogSourceTitle,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                padding: _kTightPadding,
                 child: DropdownButtonFormField<String>(
                   initialValue: _catalogSource,
                   decoration: InputDecoration(
@@ -1286,7 +1290,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             title: context.l10n.hubTabsTitle,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                padding: _kSectionPadding,
                 child: DropdownButtonFormField<String>(
                   initialValue: _widgetStyle,
                   decoration: InputDecoration(
@@ -1308,7 +1312,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                padding: _kTightPadding,
                 child: DropdownButtonFormField<int>(
                   initialValue: _widgetOpacity,
                   decoration: InputDecoration(
@@ -1364,7 +1368,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             title: context.l10n.languagesHeader,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                padding: _kTightPadding,
                 child: RadioGroup<String>(
                   groupValue: _localeOverride,
                   onChanged: (v) {
@@ -1554,53 +1558,60 @@ class _DataFolderTiles extends ConsumerWidget {
           title: Text(context.l10n.importDataAction),
           onTap: busy ? null : onImport,
         ),
-        SwitchListTile(
-          secondary: const Icon(Icons.sync_outlined),
-          title: Text(context.l10n.autoSyncTitle),
-          subtitle: Text(context.l10n.autoSyncHint),
+        _syncTile(
+          icon: Icons.sync_outlined,
+          title: context.l10n.autoSyncTitle,
+          subtitle: context.l10n.autoSyncHint,
           value: autoSync,
-          onChanged: busy
-              ? null
-              : (v) async {
-                  try {
-                    await ref.read(settingsRepositoryProvider).setAutoSync(v);
-                    ref.invalidate(dataFolderStatusProvider);
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(context.l10n.couldNotSaveSetting('$e')),
-                        ),
-                      );
-                    }
-                  }
-                },
+          set: (v) => ref.read(settingsRepositoryProvider).setAutoSync(v),
+          ref: ref,
+          context: context,
         ),
-        SwitchListTile(
-          secondary: const Icon(Icons.settings_outlined),
-          title: Text(context.l10n.syncSettingsTitle),
-          subtitle: Text(context.l10n.syncSettingsHint),
+        _syncTile(
+          icon: Icons.settings_outlined,
+          title: context.l10n.syncSettingsTitle,
+          subtitle: context.l10n.syncSettingsHint,
           value: syncSettings,
-          onChanged: busy
-              ? null
-              : (v) async {
-                  try {
-                    await ref
-                        .read(settingsRepositoryProvider)
-                        .setSyncSettings(v);
-                    ref.invalidate(dataFolderStatusProvider);
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(context.l10n.couldNotSaveSetting('$e')),
-                        ),
-                      );
-                    }
-                  }
-                },
+          set: (v) => ref.read(settingsRepositoryProvider).setSyncSettings(v),
+          ref: ref,
+          context: context,
         ),
       ],
+    );
+  }
+
+  /// Sync on/off row with identical save + error handling; the two tiles
+  /// differ only in icon, copy, value and setter.
+  SwitchListTile _syncTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required Future<void> Function(bool) set,
+    required WidgetRef ref,
+    required BuildContext context,
+  }) {
+    return SwitchListTile(
+      secondary: Icon(icon),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      value: value,
+      onChanged: busy
+          ? null
+          : (v) async {
+              try {
+                await set(v);
+                ref.invalidate(dataFolderStatusProvider);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(context.l10n.couldNotSaveSetting('$e')),
+                    ),
+                  );
+                }
+              }
+            },
     );
   }
 }
@@ -1651,7 +1662,8 @@ class _SettingsCard extends StatelessWidget {
   }
 }
 
-/// Theme family picker (Default / Catppuccin) with accent dots.
+/// Theme family picker (default, catppuccin, nord, dracula, gruvbox,
+/// tokyo-night — mirrors SettingsRepository.appTheme) with accent dots.
 class _ThemePicker extends ConsumerWidget {
   const _ThemePicker();
 

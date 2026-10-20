@@ -127,8 +127,7 @@ final classesStreamProvider = StreamProvider((ref) {
   final stream = ref.watch(classRepositoryProvider).watchAll();
   if (yearId == null) return stream;
   return stream.map(
-    (list) =>
-        list.where((c) => c.yearId == null || c.yearId == yearId).toList(),
+    (list) => list.where((c) => matchesYear(c.yearId, yearId)).toList(),
   );
 });
 
@@ -270,16 +269,14 @@ final tasksStreamProvider = StreamProvider((ref) {
   final stream = ref.watch(taskRepositoryProvider).watchAll();
   if (yearId == null) return stream;
   return stream.map(
-    (list) => list
-        .where(
-          (t) =>
-              t.classRow == null ||
-              t.classRow!.yearId == null ||
-              t.classRow!.yearId == yearId,
-        )
-        .toList(),
+    (list) => list.where((t) => matchesYear(t.classRow?.yearId, yearId)).toList(),
   );
 });
+
+/// Year filter shared by the year-scoped stream providers. Rows without a
+/// year stay visible everywhere; rows with one must match the active year.
+bool matchesYear(int? rowYearId, int activeYearId) =>
+    rowYearId == null || rowYearId == activeYearId;
 
 /// Loads the occurrence engine once (re-created on invalidation).
 final engineProvider = FutureProvider<ScheduleOccurrenceEngine>((ref) async {
@@ -438,7 +435,8 @@ final calendarStartTodayProvider = FutureProvider<bool>((ref) async {
   return ref.watch(settingsRepositoryProvider).startCalendarOnToday();
 });
 
-/// Selected app theme id ('default' or 'catppuccin').
+/// Selected app theme id (e.g. 'default'; see SettingsRepository.appTheme
+/// for the full family allowlist).
 final appThemeProvider = FutureProvider<String>((ref) async {
   return ref.watch(settingsRepositoryProvider).appTheme();
 });
@@ -453,6 +451,17 @@ final gridMarkersModeProvider = FutureProvider<String>((ref) async {
   return ref.watch(settingsRepositoryProvider).gridMarkersMode();
 });
 
+/// Raw day-start/day-end minutes from settings (no validity guarantee).
+/// Callers apply their own fallback: the fixed grid renders empty, the day
+/// range clamps to at least 60 minutes.
+Future<({int start, int end})> dayStartEndMinutes(
+  SettingsRepository settings,
+) async {
+  final start = await settings.dayStartMinutes();
+  final end = await settings.dayEndMinutes();
+  return (start: start, end: end);
+}
+
 /// Fixed lesson/break grid boundaries and break gaps from settings.
 /// Runs from the configured day start (minute precision) to the day end;
 /// empty when no lesson fits.
@@ -460,15 +469,18 @@ final fixedGridProvider =
     FutureProvider<
       ({List<int> boundaries, List<({int start, int end})> breaks})
     >((ref) async {
-      final settings = ref.watch(settingsRepositoryProvider);
-      final start = await settings.dayStartMinutes();
-      final end = await settings.dayEndMinutes();
+      final bounds = await dayStartEndMinutes(
+        ref.watch(settingsRepositoryProvider),
+      );
+      final start = bounds.start;
+      final end = bounds.end;
       if (end <= start) {
         return (
           boundaries: const <int>[],
           breaks: const <({int start, int end})>[],
         );
       }
+      final settings = ref.watch(settingsRepositoryProvider);
       final lesson = await settings.gridFixedLesson();
       final recess = await settings.gridFixedBreak();
       var count = 0;
@@ -501,9 +513,11 @@ final slotTimePresetsProvider = FutureProvider<List<int>>((ref) async {
 /// (defaults 6:00-22:00). Supports custom minutes like 6:40.
 /// Guaranteed end > start (at least 60 min span).
 final dayRangeProvider = FutureProvider<({int start, int end})>((ref) async {
-  final settings = ref.watch(settingsRepositoryProvider);
-  final start = await settings.dayStartMinutes();
-  var end = await settings.dayEndMinutes();
+  final bounds = await dayStartEndMinutes(
+    ref.watch(settingsRepositoryProvider),
+  );
+  final start = bounds.start;
+  var end = bounds.end;
   if (end <= start) end = (start + 60).clamp(1, 1440);
   return (start: start, end: end);
 });
