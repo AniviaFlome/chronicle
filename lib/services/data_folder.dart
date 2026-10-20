@@ -414,8 +414,7 @@ class DataFolderService {
         );
       }
       final manifest = manifestRaw;
-      if (manifest['app'] != appTag ||
-          manifest['formatVersion'] != formatVersion) {
+      if (!_isOurManifest(manifest)) {
         return const DataFolderResult(error: 'not-a-data-folder');
       }
       final tables = <String, List<Map<String, dynamic>>>{};
@@ -556,33 +555,41 @@ class DataFolderService {
   /// worthwhile without parsing every table file.
   Future<Map<String, dynamic>?> readManifest(Directory dir) async {
     final manifest = await _readJson(dir, manifestFile);
-    if (manifest == null ||
-        manifest['app'] != appTag ||
-        manifest['formatVersion'] != formatVersion) {
-      return null;
-    }
+    if (manifest == null || !_isOurManifest(manifest)) return null;
     return manifest;
   }
 
-  Future<Map<String, dynamic>?> _readJson(Directory dir, String name) async {    final file = File('${dir.path}/$name');
+  /// True when [manifest] is one of ours (right app tag + format version).
+  bool _isOurManifest(Map<String, dynamic>? manifest) =>
+      manifest != null &&
+      manifest['app'] == appTag &&
+      manifest['formatVersion'] == formatVersion;
+
+  /// Reads + JSON-decodes [name], or null when the file is missing or
+  /// unreadable. Callers cast the dynamic payload to map or list.
+  Future<dynamic> _readDecoded(Directory dir, String name) async {
+    final file = File('${dir.path}/$name');
     if (!await file.exists()) return null;
     try {
-      final decoded = jsonDecode(await file.readAsString());
-      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+      return jsonDecode(await file.readAsString());
     } catch (e) {
       debugPrint('Data folder: skipping unreadable $name: $e');
       return null;
     }
   }
 
+  Future<Map<String, dynamic>?> _readJson(Directory dir, String name) async {
+    final decoded = await _readDecoded(dir, name);
+    return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+  }
+
   Future<List<Map<String, dynamic>>?> _readJsonList(
     Directory dir,
     String name,
   ) async {
-    final file = File('${dir.path}/$name');
-    if (!await file.exists()) return null;
+    final decoded = await _readDecoded(dir, name);
+    if (decoded == null) return null;
     try {
-      final decoded = jsonDecode(await file.readAsString());
       if (decoded is! List) throw FormatException('Bad table file: $name');
       return [for (final m in decoded) Map<String, dynamic>.from(m as Map)];
     } catch (e) {
@@ -714,6 +721,125 @@ class DataFolderService {
     SettingsRepository.catalogSourceKey,
   };
 
+  /// Fetch/remove pair for one synced table, or null for unknown keys
+  /// (foreign tombstones are ignored, never crash the import). Branches
+  /// stay concrete per table so drift's typed columns resolve.
+  ({Future<dynamic> Function() fetch, Future<int> Function(int id) remove})?
+      _rowDeleter(String tableKey, String uuid) {
+    switch (tableKey) {
+      case 'academic_years':
+        return (
+          fetch: () => (db.select(db.academicYears)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.academicYears)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      case 'classes':
+        return (
+          fetch: () => (db.select(db.classes)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.classes)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      case 'schedule_items':
+        return (
+          fetch: () => (db.select(db.scheduleItems)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.scheduleItems)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      case 'schedule_exceptions':
+        return (
+          fetch: () => (db.select(db.scheduleExceptions)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.scheduleExceptions)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      case 'holidays':
+        return (
+          fetch: () => (db.select(db.holidays)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.holidays)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      case 'absences':
+        return (
+          fetch: () => (db.select(db.absences)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.absences)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      case 'tasks':
+        return (
+          fetch: () => (db.select(db.tasks)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.tasks)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      case 'subtasks':
+        return (
+          fetch: () => (db.select(db.subtasks)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.subtasks)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      case 'task_reminders':
+        return (
+          fetch: () => (db.select(db.taskReminders)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.taskReminders)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      case 'grades':
+        return (
+          fetch: () => (db.select(db.grades)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.grades)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      case 'pomodoro_sessions':
+        return (
+          fetch: () => (db.select(db.pomodoroSessions)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.pomodoroSessions)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      case 'xtra_events':
+        return (
+          fetch: () => (db.select(db.xtraEvents)
+                ..where((t) => t.uuid.equals(uuid)))
+              .getSingleOrNull(),
+          remove: (id) => (db.delete(db.xtraEvents)
+                ..where((t) => t.id.equals(id)))
+              .go(),
+        );
+      default:
+        return null;
+    }
+  }
+
   /// Deletes the local row with [uuid] in [tableKey] when its updatedAt is
   /// not newer than [deletedAt]. Returns true when a row was removed.
   /// FK cascades remove children; their own tombstones were adopted above.
@@ -734,129 +860,30 @@ class DataFolderService {
       return true;
     }
 
-    switch (tableKey) {
-      case 'academic_years':
-        return remove(
-          () => (db.select(
-            db.academicYears,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) => (db.delete(
-            db.academicYears,
-          )..where((t) => t.id.equals(id))).go(),
-        );
-      case 'classes':
-        return remove(
-          () => (db.select(
-            db.classes,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) =>
-              (db.delete(db.classes)..where((t) => t.id.equals(id))).go(),
-        );
-      case 'schedule_items':
-        return remove(
-          () => (db.select(
-            db.scheduleItems,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) => (db.delete(
-            db.scheduleItems,
-          )..where((t) => t.id.equals(id))).go(),
-        );
-      case 'schedule_exceptions':
-        return remove(
-          () => (db.select(
-            db.scheduleExceptions,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) => (db.delete(
-            db.scheduleExceptions,
-          )..where((t) => t.id.equals(id))).go(),
-        );
-      case 'holidays':
-        return remove(
-          () => (db.select(
-            db.holidays,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) =>
-              (db.delete(db.holidays)..where((t) => t.id.equals(id))).go(),
-        );
-      case 'absences':
-        return remove(
-          () => (db.select(
-            db.absences,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) =>
-              (db.delete(db.absences)..where((t) => t.id.equals(id))).go(),
-        );
-      case 'tasks':
-        return remove(
-          () => (db.select(
-            db.tasks,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) => (db.delete(db.tasks)..where((t) => t.id.equals(id))).go(),
-        );
-      case 'subtasks':
-        return remove(
-          () => (db.select(
-            db.subtasks,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) =>
-              (db.delete(db.subtasks)..where((t) => t.id.equals(id))).go(),
-        );
-      case 'task_reminders':
-        return remove(
-          () => (db.select(
-            db.taskReminders,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) => (db.delete(
-            db.taskReminders,
-          )..where((t) => t.id.equals(id))).go(),
-        );
-      case 'grades':
-        return remove(
-          () => (db.select(
-            db.grades,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) =>
-              (db.delete(db.grades)..where((t) => t.id.equals(id))).go(),
-        );
-      case 'pomodoro_sessions':
-        return remove(
-          () => (db.select(
-            db.pomodoroSessions,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) => (db.delete(
-            db.pomodoroSessions,
-          )..where((t) => t.id.equals(id))).go(),
-        );
-      case 'xtra_events':
-        return remove(
-          () => (db.select(
-            db.xtraEvents,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) => (db.delete(
-            db.xtraEvents,
-          )..where((t) => t.id.equals(id))).go(),
-        );
-      // Attachment rows also drop their blobs from disk.
-      case 'class_files':
-        return _removeFile(
-          () => (db.select(
-            db.classFiles,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) => (db.delete(
-            db.classFiles,
-          )..where((t) => t.id.equals(id))).go(),
-          deletedAt,
-        );
-      case 'year_files':
-        return _removeFile(
-          () => (db.select(
-            db.yearFiles,
-          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-          (id) => (db.delete(
-            db.yearFiles,
-          )..where((t) => t.id.equals(id))).go(),
-          deletedAt,
-        );
+    final deleter = _rowDeleter(tableKey, uuid);
+    if (deleter != null) return remove(deleter.fetch, deleter.remove);
+    // Attachment rows also drop their blobs from disk.
+    if (tableKey == 'class_files') {
+      return _removeFile(
+        () => (db.select(
+          db.classFiles,
+        )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+        (id) => (db.delete(
+          db.classFiles,
+        )..where((t) => t.id.equals(id))).go(),
+        deletedAt,
+      );
+    }
+    if (tableKey == 'year_files') {
+      return _removeFile(
+        () => (db.select(
+          db.yearFiles,
+        )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+        (id) => (db.delete(
+          db.yearFiles,
+        )..where((t) => t.id.equals(id))).go(),
+        deletedAt,
+      );
     }
     return false;
   }
