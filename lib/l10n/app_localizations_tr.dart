@@ -1508,6 +1508,13 @@ class AppLocalizationsTr extends AppLocalizations {
   String get widgetOpacityTransparent => 'Saydam';
 
   @override
+  String get widgetFullNameTitle => 'Tam ders adlarını göster';
+
+  @override
+  String get widgetFullNameHint =>
+      'Sonraki ders widget\'ı ders kodları olmadan düz adları gösterir';
+
+  @override
   String get widgetNoClasses => 'Bugün ders yok';
 
   @override

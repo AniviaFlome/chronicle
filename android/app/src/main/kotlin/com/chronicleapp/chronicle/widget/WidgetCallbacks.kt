@@ -22,7 +22,6 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
 import com.chronicleapp.chronicle.CafeteriaMenuHomeWidget
 import com.chronicleapp.chronicle.ChronicleHubHomeWidget
-import com.chronicleapp.chronicle.NextClassHomeWidget
 import com.chronicleapp.chronicle.TodayAgendaHomeWidget
 
 /** Hub navigation bump counter.
@@ -50,12 +49,6 @@ val agendaNavBump = mutableIntStateOf(0)
  * meal step, and the menu's `provideContent` lambda reads before
  * resolving. */
 val menuNavBump = mutableIntStateOf(0)
-
-/** Same contract for the standalone next-class widget, which gains its
- * first tap target with hero expand/collapse ([NextClassExpandCallback]).
- * Previously bump-free (nothing was tappable); the hub reuses its
- * existing [hubNavBump]. */
-val nextClassNavBump = mutableIntStateOf(0)
 
 /** Week-rail tap: select one of the 7 upcoming days. */
 class AgendaDaySelectCallback : ActionCallback {
@@ -161,5 +154,3 @@ class StandaloneMenuMealCallback : ActionCallback {
         CafeteriaMenuHomeWidget().update(context, glanceId)
     }
 }
-
-/** ActionParameters key for the expanded timeline entry (epoch-ms key). */

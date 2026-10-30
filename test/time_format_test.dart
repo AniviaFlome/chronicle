@@ -48,4 +48,37 @@ void main() {
       expect(daysBetween(DateTime(2026, 3, 28), DateTime(2026, 3, 29)), 1);
     });
   });
+
+  group('shiftMonths', () {
+    test('clamps Jan 31 to Feb last day instead of Mar overflow', () {
+      expect(shiftMonths(DateTime(2026, 1, 31), 1), DateTime(2026, 2, 28));
+      expect(shiftMonths(DateTime(2024, 1, 31), 1), DateTime(2024, 2, 29));
+      expect(shiftMonths(DateTime(2026, 3, 31), -1), DateTime(2026, 2, 28));
+      expect(shiftMonths(DateTime(2026, 5, 15), 1).day, 15);
+      expect(shiftMonths(DateTime(2026, 1, 15), -1), DateTime(2025, 12, 15));
+    });
+
+    test('preserves wall-clock time', () {
+      final d = shiftMonths(DateTime(2026, 1, 15, 9, 30), 1);
+      expect((d.hour, d.minute), (9, 30));
+    });
+  });
+
+  group('weekStartOf', () {
+    test('returns Monday start for default week', () {
+      // Wed 2026-10-28 -> Mon 2026-10-26.
+      expect(weekStartOf(DateTime(2026, 10, 28), 1), DateTime(2026, 10, 26));
+    });
+
+    test('clamps garbage weekStart into 1..7', () {
+      expect(
+        weekStartOf(DateTime(2026, 10, 28), 9),
+        weekStartOf(DateTime(2026, 10, 28), 7),
+      );
+      expect(
+        weekStartOf(DateTime(2026, 10, 28), 0),
+        weekStartOf(DateTime(2026, 10, 28), 1),
+      );
+    });
+  });
 }

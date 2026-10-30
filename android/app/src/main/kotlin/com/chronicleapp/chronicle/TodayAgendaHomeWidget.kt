@@ -7,6 +7,11 @@
 // dense class list. The rail renders at every size (compact 40dp cells when
 // short) because it is the widget's only control; the header label yields
 // below 250dp and the date line below 170dp. Row takes are 1/2/4/8 by height.
+//
+// Note: Tiny/Compact intentionally keeps the rail + one-line summary instead
+// of collapsing to a Next-class clone — the rail (day selection) is this
+// widget's control and the summary names the selected day; the hero-only
+// Next-class widget has neither.
 package com.chronicleapp.chronicle
 
 import android.content.Context

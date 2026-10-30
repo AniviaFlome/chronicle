@@ -69,6 +69,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   bool _hubTabMenu = true;
   String _widgetStyle = 'app';
   int _widgetOpacity = 0;
+  bool _widgetFullName = false;
 
   @override
   void initState() {
@@ -86,6 +87,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     _loadHubTabs();
     _loadWidgetStyle();
     _loadWidgetOpacity();
+    _loadWidgetFullName();
   }
 
   Future<void> _loadCalendarOrientation() => _loadValue(
@@ -200,6 +202,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       () => ref
           .read(settingsRepositoryProvider)
           .setWidgetOpacity(value)
+          .then((_) => refreshHomeWidgets(container)),
+      (m) => context.l10n.couldNotSaveSetting(m),
+    );
+  }
+
+  Future<void> _loadWidgetFullName() => _loadValue(
+    'Load widget full name',
+    () => ref.read(settingsRepositoryProvider).widgetFullName(),
+    (value) => _widgetFullName = value,
+  );
+
+  Future<void> _toggleWidgetFullName(bool value) async {
+    setState(() => _widgetFullName = value);
+    final container = ProviderScope.containerOf(context);
+    await _saveSetting(
+      () => ref
+          .read(settingsRepositoryProvider)
+          .setWidgetFullName(value)
           .then((_) => refreshHomeWidgets(container)),
       (m) => context.l10n.couldNotSaveSetting(m),
     );
@@ -783,9 +803,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         IcsEvent(
           title: x.title,
           start: _dayAt(x.date, x.startMinutes),
-          end: x.endMinutes == null
-              ? null
-              : _dayAt(x.date, x.endMinutes),
+          end: x.endMinutes == null ? null : _dayAt(x.date, x.endMinutes),
           location: x.location,
           description: x.notes,
         ),
@@ -1228,14 +1246,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     },
                   ),
                 ),
-              Padding(
-                padding: _kSectionPadding,
-                child: _DayRangePicker(),
-              ),
-              Padding(
-                padding: _kTightPadding,
-                child: _GridMarkersPicker(),
-              ),
+              Padding(padding: _kSectionPadding, child: _DayRangePicker()),
+              Padding(padding: _kTightPadding, child: _GridMarkersPicker()),
               SwitchListTile(
                 secondary: const Icon(Icons.today_outlined),
                 title: Text(context.l10n.startOnTodayTitle),
@@ -1353,6 +1365,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     if (v != null) _setWidgetOpacity(v);
                   },
                 ),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.title_outlined),
+                title: Text(context.l10n.widgetFullNameTitle),
+                subtitle: Text(context.l10n.widgetFullNameHint),
+                value: _widgetFullName,
+                onChanged: _toggleWidgetFullName,
               ),
               SwitchListTile(
                 secondary: const Icon(Icons.schedule_outlined),
@@ -1800,7 +1819,17 @@ class _AccentDot extends StatelessWidget {
                   ),
           ),
           child: selected
-              ? const Icon(Icons.check, color: Colors.black54, size: 20)
+              ? Icon(
+                  Icons.check,
+                  size: 20,
+                  // Same luminance rule as the class editor: dark accents
+                  // get a white check, light accents a black one.
+                  color:
+                      ThemeData.estimateBrightnessForColor(color) ==
+                          Brightness.light
+                      ? Colors.black
+                      : Colors.white,
+                )
               : null,
         ),
       ),
@@ -1898,59 +1927,70 @@ class _DayRangePickerState extends ConsumerState<_DayRangePicker> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_loaded) return const SizedBox.shrink();
-    Widget field({
-      required String label,
-      required int value,
-      required VoidCallback onTap,
-    }) {
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: InputDecorator(
-          decoration: InputDecoration(
-            labelText: label,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 14,
+    // Keep layout slot while loading (same pattern as the absence-limit
+    // field): build content with defaults and hide until the saved values
+    // land, so the row appears once instead of popping the screen down.
+    return Visibility(
+      visible: _loaded,
+      maintainSize: true,
+      maintainState: true,
+      maintainAnimation: true,
+      child: Row(
+        children: [
+          Expanded(
+            child: _dayField(
+              context,
+              label: context.l10n.dayStartsLabel,
+              value: _start,
+              onTap: () => _pick(true),
             ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                value >= 1440 ? '24:00' : hhmm(value),
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              Icon(
-                Icons.schedule_outlined,
-                size: 20,
-                color: Theme.of(context).colorScheme.outline,
-              ),
-            ],
+          const SizedBox(width: 16),
+          Expanded(
+            child: _dayField(
+              context,
+              label: context.l10n.dayEndsLabel,
+              value: _end,
+              onTap: () => _pick(false),
+            ),
           ),
-        ),
-      );
-    }
+        ],
+      ),
+    );
+  }
 
-    return Row(
-      children: [
-        Expanded(
-          child: field(
-            label: context.l10n.dayStartsLabel,
-            value: _start,
-            onTap: () => _pick(true),
+  Widget _dayField(
+    BuildContext context, {
+    required String label,
+    required int value,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 14,
           ),
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: field(
-            label: context.l10n.dayEndsLabel,
-            value: _end,
-            onTap: () => _pick(false),
-          ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              value >= 1440 ? '24:00' : hhmm(value),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            Icon(
+              Icons.schedule_outlined,
+              size: 20,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -2037,105 +2077,112 @@ class _GridMarkersPickerState extends ConsumerState<_GridMarkersPicker> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_loaded) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DropdownButtonFormField<String>(
-          initialValue: _mode,
-          decoration: InputDecoration(labelText: context.l10n.gridTimeLabels),
-          items: [
-            DropdownMenuItem(
-              value: 'class-times',
-              child: Text(context.l10n.modeClassTimes),
-            ),
-            DropdownMenuItem(
-              value: 'fixed',
-              child: Text(context.l10n.modeFixed),
-            ),
-          ],
-          onChanged: (v) {
-            if (v != null) _saveMode(v);
-          },
-        ),
-        if (_mode == 'fixed') ...[
-          const SizedBox(height: 12),
-          Text(
-            context.l10n.fixedTimeHint,
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: Theme.of(context).colorScheme.outline),
+    // Same no-shift pattern as the day-range picker: keep the slot while
+    // the saved mode loads.
+    return Visibility(
+      visible: _loaded,
+      maintainSize: true,
+      maintainState: true,
+      maintainAnimation: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DropdownButtonFormField<String>(
+            initialValue: _mode,
+            decoration: InputDecoration(labelText: context.l10n.gridTimeLabels),
+            items: [
+              DropdownMenuItem(
+                value: 'class-times',
+                child: Text(context.l10n.modeClassTimes),
+              ),
+              DropdownMenuItem(
+                value: 'fixed',
+                child: Text(context.l10n.modeFixed),
+              ),
+            ],
+            onChanged: (v) {
+              if (v != null) _saveMode(v);
+            },
           ),
-          const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final narrow = constraints.maxWidth < 420;
-              final fields = [
-                Expanded(
-                  child: TextFormField(
-                    controller: _lesson,
-                    decoration: InputDecoration(
-                      labelText: context.l10n.lessonMinLabel,
-                      hintText: '60',
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 14,
+          if (_mode == 'fixed') ...[
+            const SizedBox(height: 12),
+            Text(
+              context.l10n.fixedTimeHint,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.outline),
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final narrow = constraints.maxWidth < 420;
+                final fields = [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _lesson,
+                      decoration: InputDecoration(
+                        labelText: context.l10n.lessonMinLabel,
+                        hintText: '60',
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
                       ),
+                      keyboardType: TextInputType.number,
+                      onFieldSubmitted: (_) => _saveFixed(),
                     ),
-                    keyboardType: TextInputType.number,
-                    onFieldSubmitted: (_) => _saveFixed(),
                   ),
-                ),
-                const SizedBox(width: 12, height: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: _recess,
-                    decoration: InputDecoration(
-                      labelText: context.l10n.breakMinLabel,
-                      hintText: '10',
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 14,
+                  const SizedBox(width: 12, height: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _recess,
+                      decoration: InputDecoration(
+                        labelText: context.l10n.breakMinLabel,
+                        hintText: '10',
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
                       ),
+                      keyboardType: TextInputType.number,
+                      onFieldSubmitted: (_) => _saveFixed(),
                     ),
-                    keyboardType: TextInputType.number,
-                    onFieldSubmitted: (_) => _saveFixed(),
                   ),
-                ),
-              ];
-              final saveBtn = Padding(
-                padding: EdgeInsets.only(top: narrow ? 0 : 8),
-                child: FilledButton(
-                  onPressed: _saveFixed,
-                  child: Text(context.l10n.save),
-                ),
-              );
-              if (narrow) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                ];
+                final saveBtn = Padding(
+                  padding: EdgeInsets.only(top: narrow ? 0 : 8),
+                  child: FilledButton(
+                    onPressed: _saveFixed,
+                    child: Text(context.l10n.save),
+                  ),
+                );
+                if (narrow) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [fields[0], fields[1], fields[2]],
+                      ),
+                      const SizedBox(height: 12),
+                      saveBtn,
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [fields[0], fields[1], fields[2]],
-                    ),
-                    const SizedBox(height: 12),
+                    fields[0],
+                    fields[1],
+                    fields[2],
+                    const SizedBox(width: 12),
                     saveBtn,
                   ],
                 );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  fields[0],
-                  fields[1],
-                  fields[2],
-                  const SizedBox(width: 12),
-                  saveBtn,
-                ],
-              );
-            },
-          ),
+              },
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

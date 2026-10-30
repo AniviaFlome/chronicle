@@ -188,18 +188,16 @@ void main() {
       final classColumns = await db
           .customSelect("PRAGMA table_info('classes')")
           .get();
-      expect(
-        [for (final c in classColumns) c.data['name'] as String],
-        contains(column),
-      );
+      expect([
+        for (final c in classColumns) c.data['name'] as String,
+      ], contains(column));
     }
     final absenceColumns = await db
         .customSelect("PRAGMA table_info('absences')")
         .get();
-    expect(
-      [for (final c in absenceColumns) c.data['name'] as String],
-      contains('kind'),
-    );
+    expect([
+      for (final c in absenceColumns) c.data['name'] as String,
+    ], contains('kind'));
 
     // Old data survives.
     expect(await db.select(db.classes).get(), hasLength(1));
@@ -301,7 +299,7 @@ void main() {
     addTearDown(db.close);
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data['user_version'], 13);
+    expect(version.data['user_version'], 14);
 
     final classes = await db.select(db.classes).get();
     final byName = {for (final c in classes) c.name: c};
@@ -330,10 +328,61 @@ void main() {
     addTearDown(db2.close);
     final again = await db2.select(db2.classes).get();
     expect(again, hasLength(5));
-    expect(
-      again.where((c) => c.room != null).map((c) => c.name),
-      ['Real'],
+    expect(again.where((c) => c.room != null).map((c) => c.name), ['Real']);
+
+    await dir.delete(recursive: true);
+  });
+
+  test('v14 normalizes en/em dash rooms to null', () async {
+    final dir = await Directory.systemTemp.createTemp('chronicle-mig14');
+    final path = '${dir.path}/v13.sqlite';
+    final setup = sqlite.sqlite3.open(path);
+    setup.execute('PRAGMA foreign_keys = OFF');
+    setup.execute('''
+          CREATE TABLE classes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            color_value INTEGER NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1,
+            room TEXT,
+            uuid TEXT,
+            updated_at INTEGER
+          )''');
+    setup.execute('''
+          CREATE TABLE schedule_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            class_id INTEGER NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
+            day_of_week INTEGER NOT NULL,
+            start_minutes INTEGER NOT NULL,
+            end_minutes INTEGER NOT NULL,
+            rotation TEXT NOT NULL DEFAULT 'weekly',
+            room TEXT,
+            uuid TEXT,
+            updated_at INTEGER
+          )''');
+    setup.execute(
+      "INSERT INTO classes (name, color_value, room, uuid, updated_at) VALUES "
+      "('En', 1, '–', 'u1', 1000), "
+      "('Em', 1, '—', 'u2', 1000), "
+      "('Real', 1, 'B12', 'u3', 1000)",
     );
+    setup.execute('PRAGMA user_version = 13');
+    setup.close();
+
+    final db = AppDatabase(NativeDatabase(File(path)));
+    addTearDown(db.close);
+
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data['user_version'], 14);
+
+    final classes = await db.select(db.classes).get();
+    final byName = {for (final c in classes) c.name: c};
+    expect(byName['En']!.room, isNull);
+    expect(byName['Em']!.room, isNull);
+    expect(byName['Real']!.room, 'B12');
+    expect(byName['En']!.updatedAt, greaterThan(1000));
+    expect(byName['Em']!.updatedAt, greaterThan(1000));
+    expect(byName['Real']!.updatedAt, 1000);
 
     await dir.delete(recursive: true);
   });

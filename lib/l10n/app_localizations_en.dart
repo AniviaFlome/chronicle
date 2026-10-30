@@ -1548,6 +1548,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get widgetOpacityTransparent => 'Transparent';
 
   @override
+  String get widgetFullNameTitle => 'Show full class names';
+
+  @override
+  String get widgetFullNameHint =>
+      'Next-class widget shows plain names without course codes';
+
+  @override
   String get widgetNoClasses => 'No classes today';
 
   @override

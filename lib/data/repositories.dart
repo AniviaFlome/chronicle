@@ -195,12 +195,20 @@ class ClassRepository {
   /// Deletes a class, tombstoning it plus cascade children (slots,
   /// exceptions, absences, attached files) so deletes converge on peer
   /// devices. File blobs are removed from disk best-effort.
+  /// Tasks pointing at the class are FK-setNull: their `updatedAt` is bumped
+  /// so the nulling propagates via newer-wins merge even where FK cascades
+  /// are disabled (tests) or peers process rows out of order.
   Future<int> delete(int id) {
     final now = syncNow();
     return db.transaction(() async {
       final row = await (db.select(
         db.classes,
       )..where((c) => c.id.equals(id))).getSingleOrNull();
+      // Collect FK-null victims before the delete (afterwards they are
+      // already null and unfindable by the old id).
+      final linkedTasks = await (db.select(
+        db.tasks,
+      )..where((t) => t.classId.equals(id))).get();
       if (row != null) {
         await recordTombstone(db, SyncTables.classes, row.uuid, now);
         final items = await scheduleItemsFor(id);
@@ -234,7 +242,17 @@ class ClassRepository {
           // Best-effort cleanup only.
         }
       }
-      return (db.delete(db.classes)..where((c) => c.id.equals(id))).go();
+      final deleted = (db.delete(
+        db.classes,
+      )..where((c) => c.id.equals(id))).go();
+      // Bump FK-nulled tasks so the nulling wins on peers. Handles both
+      // FK-on (already null) and FK-off (still pointing at the dead id).
+      for (final t in linkedTasks) {
+        await (db.update(db.tasks)..where((x) => x.id.equals(t.id))).write(
+          TasksCompanion(classId: const Value(null), updatedAt: Value(now)),
+        );
+      }
+      return deleted;
     });
   }
 
@@ -292,22 +310,19 @@ class ClassRepository {
   }
 
   /// Moves/resizes a slot's times, used by calendar drag editing.
-  Future<bool> updateSlotTimes(
-    int id,
-    int startMinutes,
-    int endMinutes,
-  ) async {
+  Future<bool> updateSlotTimes(int id, int startMinutes, int endMinutes) async {
     // Single conditional write instead of read-then-replace (one query,
     // no lost-update window between the select and the replace).
     final count =
-        await (db.update(db.scheduleItems)..where((s) => s.id.equals(id)))
-            .write(
-              ScheduleItemsCompanion(
-                startMinutes: Value(startMinutes),
-                endMinutes: Value(endMinutes),
-                updatedAt: Value(syncNow()),
-              ),
-            );
+        await (db.update(
+          db.scheduleItems,
+        )..where((s) => s.id.equals(id))).write(
+          ScheduleItemsCompanion(
+            startMinutes: Value(startMinutes),
+            endMinutes: Value(endMinutes),
+            updatedAt: Value(syncNow()),
+          ),
+        );
     return count > 0;
   }
 
@@ -551,7 +566,7 @@ class TaskRepository {
       // DST transitions (monthly already used the constructor).
       RepeatKind.daily => shiftDays(due, 1),
       RepeatKind.weekly => shiftDays(due, 7),
-      RepeatKind.monthly => DateTime(due.year, due.month + 1, due.day),
+      RepeatKind.monthly => shiftMonths(due, 1),
     };
     if (task.repeatUntil != null &&
         isoFromDateTime(next).compareTo(task.repeatUntil!) > 0) {
@@ -617,13 +632,21 @@ class TaskRepository {
   }
 
   /// Deletes a task, tombstoning it plus children (subtasks, reminders,
-  /// grades) so deletes converge on peer devices.
+  /// grades) so deletes converge on peer devices. FK-setNull victims
+  /// (pomodoro sessions, revision tasks) get an `updatedAt` bump so the
+  /// nulling propagates via newer-wins merge.
   Future<int> delete(int id) {
     final now = syncNow();
     return db.transaction(() async {
       final row = await (db.select(
         db.tasks,
       )..where((t) => t.id.equals(id))).getSingleOrNull();
+      final linkedSessions = await (db.select(
+        db.pomodoroSessions,
+      )..where((s) => s.taskId.equals(id))).get();
+      final linkedRevisions = await (db.select(
+        db.tasks,
+      )..where((t) => t.linkedExamId.equals(id))).get();
       if (row != null) {
         await recordTombstone(db, SyncTables.tasks, row.uuid, now);
         final subs = await (db.select(
@@ -643,7 +666,26 @@ class TaskRepository {
           await recordTombstone(db, SyncTables.grades, g.uuid, now);
         }
       }
-      return (db.delete(db.tasks)..where((t) => t.id.equals(id))).go();
+      final deleted = (db.delete(db.tasks)..where((t) => t.id.equals(id))).go();
+      for (final s in linkedSessions) {
+        await (db.update(
+          db.pomodoroSessions,
+        )..where((x) => x.id.equals(s.id))).write(
+          PomodoroSessionsCompanion(
+            taskId: const Value(null),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+      for (final t in linkedRevisions) {
+        await (db.update(db.tasks)..where((x) => x.id.equals(t.id))).write(
+          TasksCompanion(
+            linkedExamId: const Value(null),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+      return deleted;
     });
   }
 
@@ -691,6 +733,21 @@ class TaskRepository {
     db.taskReminders,
   )..where((r) => r.taskId.equals(taskId))).get();
 
+  /// Batch fetch for the Linux due checker: one query instead of N+1.
+  Future<Map<int, List<TaskReminder>>> remindersForTasks(
+    List<int> taskIds,
+  ) async {
+    if (taskIds.isEmpty) return const {};
+    final rows = await (db.select(
+      db.taskReminders,
+    )..where((r) => r.taskId.isIn(taskIds))).get();
+    final out = <int, List<TaskReminder>>{};
+    for (final r in rows) {
+      (out[r.taskId] ??= []).add(r);
+    }
+    return out;
+  }
+
   Future<int> createReminder(TaskRemindersCompanion entry) => db
       .into(db.taskReminders)
       .insert(
@@ -704,9 +761,8 @@ class TaskRepository {
         fetch: () => (db.select(
           db.taskReminders,
         )..where((r) => r.id.equals(id))).getSingleOrNull(),
-        remove: () => (db.delete(
-          db.taskReminders,
-        )..where((r) => r.id.equals(id))).go(),
+        remove: () =>
+            (db.delete(db.taskReminders)..where((r) => r.id.equals(id))).go(),
         uuidOf: (row) => row.uuid,
         tombstoneTable: SyncTables.reminders,
       );
@@ -806,20 +862,18 @@ class XtraRepository {
     String toIso,
   ) =>
       ((e.date.isBiggerOrEqualValue(fromIso) &
-              e.date.isSmallerOrEqualValue(toIso)) |
-          e.repeatKind.isNotNull());
+          e.date.isSmallerOrEqualValue(toIso)) |
+      e.repeatKind.isNotNull());
 
   Stream<List<XtraEvent>> watchRange(String fromIso, String toIso) =>
-      (db.select(db.xtraEvents)
-            ..where((e) => _inRange(e, fromIso, toIso)))
+      (db.select(db.xtraEvents)..where((e) => _inRange(e, fromIso, toIso)))
           .watch()
           .map((rows) => expandXtraRepeats(rows, fromIso, toIso));
 
   Future<List<XtraEvent>> range(String fromIso, String toIso) async {
-    final rows =
-        await (db.select(db.xtraEvents)
-              ..where((e) => _inRange(e, fromIso, toIso)))
-            .get();
+    final rows = await (db.select(
+      db.xtraEvents,
+    )..where((e) => _inRange(e, fromIso, toIso))).get();
     return expandXtraRepeats(rows, fromIso, toIso);
   }
 
@@ -859,7 +913,7 @@ class XtraRepository {
           // Wall-clock steps (see TaskRepository.nextRepeatDate).
           RepeatKind.daily => shiftDays(d, 1),
           RepeatKind.weekly => shiftDays(d, 7),
-          RepeatKind.monthly => DateTime(d.year, d.month + 1, d.day),
+          RepeatKind.monthly => shiftMonths(d, 1),
         };
       }
     }
@@ -880,11 +934,7 @@ class XtraRepository {
       db.update(db.xtraEvents).replace(row.copyWith(updatedAt: syncNow()));
 
   /// Moves/resizes an event's times, used by calendar drag editing.
-  Future<bool> updateXtraTimes(
-    int id,
-    int startMinutes,
-    int endMinutes,
-  ) async {
+  Future<bool> updateXtraTimes(int id, int startMinutes, int endMinutes) async {
     // Single conditional write instead of read-then-replace (one query,
     // no lost-update window between the select and the replace).
     final count =
@@ -905,9 +955,8 @@ class XtraRepository {
         fetch: () => (db.select(
           db.xtraEvents,
         )..where((e) => e.id.equals(id))).getSingleOrNull(),
-        remove: () => (db.delete(
-          db.xtraEvents,
-        )..where((e) => e.id.equals(id))).go(),
+        remove: () =>
+            (db.delete(db.xtraEvents)..where((e) => e.id.equals(id))).go(),
         uuidOf: (row) => row.uuid,
         tombstoneTable: SyncTables.xtra,
       );
@@ -952,9 +1001,7 @@ class SettingsRepository {
   /// [defaultValue]: `!= 'false'` reads default-true, `== 'true'` reads
   /// default-false.
   Future<bool> _getBool(String key, {bool defaultValue = false}) async =>
-      defaultValue
-          ? (await get(key)) != 'false'
-          : (await get(key)) == 'true';
+      defaultValue ? (await get(key)) != 'false' : (await get(key)) == 'true';
 
   Future<void> _setBool(String key, bool value) =>
       set(key, value ? 'true' : 'false');
@@ -971,8 +1018,10 @@ class SettingsRepository {
     }
   }
 
-  Future<int> weekStartDay() async =>
-      int.tryParse(await get('week_start_day') ?? '') ?? 1;
+  Future<int> weekStartDay() async {
+    final raw = int.tryParse(await get('week_start_day') ?? '') ?? 1;
+    return raw.clamp(1, 7);
+  }
 
   static const appThemeKey = 'app_theme';
   static const accentColorKey = 'accent_color';
@@ -1016,8 +1065,8 @@ class SettingsRepository {
   /// 'horizontal' or 'vertical'. Defaults to 'horizontal'.
   Future<String> calendarOrientation() async =>
       (await get(calendarOrientationKey)) == 'vertical'
-          ? 'vertical'
-          : 'horizontal';
+      ? 'vertical'
+      : 'horizontal';
 
   Future<void> setCalendarOrientation(String value) =>
       set(calendarOrientationKey, value);
@@ -1136,8 +1185,7 @@ class SettingsRepository {
   /// duration. Defaults to false.
   Future<bool> autoEndTime() => _getBool(autoEndTimeKey);
 
-  Future<void> setAutoEndTime(bool value) =>
-      _setBool(autoEndTimeKey, value);
+  Future<void> setAutoEndTime(bool value) => _setBool(autoEndTimeKey, value);
 
   static const slotTimePresetsKey = 'slot_time_presets';
 
@@ -1194,8 +1242,7 @@ class SettingsRepository {
   /// Defaults to false.
   Future<bool> portraitLock() => _getBool(portraitLockKey);
 
-  Future<void> setPortraitLock(bool value) =>
-      _setBool(portraitLockKey, value);
+  Future<void> setPortraitLock(bool value) => _setBool(portraitLockKey, value);
 
   static const focusWorkMinutesKey = 'focus_work_minutes';
   static const focusBreakMinutesKey = 'focus_break_minutes';
@@ -1278,6 +1325,12 @@ class SettingsRepository {
       (db.select(db.settings)..where((s) => s.key.equals(activeYearKey)))
           .watchSingleOrNull()
           .map((row) => row == null ? null : int.tryParse(row.value));
+
+  /// One-shot read of the active year (null = all years).
+  Future<int?> activeYearId() =>
+      (db.select(db.settings)..where((s) => s.key.equals(activeYearKey)))
+          .getSingleOrNull()
+          .then((row) => row == null ? null : int.tryParse(row.value));
 
   Future<void> setActiveYearId(int? value) async {
     if (value == null) {
@@ -1379,11 +1432,9 @@ class SettingsRepository {
   /// Course-catalog source id, or '' for none. The class editor hides
   /// the catalog fetch button until the user picks a source.
   /// Defaults to ''.
-  Future<String> catalogSource() async =>
-      (await get(catalogSourceKey)) ?? '';
+  Future<String> catalogSource() async => (await get(catalogSourceKey)) ?? '';
 
-  Future<void> setCatalogSource(String value) =>
-      set(catalogSourceKey, value);
+  Future<void> setCatalogSource(String value) => set(catalogSourceKey, value);
 
   static const hubTabClassKey = 'hub_tab_class';
   static const hubTabAgendaKey = 'hub_tab_agenda';
@@ -1401,15 +1452,24 @@ class SettingsRepository {
 
   Future<void> setHubTab(String key, bool value) => _setBool(key, value);
 
+  static const widgetFullNameKey = 'widget_full_name';
+
+  /// Next-class timeline names: true shows the plain class name
+  /// ("Müzik Teorisi I"), false keeps the course-code prefix
+  /// ("MAT 103E · Müzik Teorisi I"). Defaults to false (code prefix).
+  /// Agenda day rows always use plain names.
+  Future<bool> widgetFullName() => _getBool(widgetFullNameKey);
+
+  Future<void> setWidgetFullName(bool value) =>
+      _setBool(widgetFullNameKey, value);
+
   static const widgetStyleKey = 'widget_style';
 
   /// Home widget visual style: 'you' (Material You system colors) or
   /// anything else (the app-theme mirror). Defaults to app theme.
-  Future<String> widgetStyle() async =>
-      (await get(widgetStyleKey)) ?? 'app';
+  Future<String> widgetStyle() async => (await get(widgetStyleKey)) ?? 'app';
 
-  Future<void> setWidgetStyle(String value) =>
-      set(widgetStyleKey, value);
+  Future<void> setWidgetStyle(String value) => set(widgetStyleKey, value);
 
   static const widgetOpacityKey = 'widget_opacity';
 
@@ -1499,12 +1559,6 @@ class MenuCacheRepository {
   }
 }
 
-/// File attachments for an academic year. Synced through the data folder
-/// like other tables; rows cascade-delete with the year. Physical files are
-/// removed best-effort on delete; a missing file never fails the delete.
-/// Shared delete path for attachment rows (year/class files): tombstone the
-/// uuid, hard-delete the row, then remove the stored blob best-effort. A
-/// missing file never fails the delete.
 /// Shared row delete: fetch by id, tombstone the uuid, hard-delete the row.
 /// Callers with cascades tombstone children first, then delegate the row
 /// itself here (see [ClassRepository.delete]).
@@ -1580,9 +1634,7 @@ class YearFileRepository {
     fetch: () => (db.select(
       db.yearFiles,
     )..where((t) => t.id.equals(id))).getSingleOrNull(),
-    remove: () => (db.delete(
-      db.yearFiles,
-    )..where((t) => t.id.equals(id))).go(),
+    remove: () => (db.delete(db.yearFiles)..where((t) => t.id.equals(id))).go(),
     uuidOf: (row) => row.uuid,
     pathOf: (row) => row.storedPath,
     tombstoneTable: SyncTables.yearFiles,
@@ -1619,9 +1671,8 @@ class ClassFileRepository {
     fetch: () => (db.select(
       db.classFiles,
     )..where((t) => t.id.equals(id))).getSingleOrNull(),
-    remove: () => (db.delete(
-      db.classFiles,
-    )..where((t) => t.id.equals(id))).go(),
+    remove: () =>
+        (db.delete(db.classFiles)..where((t) => t.id.equals(id))).go(),
     uuidOf: (row) => row.uuid,
     pathOf: (row) => row.storedPath,
     tombstoneTable: SyncTables.classFiles,

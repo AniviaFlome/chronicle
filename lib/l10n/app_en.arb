@@ -921,6 +921,8 @@
   "widgetOpacitySolid": "Solid",
   "widgetOpacityTranslucent": "Translucent",
   "widgetOpacityTransparent": "Transparent",
+  "widgetFullNameTitle": "Show full class names",
+  "widgetFullNameHint": "Next-class widget shows plain names without course codes",
   "widgetNoClasses": "No classes today",
   "@widgetNoClasses": {},
   "widgetAllCaughtUp": "All caught up",

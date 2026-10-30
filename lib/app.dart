@@ -103,8 +103,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) =>
         state.uri.scheme == 'glance-action' ? '/' : null,
     // Belt and braces: never show the red "Page Not Found" screen for
-    // any other unroutable location either — fall back to the dashboard.
-    errorBuilder: (_, _) => const DashboardScreen(),
+    // any other unroutable location either — fall back to the dashboard
+    // inside the Shell so rail/bottom-bar navigation survives.
+    errorBuilder: (_, _) => const _Shell(child: DashboardScreen()),
     routes: [
       ShellRoute(
         builder: (context, state, child) => _Shell(child: child),
@@ -139,10 +140,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/tasks/add',
-        pageBuilder: (_, _) => const MaterialPage(
-          fullscreenDialog: true,
-          child: TaskEditScreen(),
-        ),
+        pageBuilder: (_, _) =>
+            const MaterialPage(fullscreenDialog: true, child: TaskEditScreen()),
       ),
       GoRoute(
         path: '/tasks/edit',
@@ -151,14 +150,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           child: TaskEditScreen(existing: state.extra as TaskWithDetails?),
         ),
       ),
-      GoRoute(
-        path: '/grades',
-        builder: (_, _) => const GradesScreen(),
-      ),
-      GoRoute(
-        path: '/focus',
-        builder: (_, _) => const FocusScreen(),
-      ),
+      GoRoute(path: '/grades', builder: (_, _) => const GradesScreen()),
+      GoRoute(path: '/focus', builder: (_, _) => const FocusScreen()),
     ],
   );
 });
@@ -175,12 +168,14 @@ class _Shell extends StatelessWidget {
     final selectedIndex = items
         .indexWhere((i) => i.location == location)
         .clamp(0, items.length - 1);
-    final wide = MediaQuery.of(context).size.width >= 900;
+    final width = MediaQuery.of(context).size.width;
+    final wide = width >= 900;
+    final rail = width >= 600;
 
     return Scaffold(
       body: Row(
         children: [
-          if (MediaQuery.of(context).size.width >= 600)
+          if (rail)
             NavigationRail(
               selectedIndex: selectedIndex,
               onDestinationSelected: (i) => context.go(items[i].location),
@@ -196,13 +191,13 @@ class _Shell extends StatelessWidget {
           Expanded(child: child),
         ],
       ),
-      bottomNavigationBar: MediaQuery.of(context).size.width < 600
-          ? _PhoneNavBar(
+      bottomNavigationBar: rail
+          ? null
+          : _PhoneNavBar(
               selectedIndex: selectedIndex,
               items: items,
               onSelect: (i) => context.go(items[i].location),
-            )
-          : null,
+            ),
     );
   }
 }
@@ -237,8 +232,10 @@ class _PhoneNavBar extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             // Active pill fits inside its slot with room to spare.
-            final pillWidth = (constraints.maxWidth / items.length - 8)
-                .clamp(40.0, 64.0);
+            final pillWidth = (constraints.maxWidth / items.length - 8).clamp(
+              40.0,
+              64.0,
+            );
             return SizedBox(
               height: 80,
               child: Row(
@@ -246,43 +243,43 @@ class _PhoneNavBar extends StatelessWidget {
                   for (var i = 0; i < items.length; i++)
                     Expanded(
                       child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: () => onSelect(i),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: pillWidth,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  color: i == selectedIndex
-                                      ? scheme.secondaryContainer
-                                      : Colors.transparent,
-                                ),
-                                child: Icon(
-                                  items[i].icon,
-                                  size: 24,
-                                  color: i == selectedIndex
-                                      ? scheme.onSecondaryContainer
-                                      : scheme.onSurfaceVariant,
-                                ),
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => onSelect(i),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: pillWidth,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                color: i == selectedIndex
+                                    ? scheme.secondaryContainer
+                                    : Colors.transparent,
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                items[i].label(l10n),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: labelStyle?.copyWith(
-                                  color: i == selectedIndex
-                                      ? scheme.onSurface
-                                      : scheme.onSurfaceVariant,
-                                ),
+                              child: Icon(
+                                items[i].icon,
+                                size: 24,
+                                color: i == selectedIndex
+                                    ? scheme.onSecondaryContainer
+                                    : scheme.onSurfaceVariant,
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              items[i].label(l10n),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: labelStyle?.copyWith(
+                                color: i == selectedIndex
+                                    ? scheme.onSurface
+                                    : scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
                     ),
                 ],
               ),

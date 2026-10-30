@@ -69,9 +69,7 @@ final settingsRepositoryProvider = Provider(
 /// View seeds preloaded in main() and overridden with saved values.
 final calendarViewSeedProvider = Provider<String>((ref) => 'list');
 final absencesViewSeedProvider = Provider<String>((ref) => 'grid');
-final calendarOrientationSeedProvider = Provider<String>(
-  (ref) => 'horizontal',
-);
+final calendarOrientationSeedProvider = Provider<String>((ref) => 'horizontal');
 
 /// Default-absence-limit seed preloaded in main(). The record separates
 /// "loaded, no value set" (ready: true, limit: null → the field stays
@@ -213,6 +211,9 @@ final xtraRangeProvider =
     });
 
 /// Dashboard study statistics derived from completions and focus sessions.
+/// Trailing 7-day window (not the calendar week): counts the last 7 days
+/// including today so the dashboard stays meaningful regardless of
+/// [weekStartDay].
 class StudyStats {
   final int completedThisWeek;
   final int focusMinutesThisWeek;
@@ -313,18 +314,18 @@ final occurrencesProvider =
 
 /// The calendar week (start..start+6) containing [today] under
 /// [weekStartDay], using wall-clock shifts so DST transitions can't move
-/// the week. Mirrors `_CalendarScreenState._weekStart`.
+/// the week. Mirrors `_CalendarScreenState._weekStart` via [weekStartOf].
 (DateTime, DateTime) calendarWeekRange(DateTime today, int weekStartDay) {
   final day = DateTime(today.year, today.month, today.day);
-  final start = shiftDays(day, -((day.weekday - weekStartDay) % 7));
+  final start = weekStartOf(day, weekStartDay);
   return (start, shiftDays(start, 6));
 }
 
 /// Pre-resolves every provider the calendar's single gate waits on so the
 /// first calendar paint already holds content — no empty-week flash
-/// followed by a pop-in. Called with the root container before `runApp`
-/// (see `main.dart`) and again post-frame from StartupRunner as backup;
-/// failures are swallowed (the calendar still loads on demand).
+/// followed by a pop-in. Called post-frame from StartupRunner (see
+/// `main.dart`); failures are swallowed (the calendar still loads on
+/// demand). Warms ahead of navigation so return visits paint instantly.
 ///
 /// Warmed inputs: occurrences, Xtra events and classes for content;
 /// day-range/marker/fixed-grid settings plus week-start for geometry

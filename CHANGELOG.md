@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-30
+
+### Added
+- Widget option "Show full class names" (Settings → Widgets): the Next-class timeline (hero, Then-line, lookahead, in the standalone widget and the hub class tab) shows plain class names without the course-code prefix. Agenda day rows already use plain names and are unchanged.
+
+### Changed
+- Hub paging is dots/arrows-only: every other tap (tab body, header, shell padding, tiny strips) opens the app. Previously narrow shells and the wide tab body advanced on any tap, so misses on the small dots target read as "can't switch pages" (and there was no app-open target on 1-column widgets). Short 1-column widgets keep a slim dots-only bar (no header while it shows: bar + header leaves one squeezed row at ~110dp) with trimmed single-row bodies — name + live status for the class tab, plain then-line for quiet days; tall widgets are unchanged. Tiny strips have no dots bar, so their taps open the app; single-tab shorts skip the empty bar.
+- Tall single-tab hub hides the tab bar (chevrons wrapping to the same tab were a no-op wasting ~48dp); short single-tab behavior unchanged.
+
+### Fixed
+- Monthly repeats clamp to the last day of the month (Jan 31 → Feb 28/29, not Mar 2/3) in task repeats and Xtra event expansion.
+- Week-start prefs clamp to 1..7; all week math shares `weekStartOf` so garbage prefs can't silently shift weeks.
+- DST-safe date math: class/task reminder fire times, iCal multi-day durations and UNTIL comparisons use wall-clock calendar arithmetic, not exact `Duration` blocks.
+- iCal export stamps `DTSTAMP` with trailing `Z` (UTC); malformed VEVENTs log instead of vanishing silently; `_unescape` scans left-to-right so introduced backslashes aren't re-processed.
+- Schedule loading tolerates corrupt rows: `decodeIntList` falls back to `[]`, date parses use `tryParse` instead of throwing the whole calendar.
+- Day-rotation slots no longer fire on non-school days (Saturday sharing Friday's index); rotation/cycle indexes memoize per day; holiday ranges intersect the query range; `loadEngine` filters slots by `classIds` when present.
+- Attachment inserts stamp `uuid`/`updatedAt` at creation (were backfilled only at export); folder import sanitizes peer-supplied filenames so `../../evil` can't escape the scope dir.
+- Class/task deletes bump FK-nulled victims (`tasks.classId`, `pomodoro_sessions.taskId`, `tasks.linkedExamId`) so the nulling wins on peers; linked-exam fixup skips no-op writes to stop perpetual export churn.
+- Migrations guard `createTable` with existence checks (killed-migration safe); legacy DB rescue logs unreadable files; new v14 migration normalizes en/em-dash rooms (`–`, `—`) to null with `updatedAt` bump.
+- Reminders scope to the active year (hidden-year classes no longer schedule); Linux due check batches reminders in one query; `activeYearId()` one-shot read added.
+- Calendar `warmCalendarWeek` docstring fixed (post-frame, not pre-`runApp`); `calendarWeekRange` and all week starts share `weekStartOf`; stats window documented as trailing-7-day.
+- Settings day-range and grid-markers pickers hold layout with `Visibility(maintainSize)` instead of collapsing to zero height; app shell hoists `MediaQuery` to one read; error route keeps navigation chrome; accent-dot check uses luminance contrast; matrix absence tick uses the class slot time when known.
+- Widgets: removed dead `fmtEnds` wire key (never read natively) and dead `MENU_DISH_IDX` / Next-class expand scaffolding; `isoDate` delegates to `isoFromDateTime` (single canonical helper).
+
 ## [1.12.1] - 2026-10-20
 
 ### Changed

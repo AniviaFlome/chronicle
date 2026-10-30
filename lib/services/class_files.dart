@@ -9,6 +9,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/database.dart';
 
+import 'package:uuid/uuid.dart';
+
 /// Local storage for class/year attachments. Files live under
 /// `class_files/<id>/` or `year_files/<id>/` and sync via the data folder.
 class ClassFilesService {
@@ -24,8 +26,7 @@ class ClassFilesService {
       error is PlatformException ? 'unreadable' : 'other';
 
   Future<Directory> _scopeDir(String scope, int id) async {
-    final base =
-        storageRoot ?? await getApplicationSupportDirectory();
+    final base = storageRoot ?? await getApplicationSupportDirectory();
     final dir = Directory('${base.path}/$scope/$id');
     if (!await dir.exists()) await dir.create(recursive: true);
     return dir;
@@ -82,6 +83,8 @@ class ClassFilesService {
               fileName: name,
               storedPath: path,
               sizeBytes: Value(size),
+              uuid: Value(const Uuid().v4()),
+              updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
             ),
           )
           .then((_) {}),
@@ -103,6 +106,8 @@ class ClassFilesService {
               fileName: name,
               storedPath: path,
               sizeBytes: Value(size),
+              uuid: Value(const Uuid().v4()),
+              updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
             ),
           )
           .then((_) {}),

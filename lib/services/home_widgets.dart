@@ -87,38 +87,44 @@ Future<void> _push(ProviderContainer container) async {
   };
   final themeBg =
       switch (themeId) {
-        'catppuccin' => 1,
-        'nord' => 2,
-        'dracula' => 3,
-        'gruvbox' => 4,
-        'tokyo-night' => 5,
-        _ => 0,
-      } *
-      2 +
+            'catppuccin' => 1,
+            'nord' => 2,
+            'dracula' => 3,
+            'gruvbox' => 4,
+            'tokyo-night' => 5,
+            _ => 0,
+          } *
+          2 +
       (brightness == Brightness.dark ? 1 : 0);
   // Material You toggle (Settings → Widgets): native renders pure GlanceTheme
   // system colors when true, the app-theme triple otherwise.
   final useYou =
-      await container.read(settingsRepositoryProvider).widgetStyle() ==
-      'you';
+      await container.read(settingsRepositoryProvider).widgetStyle() == 'you';
   // Background opacity (Settings → Widgets): 0 solid, 1 translucent,
   // 2 transparent. Pushed as an int — widgets can't read app prefs.
-  final widgetOpacity =
-      await container.read(settingsRepositoryProvider).widgetOpacity();
+  final widgetOpacity = await container
+      .read(settingsRepositoryProvider)
+      .widgetOpacity();
+  // Class-name display (Settings → Widgets): plain names without the
+  // course-code prefix when true. Agenda day rows always use plain names.
+  final showFullName = await container
+      .read(settingsRepositoryProvider)
+      .widgetFullName();
 
   final occurrenceEngine = await container.read(engineProvider.future);
   final byId = await container.read(classesByIdProvider.future);
   // Scan a full week ahead so the Next-class widget can show the next
   // real class ("Tue 08:40…") instead of going blank on class-free days.
   final horizon = shiftDays(today, 7);
-  final occs = occurrenceEngine
-      .occurrences(rangeStart: today, rangeEnd: horizon)
-      .where((o) => !o.date.isBefore(today) && !o.date.isAfter(horizon))
-      .toList()
-    ..sort((a, b) {
-      final d = a.date.compareTo(b.date);
-      return d != 0 ? d : a.startMinutes.compareTo(b.startMinutes);
-    });
+  final occs =
+      occurrenceEngine
+          .occurrences(rangeStart: today, rangeEnd: horizon)
+          .where((o) => !o.date.isBefore(today) && !o.date.isAfter(horizon))
+          .toList()
+        ..sort((a, b) {
+          final d = a.date.compareTo(b.date);
+          return d != 0 ? d : a.startMinutes.compareTo(b.startMinutes);
+        });
 
   // Next class: remaining classes today plus the next 7 days. Classes past
   // tomorrow get a weekday prefix ("Tue 08:40–09:30"). Each entry is keyed
@@ -146,14 +152,17 @@ Future<void> _push(ProviderContainer container) async {
   String teacherOf(engine.ClassOccurrence o) =>
       byId[o.classId]?.teacher?.trim() ?? '';
   // Display name with the saved university course code when one exists
-  // ("MAT 103E · Müzik Teorisi I"), plain name otherwise. Used by the
-  // timeline (hero/then/looks); agenda day rows keep plain names.
+  // ("MAT 103E · Müzik Teorisi I"), plain name otherwise — or always plain
+  // when the full-name widget option is on. Used by the timeline
+  // (hero/then/looks); agenda day rows keep plain names.
   String displayNameOf(engine.ClassOccurrence o) {
-    final code = codeOf(o);
     final name = nameOf(o);
+    if (showFullName) return name;
+    final code = codeOf(o);
     if (code.isEmpty || name == '—') return name;
     return '$code · $name';
   }
+
   String colorOf(engine.ClassOccurrence o) =>
       _hexColor(byId[o.classId]?.colorValue ?? 0);
 
@@ -309,7 +318,9 @@ Future<void> _push(ProviderContainer container) async {
   for (var i = 0; i < listed.length; i++) {
     final o = listed[i];
     final next = i + 1 < listed.length ? listed[i + 1] : null;
-    final at = i == 0 ? (firstIsToday ? today : listed[i].start) : listed[i - 1].end;
+    final at = i == 0
+        ? (firstIsToday ? today : listed[i].start)
+        : listed[i - 1].end;
     timed[keyOf(at)] = entryJson(
       className: displayNameOf(o),
       detailLine: detailLineFor(o),
@@ -374,14 +385,15 @@ Future<void> _push(ProviderContainer container) async {
   // chip + bold title on the native side).
   final repo = container.read(taskRepositoryProvider);
   final open = await repo.watchAll(onlyOpen: true).first;
-  final dated = [
-    for (final t in open)
-      if (t.task.dueDate != null) t,
-  ]..sort((a, b) {
-      final d = a.task.dueDate!.compareTo(b.task.dueDate!);
-      if (d != 0) return d;
-      return (a.task.dueMinutes ?? 0).compareTo(b.task.dueMinutes ?? 0);
-    });
+  final dated =
+      [
+        for (final t in open)
+          if (t.task.dueDate != null) t,
+      ]..sort((a, b) {
+        final d = a.task.dueDate!.compareTo(b.task.dueDate!);
+        if (d != 0) return d;
+        return (a.task.dueMinutes ?? 0).compareTo(b.task.dueMinutes ?? 0);
+      });
   String taskDateLabel(String dueIso, int? dueMinutes) {
     final due = DateTime.tryParse(dueIso);
     final time = dueMinutes != null ? hhmmLocale(dueMinutes, locale) : null;
@@ -519,7 +531,6 @@ Future<void> _push(ProviderContainer container) async {
     WidgetKeys.emptyText: emptyText,
     WidgetKeys.fmtInMin: l10n.widgetInMin('{n}'),
     WidgetKeys.fmtInHours: l10n.widgetInHours('{n}'),
-    WidgetKeys.fmtEnds: l10n.widgetCurrentlyEnds('{n}'),
     WidgetKeys.fmtCurrently: l10n.widgetCurrently,
   };
 
@@ -553,10 +564,14 @@ Future<void> _push(ProviderContainer container) async {
     WidgetKeys.nextClass,
     emptyText: l10n.widgetNoClasses,
   );
-  await widgetSaveJson('${WidgetKeys.nextClass}.${WidgetKeys.timedData}', timed);
+  await widgetSaveJson(
+    '${WidgetKeys.nextClass}.${WidgetKeys.timedData}',
+    timed,
+  );
   await updateIfChanged(WidgetKeys.nextClass, WidgetReceivers.nextClass, {
     ...nextCommon,
     WidgetKeys.timedData: timed,
+    WidgetKeys.widgetFullName: showFullName,
   });
 
   // Today agenda (+ 7-day rail). selectedDay is pushed as 0 every refresh:
@@ -587,7 +602,10 @@ Future<void> _push(ProviderContainer container) async {
     '${WidgetKeys.dueTasks}.${WidgetKeys.headerTitle}',
     l10n.widgetDueTasks,
   );
-  await widgetSave('${WidgetKeys.dueTasks}.${WidgetKeys.tasksCount}', tasksCount);
+  await widgetSave(
+    '${WidgetKeys.dueTasks}.${WidgetKeys.tasksCount}',
+    tasksCount,
+  );
   await widgetSaveJson('${WidgetKeys.dueTasks}.${WidgetKeys.tasks}', taskRows);
   await updateIfChanged(WidgetKeys.dueTasks, WidgetReceivers.dueTasks, {
     ...tasksCommon,
@@ -607,7 +625,10 @@ Future<void> _push(ProviderContainer container) async {
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.tabTasks}', tabTasks);
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.tabMenu}', tabMenu);
   await widgetSaveJson('${WidgetKeys.hub}.${WidgetKeys.timedData}', timed);
-  await widgetSaveJson('${WidgetKeys.hub}.${WidgetKeys.agendaRows}', agendaDays[0]);
+  await widgetSaveJson(
+    '${WidgetKeys.hub}.${WidgetKeys.agendaRows}',
+    agendaDays[0],
+  );
   await widgetSaveJson('${WidgetKeys.hub}.${WidgetKeys.tasksRows}', taskRows);
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.tasksTitle}', hubTasksTitle);
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.menuTitle}', hubMenuTitle);
@@ -625,8 +646,14 @@ Future<void> _push(ProviderContainer container) async {
     '${WidgetKeys.hub}.${WidgetKeys.titleAgenda}',
     l10n.widgetToday,
   );
-  await widgetSave('${WidgetKeys.hub}.${WidgetKeys.emptyTasks}', l10n.widgetAllCaughtUp);
-  await widgetSave('${WidgetKeys.hub}.${WidgetKeys.emptyMenu}', l10n.widgetNoMenuToday);
+  await widgetSave(
+    '${WidgetKeys.hub}.${WidgetKeys.emptyTasks}',
+    l10n.widgetAllCaughtUp,
+  );
+  await widgetSave(
+    '${WidgetKeys.hub}.${WidgetKeys.emptyMenu}',
+    l10n.widgetNoMenuToday,
+  );
   await updateIfChanged(WidgetKeys.hub, WidgetReceivers.hub, {
     ...hubCommon,
     WidgetKeys.tabClass: tabClass,
@@ -645,6 +672,7 @@ Future<void> _push(ProviderContainer container) async {
     WidgetKeys.titleAgenda: l10n.widgetToday,
     WidgetKeys.emptyTasks: l10n.widgetAllCaughtUp,
     WidgetKeys.emptyMenu: l10n.widgetNoMenuToday,
+    WidgetKeys.widgetFullName: showFullName,
   });
 
   // Standalone cafeteria-menu widget: every servable meal plus the
@@ -684,10 +712,7 @@ Future<void> _push(ProviderContainer container) async {
     WidgetKeys.weeklyCalendar,
     emptyText: l10n.widgetNoClasses,
   );
-  await widgetSaveJson(
-    '${WidgetKeys.weeklyCalendar}.${WidgetKeys.week}',
-    week,
-  );
+  await widgetSaveJson('${WidgetKeys.weeklyCalendar}.${WidgetKeys.week}', week);
   for (var i = 0; i < 7; i++) {
     await widgetSaveJson('${WidgetKeys.weeklyCalendar}.day$i', agendaDays[i]);
   }
@@ -706,7 +731,8 @@ Future<void> _push(ProviderContainer container) async {
   // and midnight keep the countdown widgets fresh between pushes.
   await scheduleWidgetTimelines(
     boundaries: [
-      for (final k in timed.keys) DateTime.fromMillisecondsSinceEpoch(int.parse(k)),
+      for (final k in timed.keys)
+        DateTime.fromMillisecondsSinceEpoch(int.parse(k)),
     ],
   );
 }

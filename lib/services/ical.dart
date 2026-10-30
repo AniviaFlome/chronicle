@@ -2,6 +2,8 @@
 /// Dates are floating local times, matching app storage.
 library;
 
+import 'package:flutter/foundation.dart';
+
 import '../utils/time_format.dart';
 
 /// One calendar event for export, or one parsed instance from import.
@@ -42,7 +44,8 @@ String _date(DateTime d) =>
 
 /// Builds an .ics calendar. UIDs are synthetic but stable per input order.
 String buildIcs({required List<IcsEvent> events}) {
-  final now = _stamp(DateTime.now().toUtc());
+  // UTC instant: the trailing Z marks it as UTC for strict parsers.
+  final now = '${_stamp(DateTime.now().toUtc())}Z';
   final buffer = StringBuffer()
     ..writeln('BEGIN:VCALENDAR')
     ..writeln('VERSION:2.0')
@@ -75,12 +78,46 @@ String buildIcs({required List<IcsEvent> events}) {
   return buffer.toString();
 }
 
-String _unescape(String s) => s
-    .replaceAll('\\n', '\n')
-    .replaceAll('\\N', '\n')
-    .replaceAll('\\,', ',')
-    .replaceAll('\\;', ';')
-    .replaceAll('\\\\', '\\');
+String _unescape(String s) {
+  // Single left-to-right scan: the old chained replaceAll processed
+  // backslashes last, so sequences introduced by earlier replaces (e.g.
+  // "\\n" -> newline) could be re-processed. This handles each escape once.
+  final out = StringBuffer();
+  var i = 0;
+  while (i < s.length) {
+    final c = s[i];
+    if (c == '\\' && i + 1 < s.length) {
+      final n = s[i + 1];
+      switch (n) {
+        case 'n':
+        case 'N':
+          out.write('\n');
+          i += 2;
+          continue;
+        case ',':
+          out.write(',');
+          i += 2;
+          continue;
+        case ';':
+          out.write(';');
+          i += 2;
+          continue;
+        case '\\':
+          out.write('\\');
+          i += 2;
+          continue;
+        default:
+          out.write(c);
+          i++;
+          continue;
+      }
+    } else {
+      out.write(c);
+      i++;
+    }
+  }
+  return out.toString();
+}
 
 /// Parses the date part of DTSTART/DTEND values. A trailing Z means UTC and
 /// is converted to local time. Returns null on bad input.
@@ -158,8 +195,9 @@ List<IcsEvent> parseIcs(String text) {
     inEvent = false;
     try {
       out.addAll(_expandEvent(Map.of(props)));
-    } catch (_) {
-      // Skip malformed blocks.
+    } catch (e) {
+      // Skip malformed blocks, but log so a poisoned VEVENT is visible.
+      debugPrint('Skipping malformed VEVENT: $e');
     }
     props.clear();
   }
@@ -188,7 +226,12 @@ List<IcsEvent> _expandEvent(Map<String, String> props) {
   final start = _parseIcsDate(startRaw);
   if (start == null) return const [];
   final end = _parseIcsDateOrNull(props['DTEND']);
-  final duration = end?.difference(start);
+  // Wall-clock duration: exact Duration arithmetic drifts across DST.
+  // Rebuild the end from calendar days + wall-clock time instead.
+  final endDayOffset = end == null ? 0 : daysBetween(start, end);
+  final endHour = end?.hour ?? start.hour;
+  final endMinute = end?.minute ?? start.minute;
+  final endSecond = end?.second ?? start.second;
   final location = props['LOCATION'] == null
       ? null
       : _unescape(props['LOCATION']!);
@@ -196,13 +239,24 @@ List<IcsEvent> _expandEvent(Map<String, String> props) {
       ? null
       : _unescape(props['DESCRIPTION']!);
 
-  IcsEvent at(DateTime s) => IcsEvent(
-    title: title,
-    start: s,
-    end: duration == null ? null : s.add(duration),
-    location: location,
-    description: description,
-  );
+  IcsEvent at(DateTime s) {
+    if (end == null) return IcsEvent(title: title, start: s);
+    final base = shiftDays(DateTime(s.year, s.month, s.day), endDayOffset);
+    return IcsEvent(
+      title: title,
+      start: s,
+      end: DateTime(
+        base.year,
+        base.month,
+        base.day,
+        endHour,
+        endMinute,
+        endSecond,
+      ),
+      location: location,
+      description: description,
+    );
+  }
 
   final rrule = props['RRULE'];
   if (rrule == null) return [at(start)];
@@ -229,9 +283,15 @@ List<IcsEvent> _expandEvent(Map<String, String> props) {
   final out = <IcsEvent>[];
   var cursor = DateTime(start.year, start.month, start.day);
   var produced = 0;
+  // Compare date parts: UNTIL is a full instant (possibly UTC-converted),
+  // cursor is date-only midnight. Same-day UNTIL with an early time must
+  // still include that day per RFC inclusive semantics.
+  final untilIso = until == null ? null : isoFromDateTime(until);
   while (produced < 500) {
     if (cursor.isAfter(horizon)) break;
-    if (until != null && cursor.isAfter(until)) break;
+    if (untilIso != null && isoFromDateTime(cursor).compareTo(untilIso) > 0) {
+      break;
+    }
     if (count != null && produced >= count) break;
     final matches = freq == 'DAILY'
         ? true

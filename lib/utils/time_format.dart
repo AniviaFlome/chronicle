@@ -15,6 +15,38 @@ DateTime shiftDays(DateTime d, int days) => DateTime(
   d.microsecond,
 );
 
+/// Shifts a date by whole calendar months, clamping to the last day of the
+/// target month (Jan 31 + 1 month -> Feb 28/29, not Mar 2/3). Preserves
+/// wall-clock time. Never use [Duration] addition here.
+DateTime shiftMonths(DateTime d, int months) {
+  final total = (d.month - 1) + months;
+  // Floor division: Dart ~/ truncates toward zero, breaking negative
+  // totals (Jan - 1 month must be Dec of the previous year).
+  final year = d.year + (total / 12).floor();
+  final month = ((total % 12) + 12) % 12 + 1;
+  final lastDay = DateTime(year, month + 1, 0).day;
+  final day = d.day > lastDay ? lastDay : d.day;
+  return DateTime(
+    year,
+    month,
+    day,
+    d.hour,
+    d.minute,
+    d.second,
+    d.millisecond,
+    d.microsecond,
+  );
+}
+
+/// Monday-based (or [weekStart]-based, ISO 1..7) start of the week containing
+/// [d], as a wall-clock date. Single shared helper: all week math (calendar,
+/// absences, engine, reminders) must go through here so garbage prefs can't
+/// silently shift weeks.
+DateTime weekStartOf(DateTime d, int weekStart) {
+  final start = weekStart.clamp(1, 7);
+  return DateTime(d.year, d.month, d.day - ((d.weekday - start + 7) % 7));
+}
+
 /// Exact whole days between two dates, ignoring time of day and DST length.
 int daysBetween(DateTime a, DateTime b) {
   final ua = DateTime.utc(a.year, a.month, a.day);
@@ -33,7 +65,9 @@ String hhmm(int minutes) {
 /// everything else keeps the colon (08:40). Padding is unchanged.
 String hhmmLocale(int minutes, String locale) {
   final base = hhmm(minutes);
-  return locale.toLowerCase().startsWith('tr') ? base.replaceAll(':', '.') : base;
+  return locale.toLowerCase().startsWith('tr')
+      ? base.replaceAll(':', '.')
+      : base;
 }
 
 /// Parses "HH:mm" into minutes-from-midnight; null on bad input.

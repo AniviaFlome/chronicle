@@ -75,6 +75,27 @@ void main() {
       expect(parseIcs('garbage'), isEmpty);
       expect(parseIcs('BEGIN:VEVENT\nSUMMARY:No date\nEND:VEVENT\n'), isEmpty);
     });
+
+    test('DTSTAMP carries trailing Z for UTC', () {
+      final ics = buildIcs(
+        events: [IcsEvent(title: 'T', start: DateTime(2026, 9, 20, 9, 30))],
+      );
+      expect(ics, contains(RegExp(r'DTSTAMP:\d{8}T\d{6}Z')));
+    });
+
+    test('until compares date parts inclusive same-day', () {
+      final parsed = parseIcs(
+        'BEGIN:VEVENT\n'
+        'SUMMARY:Daily\n'
+        'DTSTART:20260914T090000\n'
+        'RRULE:FREQ=DAILY;UNTIL=20260915T000000\n'
+        'END:VEVENT\n',
+      );
+      expect(parsed.map((e) => e.start), [
+        DateTime(2026, 9, 14, 9),
+        DateTime(2026, 9, 15, 9),
+      ]);
+    });
   });
 
   group('storage access', () {

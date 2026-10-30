@@ -65,7 +65,10 @@ class DataFolderService {
     if (stem.isEmpty) stem = 'file';
     var ext = '';
     if (hasExt) {
-      ext = fileName.substring(dot + 1).toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
+      ext = fileName
+          .substring(dot + 1)
+          .toLowerCase()
+          .replaceAll(RegExp('[^a-z0-9]'), '');
       if (ext.length > 10) ext = ext.substring(0, 10);
     }
     final short = uuid.replaceAll('-', '');
@@ -116,10 +119,7 @@ class DataFolderService {
   /// (pre-v6 rows without migration, raw test inserts). Idempotent.
   Future<void> ensureSyncIdentity() async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    Future<void> fix(
-      TableInfo<Table, dynamic> table,
-      String sqlTable,
-    ) async {
+    Future<void> fix(TableInfo<Table, dynamic> table, String sqlTable) async {
       final pending = await db
           .customSelect(
             "SELECT id, uuid, updated_at FROM $sqlTable "
@@ -193,9 +193,7 @@ class DataFolderService {
         final lockTarget = File('${dir.path}/$exportLockFile');
         final lockTmp = File('${lockTarget.path}.tmp');
         await lockTmp.writeAsString(
-          jsonEncode({
-            'startedAt': DateTime.now().millisecondsSinceEpoch,
-          }),
+          jsonEncode({'startedAt': DateTime.now().millisecondsSinceEpoch}),
         );
         await lockTmp.rename(lockTarget.path);
       } catch (_) {}
@@ -242,8 +240,7 @@ class DataFolderService {
       // The support dir is only resolved when file rows exist, so plain
       // unit tests without platform bindings still pass.
       String supportPrefix = '';
-      if (tables['classFiles']!.isNotEmpty ||
-          tables['yearFiles']!.isNotEmpty) {
+      if (tables['classFiles']!.isNotEmpty || tables['yearFiles']!.isNotEmpty) {
         try {
           final supportBase =
               storageRoot ?? await getApplicationSupportDirectory();
@@ -308,11 +305,7 @@ class DataFolderService {
       }
       await writeJson(tombstonesFile, [
         for (final t in tombstones)
-          {
-            'tableKey': t.tableKey,
-            'uuid': t.uuid,
-            'deletedAt': t.deletedAt,
-          },
+          {'tableKey': t.tableKey, 'uuid': t.uuid, 'deletedAt': t.deletedAt},
       ]);
       // Opt-in settings snapshot: portable keys only, skipped entirely
       // when the toggle is off (a stale file from an earlier opt-in is
@@ -471,9 +464,7 @@ class DataFolderService {
           }
         }
       }
-      await settings.setDataLastImportAt(
-        DateTime.now().millisecondsSinceEpoch,
-      );
+      await settings.setDataLastImportAt(DateTime.now().millisecondsSinceEpoch);
       final seenAt = manifest['exportedAt'];
       if (seenAt is int) {
         await settings.setDataLastSeenExportedAt(seenAt);
@@ -572,7 +563,12 @@ class DataFolderService {
       final safeUuid = uuid.replaceAll(RegExp('[^a-zA-Z0-9-]'), '_');
       final file = File('${out.path}/conflict_${table}_${safeUuid}_$at.json');
       await file.writeAsString(
-        jsonEncode({'table': table, 'uuid': uuid, 'local': local, 'incoming': incoming}),
+        jsonEncode({
+          'table': table,
+          'uuid': uuid,
+          'local': local,
+          'incoming': incoming,
+        }),
       );
       // Bound growth: conflicts are rare, but drop files older than 30 days
       // so the folder can't accumulate them forever.
@@ -697,7 +693,12 @@ class DataFolderService {
       }
 
       // 3. Upsert rows parents-first, skipping tombstoned or stale rows.
-      final merged = await _mergeRows(dir, listOf, localTombs, lastImportBefore);
+      final merged = await _mergeRows(
+        dir,
+        listOf,
+        localTombs,
+        lastImportBefore,
+      );
       upserted += merged.count;
       conflicts += merged.conflicts;
       skipped += merged.skipped;
@@ -769,115 +770,105 @@ class DataFolderService {
   /// (foreign tombstones are ignored, never crash the import). Branches
   /// stay concrete per table so drift's typed columns resolve.
   ({Future<dynamic> Function() fetch, Future<int> Function(int id) remove})?
-      _rowDeleter(String tableKey, String uuid) {
+  _rowDeleter(String tableKey, String uuid) {
     switch (tableKey) {
       case 'academic_years':
         return (
-          fetch: () => (db.select(db.academicYears)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.academicYears)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.academicYears,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) =>
+              (db.delete(db.academicYears)..where((t) => t.id.equals(id))).go(),
         );
       case 'classes':
         return (
-          fetch: () => (db.select(db.classes)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.classes)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.classes,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) =>
+              (db.delete(db.classes)..where((t) => t.id.equals(id))).go(),
         );
       case 'schedule_items':
         return (
-          fetch: () => (db.select(db.scheduleItems)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.scheduleItems)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.scheduleItems,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) =>
+              (db.delete(db.scheduleItems)..where((t) => t.id.equals(id))).go(),
         );
       case 'schedule_exceptions':
         return (
-          fetch: () => (db.select(db.scheduleExceptions)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.scheduleExceptions)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.scheduleExceptions,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) => (db.delete(
+            db.scheduleExceptions,
+          )..where((t) => t.id.equals(id))).go(),
         );
       case 'holidays':
         return (
-          fetch: () => (db.select(db.holidays)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.holidays)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.holidays,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) =>
+              (db.delete(db.holidays)..where((t) => t.id.equals(id))).go(),
         );
       case 'absences':
         return (
-          fetch: () => (db.select(db.absences)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.absences)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.absences,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) =>
+              (db.delete(db.absences)..where((t) => t.id.equals(id))).go(),
         );
       case 'tasks':
         return (
-          fetch: () => (db.select(db.tasks)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.tasks)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.tasks,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) =>
+              (db.delete(db.tasks)..where((t) => t.id.equals(id))).go(),
         );
       case 'subtasks':
         return (
-          fetch: () => (db.select(db.subtasks)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.subtasks)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.subtasks,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) =>
+              (db.delete(db.subtasks)..where((t) => t.id.equals(id))).go(),
         );
       case 'task_reminders':
         return (
-          fetch: () => (db.select(db.taskReminders)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.taskReminders)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.taskReminders,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) =>
+              (db.delete(db.taskReminders)..where((t) => t.id.equals(id))).go(),
         );
       case 'grades':
         return (
-          fetch: () => (db.select(db.grades)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.grades)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.grades,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) =>
+              (db.delete(db.grades)..where((t) => t.id.equals(id))).go(),
         );
       case 'pomodoro_sessions':
         return (
-          fetch: () => (db.select(db.pomodoroSessions)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.pomodoroSessions)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.pomodoroSessions,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) => (db.delete(
+            db.pomodoroSessions,
+          )..where((t) => t.id.equals(id))).go(),
         );
       case 'xtra_events':
         return (
-          fetch: () => (db.select(db.xtraEvents)
-                ..where((t) => t.uuid.equals(uuid)))
-              .getSingleOrNull(),
-          remove: (id) => (db.delete(db.xtraEvents)
-                ..where((t) => t.id.equals(id)))
-              .go(),
+          fetch: () => (db.select(
+            db.xtraEvents,
+          )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
+          remove: (id) =>
+              (db.delete(db.xtraEvents)..where((t) => t.id.equals(id))).go(),
         );
       default:
         return null;
@@ -912,9 +903,7 @@ class DataFolderService {
         () => (db.select(
           db.classFiles,
         )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-        (id) => (db.delete(
-          db.classFiles,
-        )..where((t) => t.id.equals(id))).go(),
+        (id) => (db.delete(db.classFiles)..where((t) => t.id.equals(id))).go(),
         deletedAt,
       );
     }
@@ -923,9 +912,7 @@ class DataFolderService {
         () => (db.select(
           db.yearFiles,
         )..where((t) => t.uuid.equals(uuid))).getSingleOrNull(),
-        (id) => (db.delete(
-          db.yearFiles,
-        )..where((t) => t.id.equals(id))).go(),
+        (id) => (db.delete(db.yearFiles)..where((t) => t.id.equals(id))).go(),
         deletedAt,
       );
     }
@@ -973,7 +960,10 @@ class DataFolderService {
     /// Parses one row leniently: a single unparsable map (newer-version
     /// field, corrupt entry) is skipped and counted instead of aborting
     /// the whole import transaction.
-    T? parseRow<T>(Map<String, dynamic> m, T Function(Map<String, dynamic>) parse) {
+    T? parseRow<T>(
+      Map<String, dynamic> m,
+      T Function(Map<String, dynamic>) parse,
+    ) {
       try {
         return parse(m);
       } catch (e) {
@@ -1059,10 +1049,10 @@ class DataFolderService {
     /// File row-id → uuid, built once per table so FK remaps below are
     /// O(1) lookups instead of O(F) scans per incoming row.
     Map<int, String> fileIdUuids(List<Map<String, dynamic>> files) => {
-          for (final m in files)
-            if (m['id'] is int && m['uuid'] is String)
-              (m['id'] as int): (m['uuid'] as String),
-        };
+      for (final m in files)
+        if (m['id'] is int && m['uuid'] is String)
+          (m['id'] as int): (m['uuid'] as String),
+    };
     final yearUuids = fileIdUuids(fileYears);
     final classUuids = fileIdUuids(fileClasses);
     final taskUuids = fileIdUuids(fileTasks);
@@ -1094,14 +1084,20 @@ class DataFolderService {
         yearMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
-        await maybeConflict('academic_years', row.uuid, local.updatedAt, m, () async {
-          final existing = await (db.select(db.academicYears)
-                ..where((t) => t.uuid.equals(row.uuid)))
-              .getSingleOrNull();
-          return existing == null
-              ? null
-              : Map<String, dynamic>.from(existing.toJson());
-        });
+        await maybeConflict(
+          'academic_years',
+          row.uuid,
+          local.updatedAt,
+          m,
+          () async {
+            final existing = await (db.select(
+              db.academicYears,
+            )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
+            return existing == null
+                ? null
+                : Map<String, dynamic>.from(existing.toJson());
+          },
+        );
         await db.update(db.academicYears).replace(row.copyWith(id: local.id));
         yearMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
@@ -1112,8 +1108,7 @@ class DataFolderService {
     for (final m in fileClasses) {
       final row = parseRow(m, ClassesData.fromJson);
       if (row == null) continue;
-      if (row.uuid.isEmpty ||
-          tombstoned('classes', row.uuid, row.updatedAt)) {
+      if (row.uuid.isEmpty || tombstoned('classes', row.uuid, row.updatedAt)) {
         continue;
       }
       final yearId = row.yearId == null
@@ -1125,18 +1120,20 @@ class DataFolderService {
         final id = await db
             .into(db.classes)
             .insert(
-              row.toCompanion(true).copyWith(
-                id: const Value.absent(),
-                yearId: yearId == null ? const Value(null) : Value(yearId),
-              ),
+              row
+                  .toCompanion(true)
+                  .copyWith(
+                    id: const Value.absent(),
+                    yearId: yearId == null ? const Value(null) : Value(yearId),
+                  ),
             );
         classMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
         await maybeConflict('classes', row.uuid, local.updatedAt, m, () async {
-          final existing = await (db.select(db.classes)
-                ..where((t) => t.uuid.equals(row.uuid)))
-              .getSingleOrNull();
+          final existing = await (db.select(
+            db.classes,
+          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
           return existing == null
               ? null
               : Map<String, dynamic>.from(existing.toJson());
@@ -1171,20 +1168,24 @@ class DataFolderService {
         final id = await db
             .into(db.tasks)
             .insert(
-              row.toCompanion(true).copyWith(
-                id: const Value.absent(),
-                classId: classId == null ? const Value(null) : Value(classId),
-                linkedExamId: const Value(null),
-              ),
+              row
+                  .toCompanion(true)
+                  .copyWith(
+                    id: const Value.absent(),
+                    classId: classId == null
+                        ? const Value(null)
+                        : Value(classId),
+                    linkedExamId: const Value(null),
+                  ),
             );
         taskMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         wonTasks.add(row.uuid);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
         await maybeConflict('tasks', row.uuid, local.updatedAt, m, () async {
-          final existing = await (db.select(db.tasks)
-                ..where((t) => t.uuid.equals(row.uuid)))
-              .getSingleOrNull();
+          final existing = await (db.select(
+            db.tasks,
+          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
           return existing == null
               ? null
               : Map<String, dynamic>.from(existing.toJson());
@@ -1194,9 +1195,7 @@ class DataFolderService {
             .replace(
               row.copyWith(
                 id: local.id,
-                classId: classId == null
-                    ? const Value(null)
-                    : Value(classId),
+                classId: classId == null ? const Value(null) : Value(classId),
                 linkedExamId: const Value(null),
               ),
             );
@@ -1218,6 +1217,12 @@ class DataFolderService {
       final linkedLocal = remapFileId(taskUuids, taskMap, linkedNum);
       if (linkedLocal == null) continue;
       final local = taskMap[uuid]!;
+      final current = await (db.select(
+        db.tasks,
+      )..where((t) => t.id.equals(local.id))).getSingleOrNull();
+      // Skip no-op writes: bumping updatedAt on an identical value causes
+      // perpetual export churn (every import looks like a local change).
+      if (current != null && current.linkedExamId == linkedLocal) continue;
       await (db.update(db.tasks)..where((t) => t.id.equals(local.id))).write(
         TasksCompanion(
           linkedExamId: Value(linkedLocal),
@@ -1241,10 +1246,9 @@ class DataFolderService {
         final id = await db
             .into(db.scheduleItems)
             .insert(
-              row.toCompanion(true).copyWith(
-                id: const Value.absent(),
-                classId: Value(classId),
-              ),
+              row
+                  .toCompanion(true)
+                  .copyWith(id: const Value.absent(), classId: Value(classId)),
             );
         itemMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
@@ -1255,9 +1259,9 @@ class DataFolderService {
           local.updatedAt,
           m,
           () async {
-            final existing = await (db.select(db.scheduleItems)
-                  ..where((t) => t.uuid.equals(row.uuid)))
-                .getSingleOrNull();
+            final existing = await (db.select(
+              db.scheduleItems,
+            )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
             return existing == null
                 ? null
                 : Map<String, dynamic>.from(existing.toJson());
@@ -1286,10 +1290,12 @@ class DataFolderService {
         final id = await db
             .into(db.scheduleExceptions)
             .insert(
-              row.toCompanion(true).copyWith(
-                id: const Value.absent(),
-                scheduleItemId: Value(slotId),
-              ),
+              row
+                  .toCompanion(true)
+                  .copyWith(
+                    id: const Value.absent(),
+                    scheduleItemId: Value(slotId),
+                  ),
             );
         exceptionMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
@@ -1300,9 +1306,9 @@ class DataFolderService {
           local.updatedAt,
           m,
           () async {
-            final existing = await (db.select(db.scheduleExceptions)
-                  ..where((t) => t.uuid.equals(row.uuid)))
-                .getSingleOrNull();
+            final existing = await (db.select(
+              db.scheduleExceptions,
+            )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
             return existing == null
                 ? null
                 : Map<String, dynamic>.from(existing.toJson());
@@ -1310,9 +1316,7 @@ class DataFolderService {
         );
         await db
             .update(db.scheduleExceptions)
-            .replace(
-              row.copyWith(id: local.id, scheduleItemId: slotId),
-            );
+            .replace(row.copyWith(id: local.id, scheduleItemId: slotId));
         exceptionMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
       }
@@ -1322,8 +1326,7 @@ class DataFolderService {
     for (final m in listOf('holidays')) {
       final row = parseRow(m, Holiday.fromJson);
       if (row == null) continue;
-      if (row.uuid.isEmpty ||
-          tombstoned('holidays', row.uuid, row.updatedAt)) {
+      if (row.uuid.isEmpty || tombstoned('holidays', row.uuid, row.updatedAt)) {
         continue;
       }
       final local = holidayMap[row.uuid];
@@ -1334,8 +1337,7 @@ class DataFolderService {
         holidayMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
-        await maybeConflict('holidays', row.uuid, local.updatedAt, m,
-            () async {
+        await maybeConflict('holidays', row.uuid, local.updatedAt, m, () async {
           final existing = await (db.select(
             db.holidays,
           )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
@@ -1353,8 +1355,7 @@ class DataFolderService {
     for (final m in listOf('absences')) {
       final row = parseRow(m, Absence.fromJson);
       if (row == null) continue;
-      if (row.uuid.isEmpty ||
-          tombstoned('absences', row.uuid, row.updatedAt)) {
+      if (row.uuid.isEmpty || tombstoned('absences', row.uuid, row.updatedAt)) {
         continue;
       }
       final classId = remapFileId(classUuids, classMap, row.classId);
@@ -1364,16 +1365,14 @@ class DataFolderService {
         final id = await db
             .into(db.absences)
             .insert(
-              row.toCompanion(true).copyWith(
-                id: const Value.absent(),
-                classId: Value(classId),
-              ),
+              row
+                  .toCompanion(true)
+                  .copyWith(id: const Value.absent(), classId: Value(classId)),
             );
         absenceMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
-        await maybeConflict('absences', row.uuid, local.updatedAt, m,
-            () async {
+        await maybeConflict('absences', row.uuid, local.updatedAt, m, () async {
           final existing = await (db.select(
             db.absences,
           )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
@@ -1393,8 +1392,7 @@ class DataFolderService {
     for (final m in listOf('subtasks')) {
       final row = parseRow(m, Subtask.fromJson);
       if (row == null) continue;
-      if (row.uuid.isEmpty ||
-          tombstoned('subtasks', row.uuid, row.updatedAt)) {
+      if (row.uuid.isEmpty || tombstoned('subtasks', row.uuid, row.updatedAt)) {
         continue;
       }
       final taskId = remapFileId(taskUuids, taskMap, row.taskId);
@@ -1404,16 +1402,14 @@ class DataFolderService {
         final id = await db
             .into(db.subtasks)
             .insert(
-              row.toCompanion(true).copyWith(
-                id: const Value.absent(),
-                taskId: Value(taskId),
-              ),
+              row
+                  .toCompanion(true)
+                  .copyWith(id: const Value.absent(), taskId: Value(taskId)),
             );
         subtaskMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
-        await maybeConflict('subtasks', row.uuid, local.updatedAt, m,
-            () async {
+        await maybeConflict('subtasks', row.uuid, local.updatedAt, m, () async {
           final existing = await (db.select(
             db.subtasks,
           )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
@@ -1442,23 +1438,27 @@ class DataFolderService {
         final id = await db
             .into(db.taskReminders)
             .insert(
-              row.toCompanion(true).copyWith(
-                id: const Value.absent(),
-                taskId: Value(taskId),
-              ),
+              row
+                  .toCompanion(true)
+                  .copyWith(id: const Value.absent(), taskId: Value(taskId)),
             );
         reminderMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
         await maybeConflict(
-            'task_reminders', row.uuid, local.updatedAt, m, () async {
-          final existing = await (db.select(
-            db.taskReminders,
-          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
-          return existing == null
-              ? null
-              : Map<String, dynamic>.from(existing.toJson());
-        });
+          'task_reminders',
+          row.uuid,
+          local.updatedAt,
+          m,
+          () async {
+            final existing = await (db.select(
+              db.taskReminders,
+            )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
+            return existing == null
+                ? null
+                : Map<String, dynamic>.from(existing.toJson());
+          },
+        );
         await db
             .update(db.taskReminders)
             .replace(row.copyWith(id: local.id, taskId: taskId));
@@ -1479,16 +1479,17 @@ class DataFolderService {
         final id = await db
             .into(db.grades)
             .insert(
-              row.toCompanion(true).copyWith(
-                id: const Value.absent(),
-                examTaskId: Value(examId),
-              ),
+              row
+                  .toCompanion(true)
+                  .copyWith(
+                    id: const Value.absent(),
+                    examTaskId: Value(examId),
+                  ),
             );
         gradeMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
-        await maybeConflict('grades', row.uuid, local.updatedAt, m,
-            () async {
+        await maybeConflict('grades', row.uuid, local.updatedAt, m, () async {
           final existing = await (db.select(
             db.grades,
           )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
@@ -1521,10 +1522,12 @@ class DataFolderService {
         final id = await db
             .into(db.pomodoroSessions)
             .insert(
-              row.toCompanion(true).copyWith(
-                id: const Value.absent(),
-                taskId: taskId == null ? const Value(null) : Value(taskId),
-              ),
+              row
+                  .toCompanion(true)
+                  .copyWith(
+                    id: const Value.absent(),
+                    taskId: taskId == null ? const Value(null) : Value(taskId),
+                  ),
             );
         pomodoroMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
@@ -1572,15 +1575,20 @@ class DataFolderService {
         xtraMap[row.uuid] = (id: id, updatedAt: row.updatedAt);
         count++;
       } else if (row.updatedAt > local.updatedAt) {
-        await maybeConflict('xtra_events', row.uuid, local.updatedAt, m,
-            () async {
-          final existing = await (db.select(
-            db.xtraEvents,
-          )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
-          return existing == null
-              ? null
-              : Map<String, dynamic>.from(existing.toJson());
-        });
+        await maybeConflict(
+          'xtra_events',
+          row.uuid,
+          local.updatedAt,
+          m,
+          () async {
+            final existing = await (db.select(
+              db.xtraEvents,
+            )..where((t) => t.uuid.equals(row.uuid))).getSingleOrNull();
+            return existing == null
+                ? null
+                : Map<String, dynamic>.from(existing.toJson());
+          },
+        );
         await db.update(db.xtraEvents).replace(row.copyWith(id: local.id));
         xtraMap[row.uuid] = (id: local.id, updatedAt: row.updatedAt);
         count++;
@@ -1602,11 +1610,13 @@ class DataFolderService {
       insert: (row, parentId, storedPath) => db
           .into(db.classFiles)
           .insert(
-            row.toCompanion(true).copyWith(
-              id: const Value<int>.absent(),
-              classId: Value(parentId),
-              storedPath: Value(storedPath),
-            ),
+            row
+                .toCompanion(true)
+                .copyWith(
+                  id: const Value<int>.absent(),
+                  classId: Value(parentId),
+                  storedPath: Value(storedPath),
+                ),
           ),
       update: (row, existing, parentId, storedPath) => db
           .update(db.classFiles)
@@ -1636,11 +1646,13 @@ class DataFolderService {
       insert: (row, parentId, storedPath) => db
           .into(db.yearFiles)
           .insert(
-            row.toCompanion(true).copyWith(
-              id: const Value<int>.absent(),
-              yearId: Value(parentId),
-              storedPath: Value(storedPath),
-            ),
+            row
+                .toCompanion(true)
+                .copyWith(
+                  id: const Value<int>.absent(),
+                  yearId: Value(parentId),
+                  storedPath: Value(storedPath),
+                ),
           ),
       update: (row, existing, parentId, storedPath) => db
           .update(db.yearFiles)
@@ -1780,17 +1792,20 @@ class DataFolderService {
 
   /// Copies a folder blob into local app storage
   /// (`<scope>/<parentId>/`), returning the *relative* stored path.
+  /// Peer-supplied [fileName] is sanitized: path separators are stripped so
+  /// a hand-edited export can't escape the scope dir ("../../evil").
   Future<String> _storeBlob(
     String scope,
     int parentId,
     String fileName,
     File blob,
   ) async {
-    final base =
-        storageRoot ?? await getApplicationSupportDirectory();
+    final base = storageRoot ?? await getApplicationSupportDirectory();
     final dir = Directory('${base.path}/$scope/$parentId');
     if (!await dir.exists()) await dir.create(recursive: true);
-    final target = await ClassFilesService.uniqueTarget(dir, fileName);
+    final safe = fileName.trim().split('/').last.split('\\').last;
+    final name = safe.isEmpty ? 'file' : safe;
+    final target = await ClassFilesService.uniqueTarget(dir, name);
     await blob.copy(target.path);
     return '$scope/$parentId/${target.path.split('/').last}';
   }

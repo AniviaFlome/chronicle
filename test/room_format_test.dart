@@ -11,6 +11,9 @@ void main() {
       expect(cleanRoom(' -- '), isNull);
       expect(cleanRoom('-'), isNull);
       expect(cleanRoom(' - '), isNull);
+      expect(cleanRoom('–'), isNull);
+      expect(cleanRoom('—'), isNull);
+      expect(cleanRoom(' — '), isNull);
     });
 
     test('keeps real rooms trimmed', () {

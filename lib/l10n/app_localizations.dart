@@ -2672,6 +2672,18 @@ abstract class AppLocalizations {
   /// **'Transparent'**
   String get widgetOpacityTransparent;
 
+  /// No description provided for @widgetFullNameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show full class names'**
+  String get widgetFullNameTitle;
+
+  /// No description provided for @widgetFullNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Next-class widget shows plain names without course codes'**
+  String get widgetFullNameHint;
+
   /// No description provided for @widgetNoClasses.
   ///
   /// In en, this message translates to:

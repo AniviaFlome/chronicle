@@ -15,10 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.core.os.ConfigurationCompat
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.action.Action
-import androidx.glance.action.actionParametersOf
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxWidth
@@ -35,7 +32,6 @@ import com.chronicleapp.chronicle.widget.currentVerticalBucket
 import com.chronicleapp.chronicle.widget.heroName
 import com.chronicleapp.chronicle.widget.isSentinel
 import com.chronicleapp.chronicle.widget.long
-import com.chronicleapp.chronicle.widget.nextClassNavBump
 import com.chronicleapp.chronicle.widget.parseTimed
 import com.chronicleapp.chronicle.widget.resolvePalette
 import com.chronicleapp.chronicle.widget.snapshot
@@ -107,10 +103,8 @@ class NextClassHomeWidget : GlanceAppWidget() {
 private fun NextClassContent(context: Context, state: NextClassWidgetUiState) {
     // Loading resolves against the live prefs snapshot for theming; the
     // body is a quiet empty state so a cold bind never flashes raw keys.
-    // Tracked bump read (see nextClassNavBump): hero expand taps re-read
-    // prefs on live-session recomposes instead of replaying old state.
-    @Suppress("unused")
-    val navBump = nextClassNavBump.intValue
+    // No tap targets: hero expand was removed (detail always visible), so
+    // no bump counter is needed here (hub/agenda/menu keep theirs).
     val snap: WidgetSnapshot = when (state) {
         is NextClassWidgetUiState.Success -> state.snap
         else -> HomeWidgetPlugin.getData(context).snapshot(Keys.NEXT_CLASS)

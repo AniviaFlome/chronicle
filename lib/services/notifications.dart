@@ -31,7 +31,12 @@ DateTime? reminderFireTime({
           dueMinutes ~/ 60,
           dueMinutes % 60,
         );
-  return base.subtract(Duration(minutes: offsetMinutes));
+  // Wall-clock subtraction: Duration math shifts across DST transitions.
+  final total = base.hour * 60 + base.minute - offsetMinutes;
+  final dayShift = total ~/ 1440 - (total < 0 && total % 1440 != 0 ? 1 : 0);
+  final norm = ((total % 1440) + 1440) % 1440;
+  final day = shiftDays(DateTime(base.year, base.month, base.day), dayShift);
+  return DateTime(day.year, day.month, day.day, norm ~/ 60, norm % 60);
 }
 
 String _reminderBody(AppLocalizations l10n, String? dueDate, int? dueMinutes) {
@@ -303,10 +308,14 @@ class ReminderScheduler {
     final open = await tasks.watchAll(onlyOpen: true).first;
     final now = DateTime.now();
     final l10n = await _strings();
+    // One batch query for all reminders (was N+1: one per task).
+    final byTask = await tasks.remindersForTasks([
+      for (final d in open) d.task.id,
+    ]);
     for (final details in open) {
       final task = details.task;
       if (task.dueDate == null) continue;
-      final reminders = await tasks.remindersFor(task.id);
+      final reminders = byTask[task.id] ?? const [];
       for (final r in reminders) {
         final fire = reminderFireTime(
           dueDate: task.dueDate,
@@ -376,15 +385,27 @@ class ReminderScheduler {
   /// Occurrences starting within the reminder window: today and tomorrow
   /// ([includePast] also returns already-started ones for the Linux grace
   /// check). Only classes with an effective lead time are included.
+  /// Scoped to the active year (like engineProvider): hidden-year classes
+  /// must not schedule reminders.
   Future<List<({int id, String title, String body, DateTime fire})>>
   _upcomingClassStarts({bool includePast = false}) async {
     final defaultLead = await settings.defaultClassReminderMinutes();
     final l10n = await _strings();
     final anchor = await settings.weekABAnchor();
     final weekStartDay = await settings.weekStartDay();
+    final activeYearId = await settings.activeYearId();
+    Set<int>? classIds;
+    if (activeYearId != null) {
+      final all = await classes.all();
+      classIds = {
+        for (final c in all)
+          if (c.yearId == null || c.yearId == activeYearId) c.id,
+      };
+    }
     final engine = await schedule.loadEngine(
       weekABAnchor: anchor,
       weekStartDay: weekStartDay,
+      classIds: classIds,
     );
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -400,8 +421,29 @@ class ReminderScheduler {
       if (classRow == null || !classRow.active) continue;
       final lead = classRow.reminderMinutes ?? defaultLead;
       if (lead == null) continue;
-      final start = occ.date.add(Duration(minutes: occ.startMinutes));
-      final fire = start.subtract(Duration(minutes: lead));
+      // Wall-clock start: Duration addition drifts the time of day across
+      // DST transitions (local midnight + minutes is not 24h-exact).
+      final start = DateTime(
+        occ.date.year,
+        occ.date.month,
+        occ.date.day,
+        occ.startMinutes ~/ 60,
+        occ.startMinutes % 60,
+      );
+      final total = occ.startMinutes - lead;
+      final dayShift = total ~/ 1440 - (total < 0 && total % 1440 != 0 ? 1 : 0);
+      final norm = ((total % 1440) + 1440) % 1440;
+      final fireDay = shiftDays(
+        DateTime(occ.date.year, occ.date.month, occ.date.day),
+        dayShift,
+      );
+      final fire = DateTime(
+        fireDay.year,
+        fireDay.month,
+        fireDay.day,
+        norm ~/ 60,
+        norm % 60,
+      );
       if (!includePast && fire.isBefore(now)) continue;
       final room = occ.room ?? classRow.room;
       out.add((

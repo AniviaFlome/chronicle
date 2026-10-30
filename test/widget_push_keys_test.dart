@@ -37,5 +37,11 @@ void main() {
       expect(WidgetKeys.menuMealKind, 'menuMealKind');
       expect(WidgetKeys.week, 'week');
     });
+
+    test('widget display flag key is stable', () {
+      // Fingerprint-only (never saved to prefs): the pushed timeline
+      // strings already carry the result; the flag just forces an update.
+      expect(WidgetKeys.widgetFullName, 'widgetFullName');
+    });
   });
 }

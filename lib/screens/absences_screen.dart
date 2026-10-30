@@ -89,7 +89,8 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
           final byId = {for (final c in classList) c.id: c};
           return absences.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text(context.l10n.couldNotLoad('$e'))),
+            error: (e, _) =>
+                Center(child: Text(context.l10n.couldNotLoad('$e'))),
             data: (all) {
               final selectedClassId = classList.any((c) => c.id == _classId)
                   ? _classId
@@ -295,7 +296,9 @@ class _AbsenceTile extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            absence.isExcused ? context.l10n.excusedBadge : context.l10n.unexcusedBadge,
+                            absence.isExcused
+                                ? context.l10n.excusedBadge
+                                : context.l10n.unexcusedBadge,
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: absence.isExcused
                                   ? theme.colorScheme.onSecondaryContainer
@@ -383,8 +386,7 @@ class _FilterRow extends StatelessWidget {
                           ),
                           child: Text(switch (f) {
                             _ExcusedFilter.all => context.l10n.allFilter,
-                            _ExcusedFilter.excused =>
-                              context.l10n.excusedBadge,
+                            _ExcusedFilter.excused => context.l10n.excusedBadge,
                             _ExcusedFilter.unexcused =>
                               context.l10n.unexcusedBadge,
                           }),
@@ -405,20 +407,14 @@ class _FilterRow extends StatelessWidget {
                 children: [
                   chips,
                   const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: trailing!,
-                  ),
+                  Align(alignment: Alignment.centerRight, child: trailing!),
                 ],
               );
             }
             return Row(
               children: [
                 Expanded(child: chips),
-                if (trailing != null) ...[
-                  const SizedBox(width: 12),
-                  trailing!,
-                ],
+                if (trailing != null) ...[const SizedBox(width: 12), trailing!],
               ],
             );
           },
@@ -480,11 +476,8 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
     super.dispose();
   }
 
-  DateTime _weekStartOf(DateTime d, int weekStartDay) {
-    final day = DateTime(d.year, d.month, d.day);
-    final diff = ((day.weekday - weekStartDay) + 7) % 7;
-    return DateTime(day.year, day.month, day.day - diff);
-  }
+  DateTime _weekStartOf(DateTime d, int weekStartDay) =>
+      weekStartOf(d, weekStartDay);
 
   void _maybeJumpToCurrent(String sig) {
     if (!_hScroll.hasClients) {
@@ -497,6 +490,7 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
       if (!mounted || _readySig == sig) return;
       setState(() => _readySig = sig);
     }
+
     final weeks = _lastWeeks;
     final index = _lastCurrentIndex;
     // Prevent repeated jumps.
@@ -522,7 +516,8 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
     // Clamp: near the last weeks the raw target overshoots maxScrollExtent
     // and lands off-screen (throws in debug).
     final target =
-        (index * cellWidth - (pos.viewportDimension - nameWidth - cellWidth * 2))
+        (index * cellWidth -
+                (pos.viewportDimension - nameWidth - cellWidth * 2))
             .clamp(0.0, pos.maxScrollExtent);
     // Post-frame jump once per weeks change.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -610,10 +605,9 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
     }
     // Cache for post-frame jump. The grid stays hidden until the jump
     // lands so the first painted frame is already on the current week.
-    final jumpSig =
-        weeks.isEmpty
-            ? 'empty'
-            : '${isoFromDateTime(weeks.first)}_${isoFromDateTime(weeks.last)}_${weeks.length}_$currentIndex';
+    final jumpSig = weeks.isEmpty
+        ? 'empty'
+        : '${isoFromDateTime(weeks.first)}_${isoFromDateTime(weeks.last)}_${weeks.length}_$currentIndex';
     if (_lastWeeks == null || _lastWeeks!.length != weeks.length) {
       _lastWeeks = weeks;
       _lastCurrentIndex = currentIndex;
@@ -632,8 +626,7 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
 
     final rows = [
       for (final c in widget.byId.values)
-        if (widget.selectedClassId == null || c.id == widget.selectedClassId)
-          c,
+        if (widget.selectedClassId == null || c.id == widget.selectedClassId) c,
     ]..sort((a, b) => a.name.compareTo(b.name));
 
     const nameWidth = 120.0;
@@ -664,7 +657,7 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
             opacity: hideForJump ? 0 : 1,
             child: IgnorePointer(
               ignoring: hideForJump,
-                child: SingleChildScrollView(
+              child: SingleChildScrollView(
                 controller: _hScroll,
                 scrollDirection: Axis.horizontal,
                 child: Column(
@@ -734,8 +727,7 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
                                 items: byCell[(c.id, weeks[i])] ?? const [],
                                 color: Color(c.colorValue),
                                 className: c.name,
-                                weekLabel:
-                                    '${context.l10n.weekPrefix}${i + 1}',
+                                weekLabel: '${context.l10n.weekPrefix}${i + 1}',
                                 classId: c.id,
                                 weekStart: weeks[i],
                                 weekEnd: shiftDays(weeks[i], 6),
@@ -779,12 +771,30 @@ class _MatrixCell extends ConsumerWidget {
     if (items.isEmpty) {
       // Tick: mark absence on the first day of the week (kind picked in
       // the same dialog as everywhere else; cancel aborts the mark).
+      // Times mirror the class slot on that weekday when known (history
+      // survives schedule edits); otherwise a neutral 09:00-10:00 placeholder.
       final draft = await showMarkAbsenceDialog(
         context,
         title: context.l10n.markAbsent,
         initialExcused: createExcused,
       );
       if (draft == null || !context.mounted) return;
+      var start = 540;
+      var end = 600;
+      try {
+        final slots = await ref
+            .read(classRepositoryProvider)
+            .scheduleItemsFor(classId);
+        for (final s in slots) {
+          if (s.dayOfWeek == weekStart.weekday) {
+            start = s.startMinutes;
+            end = s.endMinutes;
+            break;
+          }
+        }
+      } catch (_) {
+        // Fall back to the placeholder below.
+      }
       try {
         await ref
             .read(absenceRepositoryProvider)
@@ -792,20 +802,17 @@ class _MatrixCell extends ConsumerWidget {
               AbsencesCompanion.insert(
                 classId: classId,
                 date: isoFromDateTime(weekStart),
-                startMinutes: 540,
-                endMinutes: 600,
-                reason: Value(
-                  draft.reason.isEmpty ? null : draft.reason,
-                ),
+                startMinutes: start,
+                endMinutes: end,
+                reason: Value(draft.reason.isEmpty ? null : draft.reason),
                 isExcused: Value(draft.excused),
                 kind: Value(draft.kind),
               ),
             );
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Could not save: $e')));
         }
       }
       return;
@@ -816,9 +823,8 @@ class _MatrixCell extends ConsumerWidget {
         await ref.read(absenceRepositoryProvider).unmark(items.single.id);
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Could not save: $e')));
         }
       }
       return;
@@ -884,10 +890,9 @@ class _MatrixCell extends ConsumerWidget {
       width: 44,
       child: Center(
         child: Tooltip(
-          message:
-              hasAny
-                  ? '$className · $weekLabel · ${items.length} (tap to ${items.length == 1 ? 'remove' : 'view'})'
-                  : '$className · $weekLabel · ${isoFromDateTime(weekStart)} (tap to mark)',
+          message: hasAny
+              ? '$className · $weekLabel · ${items.length} (tap to ${items.length == 1 ? 'remove' : 'view'})'
+              : '$className · $weekLabel · ${isoFromDateTime(weekStart)} (tap to mark)',
           child: InkWell(
             onTap: () => _toggle(context, ref),
             onLongPress: hasAny ? () => _showSingleDialog(context) : null,

@@ -50,6 +50,17 @@ void main() {
         DateTime(2026, 9, 20, 17, 0),
       );
     });
+
+    test('cross-midnight offset shifts wall-clock day', () {
+      expect(
+        reminderFireTime(
+          dueDate: '2026-09-20',
+          dueMinutes: 30,
+          offsetMinutes: 60,
+        ),
+        DateTime(2026, 9, 19, 23, 30),
+      );
+    });
   });
 
   group('classReminderId', () {

@@ -30,9 +30,6 @@ object Keys {
 
     // NextClass.
     const val TIMED_DATA = "timedData"
-    // Native-owned hub menu dish cursor (index into the shown meal's
-    // dishes, rotated by tapping the summary); never pushed.
-    const val MENU_DISH_IDX = "menuDishIdx"
 
     // TodayAgenda.
     const val SELECTED_DAY = "selectedDay"

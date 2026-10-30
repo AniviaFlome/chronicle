@@ -66,7 +66,13 @@ class ScheduleOccurrenceEngine {
     for (final h in holidays) {
       var d = _dayStart(h.start);
       final last = _dayStart(h.end);
-      while (!d.isAfter(last)) {
+      // Intersect with the query range: a year-long holiday would otherwise
+      // materialize ~365 entries for every load.
+      if (last.isBefore(start) || d.isAfter(end)) continue;
+      if (d.isBefore(start)) d = start;
+      var lastClamped = last;
+      if (lastClamped.isAfter(end)) lastClamped = end;
+      while (!d.isAfter(lastClamped)) {
         holidayDates.add(d);
         d = shiftDays(d, 1);
       }
@@ -78,6 +84,10 @@ class ScheduleOccurrenceEngine {
 
     final result = <ClassOccurrence>[];
     final nSlots = slots.length;
+    // Per-day caches: parity/cycle/rotation are recomputed once per date,
+    // not once per slot (day-rotation walks anchor->date day by day).
+    final rotationCache = <DateTime, int>{};
+    final cycleCache = <int, int>{};
     for (
       var cursor = start;
       !cursor.isAfter(end);
@@ -87,6 +97,7 @@ class ScheduleOccurrenceEngine {
 
       final isoWeekday = cursor.weekday;
       final parity = _parityFor(cursor);
+      cycleCache.clear();
 
       for (var i = 0; i < nSlots; i++) {
         final slot = slots[i];
@@ -120,16 +131,26 @@ class ScheduleOccurrenceEngine {
             if (cycle < 1) continue;
             final weeks = slot.cycleWeeks ?? const [];
             // cycleWeeks are documented 1-based; the index is 0-based.
-            if (!weeks.contains(_cycleWeekIndex(cursor, cycle) + 1)) continue;
+            final idx = cycleCache.putIfAbsent(
+              cycle,
+              () => _cycleWeekIndex(cursor, cycle),
+            );
+            if (!weeks.contains(idx + 1)) continue;
           case RotationType.dayRotation:
             final config = dayRotation;
             if (config == null) continue;
+            // Rotation only advances on school days: a Saturday sharing
+            // Friday's index must not fire the Friday slot.
+            if (!config.schoolDays.contains(cursor.weekday)) continue;
             final days = slot.rotationDays ?? const [];
             // rotationDays are documented 1-based; the index is 0-based.
-            final index = rotationDayIndex(
-              date: cursor,
-              config: config,
-              holidays: holidayDates,
+            final index = rotationCache.putIfAbsent(
+              cursor,
+              () => rotationDayIndex(
+                date: cursor,
+                config: config,
+                holidays: holidayDates,
+              ),
             );
             if (!days.contains(index + 1)) continue;
         }
@@ -185,8 +206,7 @@ class ScheduleOccurrenceEngine {
   int _parityFor(DateTime date) {
     final anchorWeekStart = _weekStartOf(_dayStart(weekABAnchor));
     final dateWeekStart = _weekStartOf(_dayStart(date));
-    final diffWeeks = (dateWeekStart.difference(anchorWeekStart).inDays / 7)
-        .round();
+    final diffWeeks = daysBetween(anchorWeekStart, dateWeekStart) ~/ 7;
     return ((diffWeeks % 2) + 2) % 2;
   }
 
@@ -195,19 +215,14 @@ class ScheduleOccurrenceEngine {
   int _cycleWeekIndex(DateTime date, int cycleLength) {
     final anchorWeekStart = _weekStartOf(_dayStart(weekABAnchor));
     final dateWeekStart = _weekStartOf(_dayStart(date));
-    final diffWeeks = (dateWeekStart.difference(anchorWeekStart).inDays / 7)
-        .round();
+    final diffWeeks = daysBetween(anchorWeekStart, dateWeekStart) ~/ 7;
     return ((diffWeeks % cycleLength) + cycleLength) % cycleLength;
   }
 
   /// Start (local midnight) of the week containing [date], where weeks start
-  /// on [weekStartDay].
-  DateTime _weekStartOf(DateTime date) {
-    // Dart: Monday = 1 .. Sunday = 7. Shift so weekStartDay becomes 0.
-    final shift = (date.weekday - weekStartDay) % 7;
-    final normalized = shift < 0 ? shift + 7 : shift;
-    return shiftDays(date, -normalized);
-  }
+  /// on [weekStartDay]. Shared helper in time_format (clamps garbage prefs).
+  DateTime _weekStartOf(DateTime date) =>
+      weekStartOf(date, weekStartDay.clamp(1, 7));
 
   static DateTime _dayStart(DateTime d) => DateTime(d.year, d.month, d.day);
 }

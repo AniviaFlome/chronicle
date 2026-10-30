@@ -494,6 +494,8 @@
   "widgetOpacitySolid": "Opak",
   "widgetOpacityTranslucent": "Yarı saydam",
   "widgetOpacityTransparent": "Saydam",
+  "widgetFullNameTitle": "Tam ders adlarını göster",
+  "widgetFullNameHint": "Sonraki ders widget'ı ders kodları olmadan düz adları gösterir",
   "widgetNoClasses": "Bugün ders yok",
   "widgetAllCaughtUp": "Hepsi tamam",
   "widgetNoMenuToday": "Bugün menü yok",

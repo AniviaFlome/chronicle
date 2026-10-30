@@ -35,7 +35,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   static QueryExecutor _openConnection() {
     return driftDatabase(
@@ -73,7 +73,7 @@ class AppDatabase extends _$AppDatabase {
       // that never had academic_years gets them for free here and must
       // skip the v4 column adds; only a v3 database needs them.
       if (from < 3) {
-        await m.createTable(academicYears);
+        await _createTableIfMissing(m, academicYears);
         await _addColumnIfMissing(m, classes, classes.yearId);
         await _addColumnIfMissing(m, scheduleItems, scheduleItems.rotationDays);
       } else if (from < 4) {
@@ -99,22 +99,24 @@ class AppDatabase extends _$AppDatabase {
         await _addColumnIfMissing(m, tasks, tasks.repeatKind);
         await _addColumnIfMissing(m, tasks, tasks.repeatUntil);
         await _addColumnIfMissing(m, tasks, tasks.linkedExamId);
-        await m.createTable(grades);
-        await m.createTable(pomodoroSessions);
-        await m.createTable(xtraEvents);
+        await _createTableIfMissing(m, grades);
+        await _createTableIfMissing(m, pomodoroSessions);
+        await _createTableIfMissing(m, xtraEvents);
       }
       if (from < 6) {
         // Sync identity columns for folder sync (Syncthing transport).
         // ADD COLUMN with a constant default keeps this safe for non-empty
         // tables; the Dart backfill below replaces the placeholder values
         // with fresh uuids. Every step is idempotent for killed migrations.
-        await m.createTable(syncTombstones);
+        await _createTableIfMissing(m, syncTombstones);
         final syncColumns =
-            <({
-              TableInfo<Table, dynamic> table,
-              GeneratedColumn<Object> uuid,
-              GeneratedColumn<Object> updatedAt,
-            })>[
+            <
+              ({
+                TableInfo<Table, dynamic> table,
+                GeneratedColumn<Object> uuid,
+                GeneratedColumn<Object> updatedAt,
+              })
+            >[
               (
                 table: academicYears,
                 uuid: academicYears.uuid,
@@ -145,11 +147,7 @@ class AppDatabase extends _$AppDatabase {
                 uuid: absences.uuid,
                 updatedAt: absences.updatedAt,
               ),
-              (
-                table: tasks,
-                uuid: tasks.uuid,
-                updatedAt: tasks.updatedAt,
-              ),
+              (table: tasks, uuid: tasks.uuid, updatedAt: tasks.updatedAt),
               (
                 table: subtasks,
                 uuid: subtasks.uuid,
@@ -160,11 +158,7 @@ class AppDatabase extends _$AppDatabase {
                 uuid: taskReminders.uuid,
                 updatedAt: taskReminders.updatedAt,
               ),
-              (
-                table: grades,
-                uuid: grades.uuid,
-                updatedAt: grades.updatedAt,
-              ),
+              (table: grades, uuid: grades.uuid, updatedAt: grades.updatedAt),
               (
                 table: pomodoroSessions,
                 uuid: pomodoroSessions.uuid,
@@ -183,16 +177,16 @@ class AppDatabase extends _$AppDatabase {
         await _backfillSyncColumns(m);
       }
       if (from < 7) {
-        await m.createTable(menuCache);
+        await _createTableIfMissing(m, menuCache);
       }
       if (from < 8) {
         // Class file attachments (synced since v10 via uuid/updatedAt).
-        await m.createTable(classFiles);
+        await _createTableIfMissing(m, classFiles);
       }
       if (from < 9) {
         // Per-kind absence quotas (+ absence kinds, legacy null = theory)
         // and academic-year file attachments (synced since v10).
-        await m.createTable(yearFiles);
+        await _createTableIfMissing(m, yearFiles);
         await _addColumnIfMissing(m, classes, classes.maxAbsencesTheory);
         await _addColumnIfMissing(m, classes, classes.maxAbsencesPractical);
         await _addColumnIfMissing(m, absences, absences.kind);
@@ -234,6 +228,22 @@ class AppDatabase extends _$AppDatabase {
           [now],
         );
       }
+      if (from < 14) {
+        // Same placeholder cleanup for en/em dashes ("–", "—"): typed
+        // with a different key but the same "no room" meaning (cleanRoom
+        // now normalizes them on write). Idempotent like v13.
+        final now = DateTime.now().millisecondsSinceEpoch;
+        await customStatement(
+          'UPDATE classes SET room = NULL, updated_at = ? '
+          "WHERE TRIM(room) IN ('–', '—')",
+          [now],
+        );
+        await customStatement(
+          'UPDATE schedule_items SET room = NULL, updated_at = ? '
+          "WHERE TRIM(room) IN ('–', '—')",
+          [now],
+        );
+      }
     },
     beforeOpen: (_) => customStatement('PRAGMA foreign_keys = ON'),
   );
@@ -255,6 +265,22 @@ class AppDatabase extends _$AppDatabase {
     if (!names.contains(column.name.toLowerCase())) {
       await m.addColumn(table, column);
     }
+  }
+
+  /// Creates [table] unless it already exists. Bare `m.createTable` re-runs
+  /// on a killed-migration retry; safe only if drift emits IF NOT EXISTS.
+  /// Guard explicitly like the column adds above.
+  Future<void> _createTableIfMissing(
+    Migrator m,
+    TableInfo<Table, dynamic> table,
+  ) async {
+    final existing = await m.database
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+          variables: [Variable<String>(table.actualTableName)],
+        )
+        .get();
+    if (existing.isEmpty) await m.createTable(table);
   }
 
   /// Assigns fresh uuids and timestamps to pre-v6 rows still carrying the
@@ -282,9 +308,12 @@ class AppDatabase extends _$AppDatabase {
     // (e.g. file tables during the v6 backfill); skip those — their own
     // migration step backfills later via this same method.
     final existingTables = {
-      for (final row in await m.database
-          .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
-          .get())
+      for (final row
+          in await m.database
+              .customSelect(
+                "SELECT name FROM sqlite_master WHERE type = 'table'",
+              )
+              .get())
         (row.data['name'] as String).toLowerCase(),
     };
     for (final table in tables) {
@@ -330,6 +359,8 @@ Future<bool> copyLegacyDatabaseFile({
     if (await target.exists()) {
       // Never overwrite real data: only replace a support DB that holds
       // no classes (an updater's first launch already created an empty one).
+      // A corrupt target reads as 0 classes and is replaced — logged via
+      // debugPrint in _sqliteRowCount so the rescue stays visible.
       if (await _sqliteRowCount(target, 'classes') != 0) return false;
     }
     await target.parent.create(recursive: true);
@@ -360,6 +391,8 @@ Future<bool> copyLegacyDatabaseFile({
 
 /// Read-only row count; missing tables, corrupt files and any error all
 /// count as 0 (empty), never as data worth preserving or rescuing.
+/// Corrupt/unreadable files are logged so a rescue replacing a corrupt
+/// target stays visible in logs.
 Future<int> _sqliteRowCount(File dbFile, String table) async {
   try {
     final db = sqlite.sqlite3.open(dbFile.path, mode: sqlite.OpenMode.readOnly);
@@ -374,7 +407,9 @@ Future<int> _sqliteRowCount(File dbFile, String table) async {
     } finally {
       db.close();
     }
-  } catch (_) {
+  } catch (e) {
+    // ignore: avoid_print
+    print('Legacy DB check: unreadable ${dbFile.path} ($e)');
     return 0;
   }
 }

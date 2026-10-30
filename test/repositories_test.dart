@@ -180,10 +180,7 @@ void main() {
     expect(await classes.all(), isEmpty);
     expect(await (db.select(db.scheduleItems)).get(), isEmpty);
     final tombs = await db.select(db.syncTombstones).get();
-    expect(
-      tombs.where((t) => t.tableKey == SyncTables.classes),
-      hasLength(2),
-    );
+    expect(tombs.where((t) => t.tableKey == SyncTables.classes), hasLength(2));
     expect(
       tombs.where((t) => t.tableKey == SyncTables.scheduleItems),
       hasLength(2),
@@ -636,5 +633,72 @@ void main() {
     expect(await settings.appTheme(), 'default');
     await settings.set('accent_color', 'junk');
     expect(await settings.accentColor(), 0xFFCBA6F7);
+  });
+
+  test('widget display settings round-trip', () async {
+    final settings = SettingsRepository(db);
+    expect(await settings.widgetFullName(), isFalse);
+    expect(await settings.widgetOpacity(), 0);
+
+    await settings.setWidgetFullName(true);
+    await settings.setWidgetOpacity(2);
+    expect(await settings.widgetFullName(), isTrue);
+    expect(await settings.widgetOpacity(), 2);
+
+    await settings.setWidgetFullName(false);
+    expect(await settings.widgetFullName(), isFalse);
+  });
+
+  test('monthly repeat clamps Jan 31 to Feb last day', () async {
+    final tasks = TaskRepository(db);
+    final id = await tasks.create(
+      TasksCompanion.insert(
+        title: 'Rent',
+        dueDate: const Value('2026-01-31'),
+        repeatKind: const Value(RepeatKind.monthly),
+      ),
+    );
+    final row = (await tasks.byId(id))!;
+    final next = TaskRepository.nextRepeatDate(row);
+    expect(next, DateTime(2026, 2, 28));
+  });
+
+  test('weekStartDay clamps garbage prefs into 1..7', () async {
+    final settings = SettingsRepository(db);
+    expect(await settings.weekStartDay(), 1);
+    await settings.set('week_start_day', '9');
+    expect(await settings.weekStartDay(), 7);
+    await settings.set('week_start_day', '0');
+    expect(await settings.weekStartDay(), 1);
+    await settings.set('week_start_day', 'junk');
+    expect(await settings.weekStartDay(), 1);
+  });
+
+  test('activeYearId round-trips null and id', () async {
+    final settings = SettingsRepository(db);
+    expect(await settings.activeYearId(), isNull);
+    await settings.setActiveYearId(42);
+    expect(await settings.activeYearId(), 42);
+    await settings.setActiveYearId(null);
+    expect(await settings.activeYearId(), isNull);
+  });
+
+  test('class delete bumps FK-nulled task updatedAt', () async {
+    final tasks = TaskRepository(db);
+    final classId = await classes.create(
+      ClassesCompanion.insert(name: 'Physics', colorValue: 0xFF000000),
+    );
+    final taskId = await tasks.create(
+      TasksCompanion.insert(title: 'Lab', classId: Value(classId)),
+    );
+    final before = await (db.select(
+      db.tasks,
+    )..where((t) => t.id.equals(taskId))).getSingle();
+    await classes.delete(classId);
+    final after = await (db.select(
+      db.tasks,
+    )..where((t) => t.id.equals(taskId))).getSingle();
+    expect(after.classId, isNull);
+    expect(after.updatedAt, greaterThanOrEqualTo(before.updatedAt));
   });
 }

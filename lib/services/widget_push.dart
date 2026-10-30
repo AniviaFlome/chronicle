@@ -27,7 +27,6 @@ abstract final class WidgetKeys {
   // running classes show it verbatim (the range already carries the time).
   static const fmtInMin = 'fmtInMin';
   static const fmtInHours = 'fmtInHours';
-  static const fmtEnds = 'fmtEnds';
   static const fmtCurrently = 'fmtCurrently';
 
   // NextClass (and hub class tab) timeline: a JSON object keyed by
@@ -85,6 +84,11 @@ abstract final class WidgetKeys {
   static const titleAgenda = 'titleAgenda';
   static const emptyTasks = 'emptyTasks';
   static const emptyMenu = 'emptyMenu';
+
+  // Next-class display flag (Settings → Widgets): plain class names without
+  // the course-code prefix when true. Fingerprint-only (never saved to
+  // prefs): the pushed timeline strings already carry the result.
+  static const widgetFullName = 'widgetFullName';
 }
 
 /// Receiver class names registered in AndroidManifest.xml, fully qualified.
@@ -118,12 +122,12 @@ Future<void> widgetSaveJson(String key, Object? value) =>
 /// ticks for the next day, and the next midnight (day rollover). Replaces
 /// any previous schedule for those receivers; [boundaries] empty cancels.
 /// Times are absolute instants — recompute on every push.
-Future<void> scheduleWidgetTimelines({required List<DateTime> boundaries}) async {
+Future<void> scheduleWidgetTimelines({
+  required List<DateTime> boundaries,
+}) async {
   for (final name in const [WidgetReceivers.nextClass, WidgetReceivers.hub]) {
     if (boundaries.isEmpty) {
-      await HomeWidget.cancelScheduledWidgetUpdates(
-        qualifiedAndroidName: name,
-      );
+      await HomeWidget.cancelScheduledWidgetUpdates(qualifiedAndroidName: name);
       continue;
     }
     final now = DateTime.now();
@@ -134,9 +138,6 @@ Future<void> scheduleWidgetTimelines({required List<DateTime> boundaries}) async
       for (var i = 1; i <= 24; i++) now.add(Duration(hours: i)),
       midnight,
     }.toList()..sort();
-    await HomeWidget.scheduleWidgetUpdates(
-      times,
-      qualifiedAndroidName: name,
-    );
+    await HomeWidget.scheduleWidgetUpdates(times, qualifiedAndroidName: name);
   }
 }

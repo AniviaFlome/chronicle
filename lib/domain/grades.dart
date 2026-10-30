@@ -36,6 +36,10 @@ double? gpa(Iterable<double> percents) {
 }
 
 /// Whole days from [today] until an ISO due date (negative = overdue).
+/// Returns 0 when [isoDue] is unparseable (indistinguishable from due-today;
+/// callers with a raw string should `DateTime.tryParse` first like
+/// `taskDateLabel` does). Stored due dates are validated on write, so this
+/// only fires on corrupt rows.
 int daysUntil(String isoDue, DateTime today) {
   final due = DateTime.tryParse(isoDue);
   if (due == null) return 0;

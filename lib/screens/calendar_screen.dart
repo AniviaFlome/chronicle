@@ -84,11 +84,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   DateTime _weekStart(int weekStartDay) {
-    final diff = (_focused.weekday - weekStartDay) % 7;
-    // Wall-clock step: Duration subtraction drifts across DST transitions,
-    // breaking day-bucket equality for the whole week.
-    final s = shiftDays(_focused, -diff);
-    return DateTime(s.year, s.month, s.day);
+    return weekStartOf(_focused, weekStartDay);
   }
 
   void _setView(String view) async {
@@ -117,10 +113,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final compactDays =
         defaultTargetPlatform == TargetPlatform.android &&
         MediaQuery.of(context).size.width < 600;
-    final listDayWidth =
-        compactDays ? _dayColumnWidthCompact : _dayColumnWidth;
-    final gridDayWidth =
-        compactDays ? _gridDayWidthCompact : _gridDayWidth;
+    final listDayWidth = compactDays ? _dayColumnWidthCompact : _dayColumnWidth;
+    final gridDayWidth = compactDays ? _gridDayWidthCompact : _gridDayWidth;
     final now = DateTime.now();
     final todayMidnight = DateTime(now.year, now.month, now.day);
 
@@ -192,100 +186,98 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             child: _WeekSwipe(
               onPrevious: () =>
                   setState(() => _focused = shiftDays(_focused, -7)),
-              onNext: () =>
-                  setState(() => _focused = shiftDays(_focused, 7)),
+              onNext: () => setState(() => _focused = shiftDays(_focused, 7)),
               child: Builder(
                 builder: (context) {
-                // Single gate: the week renders only when every source it
-                // paints has data. While anything is still resolving, a
-                // skeleton with real headers and shimmer bars holds the
-                // layout, then everything appears at the same time — no
-                // staggered pop-in (xtra chips, class colors, absence
-                // badges, rotation labels all arrive together).
-                final year = ref.watch(activeYearProvider);
-                final holidays = ref.watch(holidaysStreamProvider);
-                final absences = ref.watch(allAbsencesStreamProvider);
-                // Grid geometry inputs: the grid falls back to defaults
-                // while these resolve, visibly repositioning every block.
-                // Gating on them keeps first paint final.
-                final dayRange = ref.watch(dayRangeProvider);
-                final markersMode = ref.watch(gridMarkersModeProvider);
-                final fixed = ref.watch(fixedGridProvider);
-                final startToday = ref.watch(calendarStartTodayProvider);
-                final weekError =
-                    occurrences.error ??
-                    classes.error ??
-                    year.error ??
-                    holidays.error ??
-                    absences.error ??
-                    dayRange.error ??
-                    markersMode.error ??
-                    fixed.error ??
-                    startToday.error;
-                if (weekError != null) {
-                  return Center(
-                    child: Text(context.l10n.couldNotLoadWeek('$weekError')),
+                  // Single gate: the week renders only when every source it
+                  // paints has data. While anything is still resolving, a
+                  // skeleton with real headers and shimmer bars holds the
+                  // layout, then everything appears at the same time — no
+                  // staggered pop-in (xtra chips, class colors, absence
+                  // badges, rotation labels all arrive together).
+                  final year = ref.watch(activeYearProvider);
+                  final holidays = ref.watch(holidaysStreamProvider);
+                  final absences = ref.watch(allAbsencesStreamProvider);
+                  // Grid geometry inputs: the grid falls back to defaults
+                  // while these resolve, visibly repositioning every block.
+                  // Gating on them keeps first paint final.
+                  final dayRange = ref.watch(dayRangeProvider);
+                  final markersMode = ref.watch(gridMarkersModeProvider);
+                  final fixed = ref.watch(fixedGridProvider);
+                  final startToday = ref.watch(calendarStartTodayProvider);
+                  final weekError =
+                      occurrences.error ??
+                      classes.error ??
+                      year.error ??
+                      holidays.error ??
+                      absences.error ??
+                      dayRange.error ??
+                      markersMode.error ??
+                      fixed.error ??
+                      startToday.error;
+                  if (weekError != null) {
+                    return Center(
+                      child: Text(context.l10n.couldNotLoadWeek('$weekError')),
+                    );
+                  }
+                  final eventsError = xtra.error;
+                  if (eventsError != null) {
+                    return Center(
+                      child: Text(
+                        context.l10n.couldNotLoadEvents('$eventsError'),
+                      ),
+                    );
+                  }
+                  final ready =
+                      occurrences.hasValue &&
+                      xtra.hasValue &&
+                      classes.hasValue &&
+                      year.hasValue &&
+                      holidays.hasValue &&
+                      absences.hasValue &&
+                      dayRange.hasValue &&
+                      markersMode.hasValue &&
+                      fixed.hasValue &&
+                      startToday.hasValue;
+                  if (!ready) {
+                    return _WeekSkeleton(
+                      start: start,
+                      view: _view,
+                      listDayWidth: listDayWidth,
+                      gridDayWidth: gridDayWidth,
+                      todayMidnight: todayMidnight,
+                      rotationLabel: rotationLabel,
+                    );
+                  }
+                  // Day layout is mobile-only: non-mobile platforms always
+                  // render the horizontal strip, even if a synced/phone-saved
+                  // 'vertical' value lingers. defaultTargetPlatform (not
+                  // Platform.isAndroid) keeps widget tests exercising both.
+                  final savedOrientation = ref.watch(
+                    initialCalendarOrientationProvider,
                   );
-                }
-                final eventsError = xtra.error;
-                if (eventsError != null) {
-                  return Center(
-                    child: Text(
-                      context.l10n.couldNotLoadEvents('$eventsError'),
-                    ),
-                  );
-                }
-                final ready =
-                    occurrences.hasValue &&
-                    xtra.hasValue &&
-                    classes.hasValue &&
-                    year.hasValue &&
-                    holidays.hasValue &&
-                    absences.hasValue &&
-                    dayRange.hasValue &&
-                    markersMode.hasValue &&
-                    fixed.hasValue &&
-                    startToday.hasValue;
-                if (!ready) {
-                  return _WeekSkeleton(
+                  final mobile =
+                      defaultTargetPlatform == TargetPlatform.android ||
+                      defaultTargetPlatform == TargetPlatform.iOS;
+                  return _WeekBody(
                     start: start,
+                    end: end,
+                    list: occurrences.value ?? const <engine.ClassOccurrence>[],
+                    xtraList: xtra.value ?? const <XtraEvent>[],
+                    classes: classes,
+                    absenceKeys: absenceKeys,
+                    rotationLabel: rotationLabel,
                     view: _view,
+                    orientation: mobile ? savedOrientation : 'horizontal',
+                    listCtrl: _listCtrl,
+                    gridCtrl: _gridCtrl,
+                    listVertCtrl: _listVertCtrl,
+                    gridVertCtrl: _gridVertCtrl,
                     listDayWidth: listDayWidth,
                     gridDayWidth: gridDayWidth,
+                    autoScrollToday: compactDays && (startToday.value ?? true),
                     todayMidnight: todayMidnight,
-                    rotationLabel: rotationLabel,
                   );
-                }
-                // Day layout is mobile-only: non-mobile platforms always
-                // render the horizontal strip, even if a synced/phone-saved
-                // 'vertical' value lingers. defaultTargetPlatform (not
-                // Platform.isAndroid) keeps widget tests exercising both.
-                final savedOrientation = ref.watch(
-                  initialCalendarOrientationProvider,
-                );
-                final mobile =
-                    defaultTargetPlatform == TargetPlatform.android ||
-                    defaultTargetPlatform == TargetPlatform.iOS;
-                return _WeekBody(
-                  start: start,
-                  end: end,
-                  list: occurrences.value ?? const <engine.ClassOccurrence>[],
-                  xtraList: xtra.value ?? const <XtraEvent>[],
-                  classes: classes,
-                  absenceKeys: absenceKeys,
-                  rotationLabel: rotationLabel,
-                  view: _view,
-                  orientation: mobile ? savedOrientation : 'horizontal',
-                  listCtrl: _listCtrl,
-                  gridCtrl: _gridCtrl,
-                  listVertCtrl: _listVertCtrl,
-                  gridVertCtrl: _gridVertCtrl,
-                  listDayWidth: listDayWidth,
-                  gridDayWidth: gridDayWidth,
-                  autoScrollToday:
-                      compactDays && (startToday.value ?? true),
-                  todayMidnight: todayMidnight,
-                );
                 },
               ),
             ),
@@ -299,6 +291,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final absences = ref.watch(allAbsencesStreamProvider).value ?? const [];
     return {for (final a in absences) '${a.classId}|${a.date}'};
   }
+
   /// Returns the rotation day label for a date, or null when the active
   /// year has no day rotation configured.
   String? Function(DateTime) _rotationLabeler(WidgetRef ref) {
@@ -579,14 +572,13 @@ class _DayHeader extends StatelessWidget {
   double Function(int)? slotY,
   bool showFixed,
   List<DateTime> days,
-}) _computeGridGeometry({
+})
+_computeGridGeometry({
   required Map<DateTime, List<engine.ClassOccurrence>> byDay,
   required DateTime start,
   required ({int start, int end}) range,
   required String mode,
-  required (
-    {List<int> boundaries, List<({int start, int end})> breaks}
-  ) fixed,
+  required ({List<int> boundaries, List<({int start, int end})> breaks}) fixed,
   required double? viewportHeight,
 }) {
   final showFixed = mode == 'fixed' && fixed.boundaries.isNotEmpty;
@@ -618,14 +610,8 @@ class _DayHeader extends StatelessWidget {
   }
   // Fixed-grid boundaries extend the shown range so none are cut off.
   if (showFixed) {
-    rangeStart = min(rangeStart, fixed.boundaries.first).clamp(
-      0,
-      rangeStart,
-    );
-    rangeEnd = max(rangeEnd, fixed.boundaries.last).clamp(
-      rangeEnd,
-      1440,
-    );
+    rangeStart = min(rangeStart, fixed.boundaries.first).clamp(0, rangeStart);
+    rangeEnd = max(rangeEnd, fixed.boundaries.last).clamp(rangeEnd, 1440);
     if (rangeEnd <= rangeStart) {
       rangeEnd = (rangeStart + 120).clamp(0, 1440);
     }
@@ -846,9 +832,7 @@ class _WeekGridState extends ConsumerState<_WeekGrid> {
     if (body == null || !body.hasClients || !_headerCtrl.hasClients) return;
     _syncing = true;
     try {
-      body.jumpTo(
-        _headerCtrl.offset.clamp(0.0, body.position.maxScrollExtent),
-      );
+      body.jumpTo(_headerCtrl.offset.clamp(0.0, body.position.maxScrollExtent));
     } finally {
       _syncing = false;
     }
@@ -867,8 +851,7 @@ class _WeekGridState extends ConsumerState<_WeekGrid> {
     final vertController = widget.vertController;
     final dayWidth = widget.dayWidth;
     // Settings range in minutes; classes outside it extend the range.
-    final range =
-        ref.watch(dayRangeProvider).value ?? (start: 360, end: 1320);
+    final range = ref.watch(dayRangeProvider).value ?? (start: 360, end: 1320);
     final mode = ref.watch(gridMarkersModeProvider).value ?? 'class-times';
     final fixed =
         ref.watch(fixedGridProvider).value ??
@@ -897,8 +880,8 @@ class _WeekGridState extends ConsumerState<_WeekGrid> {
     );
 
     Widget headerCell(DateTime day, {double? width}) {
-      final allDay =
-          partitionXtra(xtraByDay[day] ?? const <XtraEvent>[]).allDay;
+      final allDay = partitionXtra(xtraByDay[day] ?? const <XtraEvent>[])
+          .allDay;
       return Container(
         width: width ?? dayWidth,
         margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -974,8 +957,7 @@ class _WeekGridState extends ConsumerState<_WeekGrid> {
                               hourly: hourly,
                               breaks: breaks,
                               slotY: slotY,
-                              xtra:
-                                  xtraByDay[days[i]] ?? const <XtraEvent>[],
+                              xtra: xtraByDay[days[i]] ?? const <XtraEvent>[],
                               dayWidth: colWidth,
                             ),
                           ),
@@ -1062,8 +1044,7 @@ class _WeekGridState extends ConsumerState<_WeekGrid> {
                                 hourly: hourly,
                                 breaks: breaks,
                                 slotY: slotY,
-                                xtra:
-                                    xtraByDay[day] ?? const <XtraEvent>[],
+                                xtra: xtraByDay[day] ?? const <XtraEvent>[],
                                 dayWidth: dayWidth,
                               ),
                           ],
@@ -1301,9 +1282,8 @@ class _GridDayColumn extends ConsumerWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSecondaryContainer.withValues(
-                          alpha: 0.85,
-                        ),
+                        color: theme.colorScheme.onSecondaryContainer
+                            .withValues(alpha: 0.85),
                         fontSize: 10,
                       ),
                     ),
@@ -1360,10 +1340,9 @@ class _GridDayColumn extends ConsumerWidget {
         await ref.read(reminderSchedulerProvider).refreshClassReminders();
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(
-              SnackBar(content: Text(context.l10n.couldNotMoveClass('$e'))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.l10n.couldNotMoveClass('$e'))),
+          );
         }
       }
     }
@@ -1375,10 +1354,9 @@ class _GridDayColumn extends ConsumerWidget {
             .updateXtraTimes(event.id, start, end);
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(
-              SnackBar(content: Text(context.l10n.couldNotMoveEvent('$e'))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.l10n.couldNotMoveEvent('$e'))),
+          );
         }
       }
     }
@@ -1417,86 +1395,81 @@ class _GridDayColumn extends ConsumerWidget {
       width: dayWidth,
       margin: const EdgeInsets.symmetric(horizontal: 3),
       child: Container(
-            height: totalHeight,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface.withValues(alpha: 0.4),
-              border: Border.all(
-                color: theme.dividerColor.withValues(alpha: 0.35),
+        height: totalHeight,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface.withValues(alpha: 0.4),
+          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.35)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          children: [
+            // Background lines at every gutter mark.
+            for (final h in hourly)
+              Positioned(
+                top: (slotY?.call(h) ?? (h - rangeStart) * _pxPerMin),
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 1,
+                  color: theme.dividerColor.withValues(alpha: 0.35),
+                ),
               ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(
-              children: [
-                // Background lines at every gutter mark.
-                for (final h in hourly)
-                  Positioned(
-                    top: (slotY?.call(h) ?? (h - rangeStart) * _pxPerMin),
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 1,
-                      color: theme.dividerColor.withValues(alpha: 0.35),
-                    ),
+            if (slotY == null) ..._breakBoxes(theme, locale),
+            if (showNow)
+              Positioned(
+                top:
+                    (slotY?.call(nowMinutes) ??
+                    (nowMinutes - rangeStart) * _pxPerMin),
+                left: 0,
+                right: 0,
+                child: Container(height: 2, color: theme.colorScheme.error),
+              ),
+            for (var i = 0; i < occurrences.length; i++)
+              draggableBlock(
+                index: i,
+                title:
+                    classesById[occurrences[i].classId]?.name ??
+                    context.l10n.classFallback,
+                startMinutes: occurrences[i].startMinutes,
+                endMinutes: occurrences[i].endMinutes,
+                onCommit: (s, e) => commitClassTime(occurrences[i], s, e),
+                quickEditRow: classesById[occurrences[i].classId],
+                child: _GridBlock(
+                  square: slotY != null,
+                  occurrence: occurrences[i],
+                  classRow: classesById[occurrences[i].classId],
+                  absent: absenceKeys.contains(
+                    '${occurrences[i].classId}|${isoFromDateTime(occurrences[i].date)}',
                   ),
-                if (slotY == null) ..._breakBoxes(theme, locale),
-                if (showNow)
-                  Positioned(
-                    top:
-                        (slotY?.call(nowMinutes) ??
-                            (nowMinutes - rangeStart) * _pxPerMin),
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 2,
-                      color: theme.colorScheme.error,
-                    ),
+                  blockHeight: _blockHeight(
+                    occurrences[i].startMinutes,
+                    occurrences[i].endMinutes,
                   ),
-                for (var i = 0; i < occurrences.length; i++)
-                  draggableBlock(
-                    index: i,
-                    title: classesById[occurrences[i].classId]?.name ?? context.l10n.classFallback,
-                    startMinutes: occurrences[i].startMinutes,
-                    endMinutes: occurrences[i].endMinutes,
-                    onCommit: (s, e) => commitClassTime(occurrences[i], s, e),
-                    quickEditRow: classesById[occurrences[i].classId],
-                    child: _GridBlock(
-                      square: slotY != null,
-                      occurrence: occurrences[i],
-                      classRow: classesById[occurrences[i].classId],
-                      absent: absenceKeys.contains(
-                        '${occurrences[i].classId}|${isoFromDateTime(occurrences[i].date)}',
-                      ),
-                      blockHeight: _blockHeight(
-                        occurrences[i].startMinutes,
-                        occurrences[i].endMinutes,
-                      ),
-                    ),
+                ),
+              ),
+            for (var j = 0; j < timedXtra.length; j++)
+              draggableBlock(
+                index: occurrences.length + j,
+                title: timedXtra[j].title,
+                startMinutes: timedXtra[j].startMinutes!,
+                endMinutes:
+                    timedXtra[j].endMinutes ?? timedXtra[j].startMinutes! + 60,
+                onCommit: (s, e) => commitXtraTime(timedXtra[j], s, e),
+                child: _XtraGridBlock(
+                  square: slotY != null,
+                  event: timedXtra[j],
+                  onTap: () =>
+                      showXtraDialog(context, ref, existing: timedXtra[j]),
+                  blockHeight: _blockHeight(
+                    timedXtra[j].startMinutes!,
+                    timedXtra[j].endMinutes ?? timedXtra[j].startMinutes! + 60,
                   ),
-                for (var j = 0; j < timedXtra.length; j++)
-                  draggableBlock(
-                    index: occurrences.length + j,
-                    title: timedXtra[j].title,
-                    startMinutes: timedXtra[j].startMinutes!,
-                    endMinutes:
-                        timedXtra[j].endMinutes ??
-                        timedXtra[j].startMinutes! + 60,
-                    onCommit: (s, e) => commitXtraTime(timedXtra[j], s, e),
-                    child: _XtraGridBlock(
-                      square: slotY != null,
-                      event: timedXtra[j],
-                      onTap: () =>
-                          showXtraDialog(context, ref, existing: timedXtra[j]),
-                      blockHeight: _blockHeight(
-                        timedXtra[j].startMinutes!,
-                        timedXtra[j].endMinutes ??
-                            timedXtra[j].startMinutes! + 60,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1575,10 +1548,7 @@ class _XtraGridBlock extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(square ? _slotRadius : 10),
-          border: Border.all(
-            color: accent.withValues(alpha: 0.55),
-            width: 1,
-          ),
+          border: Border.all(color: accent.withValues(alpha: 0.55), width: 1),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.08),
@@ -1594,52 +1564,49 @@ class _XtraGridBlock extends StatelessWidget {
             Container(width: 5, color: accent),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 // Sliver blocks (e.g. out-of-rhythm classes absorbed at
                 // the 22px minimum) can't fit text: spine only, otherwise
                 // the Column throws a layout overflow.
                 child: available < 20
                     ? const SizedBox.shrink()
                     : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      event.title,
-                      maxLines: available < 32 ? 1 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        height: 1.2,
-                        color: fg,
-                      ),
-                    ),
-                    if (available >= 44) ...[
-                      const SizedBox(height: 3),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          timeText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            height: 1.2,
-                            color: fg,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            event.title,
+                            maxLines: available < 32 ? 1 : 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              height: 1.2,
+                              color: fg,
+                            ),
                           ),
-                        ),
+                          if (available >= 44) ...[
+                            const SizedBox(height: 3),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                timeText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  height: 1.2,
+                                  color: fg,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                  ],
-                ),
               ),
             ),
           ],
@@ -1711,88 +1678,82 @@ class _GridBlock extends StatelessWidget {
             Container(width: 5, color: spine),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 // Sliver blocks (e.g. out-of-rhythm classes absorbed at
                 // the 22px minimum) can't fit text: spine only, otherwise
                 // the Column throws a layout overflow.
                 child: available < 20
                     ? const SizedBox.shrink()
                     : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      classRow?.name ?? context.l10n.classFallback,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        height: 1.2,
-                        color: fg,
-                      ),
-                    ),
-                    if (available >= 44) ...[
-                      const SizedBox(height: 3),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: (absent
-                                  ? theme.colorScheme.error
-                                  : accent)
-                              .withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          // Absent marker leads the line so it survives
-                          // the ellipsis on narrow blocks.
-                          absent
-                              ? '${context.l10n.absentBadge} · $timeText'
-                              : timeText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            height: 1.2,
-                            color: absent
-                                ? theme.colorScheme.error
-                                : fg,
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (room != null &&
-                        room.isNotEmpty &&
-                        available >= 64) ...[
-                      const SizedBox(height: 2),
-                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.location_on_outlined,
-                            size: 11,
-                            color: fg.withValues(alpha: 0.7),
-                          ),
-                          const SizedBox(width: 2),
-                          Flexible(
-                            child: Text(
-                              room,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: fg.withValues(alpha: 0.7),
-                                height: 1.2,
-                              ),
+                          Text(
+                            classRow?.name ?? context.l10n.classFallback,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              height: 1.2,
+                              color: fg,
                             ),
                           ),
+                          if (available >= 44) ...[
+                            const SizedBox(height: 3),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    (absent ? theme.colorScheme.error : accent)
+                                        .withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                // Absent marker leads the line so it survives
+                                // the ellipsis on narrow blocks.
+                                absent
+                                    ? '${context.l10n.absentBadge} · $timeText'
+                                    : timeText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  height: 1.2,
+                                  color: absent ? theme.colorScheme.error : fg,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (room != null &&
+                              room.isNotEmpty &&
+                              available >= 64) ...[
+                            const SizedBox(height: 2),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 11,
+                                  color: fg.withValues(alpha: 0.7),
+                                ),
+                                const SizedBox(width: 2),
+                                Flexible(
+                                  child: Text(
+                                    room,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: fg.withValues(alpha: 0.7),
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
-                    ],
-                  ],
-                ),
               ),
             ),
           ],
@@ -1838,9 +1799,10 @@ class _PulseBarState extends State<_PulseBar>
   @override
   Widget build(BuildContext context) {
     return FadeTransition(
-      opacity: Tween<double>(begin: 0.35, end: 1).animate(
-        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-      ),
+      opacity: Tween<double>(
+        begin: 0.35,
+        end: 1,
+      ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut)),
       child: Container(
         height: widget.height,
         decoration: BoxDecoration(
@@ -1880,11 +1842,7 @@ class _WeekSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final listW = _fit(
-          constraints.maxWidth - 24 - 56,
-          listDayWidth,
-          110,
-        );
+        final listW = _fit(constraints.maxWidth - 24 - 56, listDayWidth, 110);
         final gridW = _fit(
           constraints.maxWidth - 24 - 52 - 4 - 42,
           gridDayWidth,
@@ -2041,9 +1999,8 @@ class _SkeletonTicks extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final line = BorderSide(
-      color: Theme.of(
-        context,
-      ).colorScheme.outlineVariant.withValues(alpha: 0.4),
+      color: Theme.of(context).colorScheme.outlineVariant
+          .withValues(alpha: 0.4),
       width: 0.5,
     );
     return Column(
@@ -2051,9 +2008,7 @@ class _SkeletonTicks extends StatelessWidget {
         for (var k = 0; k < 17; k++)
           Expanded(
             child: Container(
-              decoration: BoxDecoration(
-                border: Border(bottom: line),
-              ),
+              decoration: BoxDecoration(border: Border(bottom: line)),
             ),
           ),
       ],
@@ -2177,8 +2132,7 @@ class _WeekBodyState extends State<_WeekBody> {
     }
     final today = DateTime.now();
     final todayMidnight =
-        widget.todayMidnight ??
-        DateTime(today.year, today.month, today.day);
+        widget.todayMidnight ?? DateTime(today.year, today.month, today.day);
 
     // Jump/reveal keys are per orientation: horizontal jumps move a
     // horizontal controller, vertical jumps scroll a day into view, and
@@ -2256,8 +2210,7 @@ class _WeekBodyState extends State<_WeekBody> {
         final vertical = widget.orientation == 'vertical';
         // Single left gutter, one gap, padding and the 3px side
         // margins around every day column.
-        final gridAvail =
-            constraints.maxWidth - 24 - _gutterWidth - 4 - 42;
+        final gridAvail = constraints.maxWidth - 24 - _gutterWidth - 4 - 42;
         final gridDayWidth = _fitWidth(gridAvail, widget.gridDayWidth, 100);
         // Horizontal padding plus the 4px side margins of every column.
         final listDayWidth = _fitWidth(
@@ -2279,9 +2232,7 @@ class _WeekBodyState extends State<_WeekBody> {
           dayKeys: vertical ? _gridKeys : null,
           viewportHeight: vertical
               ? null
-              : (constraints.maxHeight.isFinite
-                    ? constraints.maxHeight
-                    : null),
+              : (constraints.maxHeight.isFinite ? constraints.maxHeight : null),
           controller: widget.gridCtrl,
           vertController: widget.gridVertCtrl,
           dayWidth: gridDayWidth,
@@ -2380,10 +2331,7 @@ class _WeekBodyState extends State<_WeekBody> {
           offstage: hideForJump('grid'),
           child: gridBody,
         );
-        final listChild = Offstage(
-          offstage: hideForJump('list'),
-          child: strip,
-        );
+        final listChild = Offstage(offstage: hideForJump('list'), child: strip);
         return IndexedStack(
           index: widget.view == 'grid' ? 1 : 0,
           children: [listChild, gridChild],

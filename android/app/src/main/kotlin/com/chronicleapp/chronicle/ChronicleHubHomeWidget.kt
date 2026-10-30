@@ -85,7 +85,6 @@ import com.chronicleapp.chronicle.widget.resolveTimed
 import com.chronicleapp.chronicle.widget.snapshot
 import com.chronicleapp.chronicle.widget.str
 import com.chronicleapp.chronicle.widget.TinyRow
-import com.chronicleapp.chronicle.widget.widgetBg
 
 import es.antonborri.home_widget.HomeWidgetGlanceStateDefinition
 import es.antonborri.home_widget.HomeWidgetPlugin
@@ -249,39 +248,37 @@ private fun HubContent(context: Context, state: HubWidgetUiState) {
     // Short strips (Compact bucket, ~110-150dp tall): the dots bar + header
     // + padding eat ~100dp, leaving ~10dp for content — a stock Compact
     // squeezes rows to textless slivers (seen-on-device). Short widgets get
-    // a slim layout instead: header + fitting rows, no bar. Paging still
-    // works everywhere via the shell/body tap; the bar returns at
-    // TallColumn and up. All Compact slots are narrow, so shellClick stays.
+    // a slim layout instead: header + fitting rows, no bar. Paging needs
+    // TallColumn+ where the bar fits; short/tiny taps open the app.
     val short = state is HubWidgetUiState.Success &&
         currentVerticalBucket() == VerticalBucket.Compact
     // The tab bar lives in the shell's flush bottom slot (not in the padded
     // body), so dots + arrows sit stationary at the very bottom edge on
-    // every tab and every size. Tiny strips have no bar.
+    // every tab and every size. Tiny strips have no bar; short strips get
+    // the slim dots-only bar (see ShortHubColumn) so 1-column widgets can
+    // page without growing.
     val barData = (state as? HubWidgetUiState.Success)
         ?.takeUnless { tiny }
         ?.content
-    // Narrow hub: a tap ANYWHERE (body, header, shell padding, tiny strip)
-    // advances one tab instead of opening the app — on a 1x2 there is no
-    // blank corner to spare for an app-open target, and near-miss taps were
-    // the whole "can't switch pages" complaint. Tiny strips get it too:
-    // they have no dots bar, so without this every tap opens the app and
-    // the single visible line (e.g. one dish) is a dead end. The dots bar
-    // keeps its own +1 (same action). Wide hub keeps the app-open shell
-    // tap, but the tab body below advances (see HubColumn).
-    val shellClick = if (isNarrowSlot()) {
-        actionRunCallback<HubTabCallback>(
-            actionParametersOf(HubDirectionKey to 1),
-        )
-    } else {
-        null
-    }
+    // Single-tab shorts skip the bar (nothing to page to); the dots row
+    // early-returns under count <= 1, so an empty bar would just eat 36dp.
+    // Tall single-tab hubs also skip it: chevrons wrapping to the same tab
+    // are a no-op that wastes ~48dp.
+    val multiTab = barData?.enabled?.size?.let { it > 1 } == true
+    // Bar visibility: any multi-tab hub (tall or short slim dots bar).
+    // Single-tab hubs get no bar at all — dots/arrows would be dead.
+    val showBar = barData != null && !tiny && multiTab
+    // Paging is dots/arrows-only: every other tap (body, header, shell
+    // padding, tiny strips) falls through to the shell's app-open action.
+    // (Narrow shells used to advance on any tap; the dots target was tiny
+    // and near-misses read as "can't switch pages". The contract is now
+    // inverted: dots switch, taps open the app.)
     VerticalShell(
         context,
         palette,
         snap.opacity,
         paddingDp = if (tiny || short) 8 else 12,
-        bottomBar = if (barData == null || short) null else ({ TabBar(context, palette, barData) }),
-        shellClick = shellClick,
+        bottomBar = if (!showBar) null else ({ TabBar(context, palette, barData!!, slim = short) }),
     ) {
         when (state) {
             is HubWidgetUiState.Loading ->
@@ -298,7 +295,7 @@ private fun HubContent(context: Context, state: HubWidgetUiState) {
                     R.drawable.ic_widget_event_available,
                     state.message.ifEmpty { snap.emptyText },
                 )
-            is HubWidgetUiState.Success -> HubBody(context, palette, state.content, state.nowMs)
+            is HubWidgetUiState.Success -> HubBody(context, palette, state.content, state.nowMs, hasBar = showBar && short)
         }
     }
 }
@@ -309,15 +306,17 @@ private fun HubBody(
     palette: ChroniclePalette,
     data: HubContentData,
     nowMs: Long,
+    hasBar: Boolean = false,
 ) {
     // Portrait buckets: Tiny collapses to one quiet line; shorts get a
-    // slim header + rows layout with no tab bar; lists scroll in the
-    // taller buckets so nothing clips and tall ones fill up.
+    // slim rows layout with the dots-only bar (no header: the bar eats
+    // that budget at ~110dp); lists scroll in the taller buckets so
+    // nothing clips and tall ones fill up.
     when (currentVerticalBucket()) {
         VerticalBucket.Tiny ->
             Tiny(palette, data)
         VerticalBucket.Compact ->
-            ShortHubColumn(context, palette, data, nowMs)
+            ShortHubColumn(context, palette, data, nowMs, hasBar)
         VerticalBucket.TallColumn ->
             HubColumn(context, palette, data, nowMs)
         VerticalBucket.FullPortrait ->
@@ -492,23 +491,13 @@ private fun HubColumn(
             // below an interactive Row (seen on-device as a blank menu tab
             // under the meal switcher), and weight-bound lazy lists need a
             // bound anyway. Same arrangement as the standalone widgets.
-            // The body itself advances a tab on tap, on EVERY size: paging
-            // must not depend on which slot the host matched (a 1-column
-            // widget rendering a wide slot kept the app-open shell and its
-            // tiny dots target — "can't switch pages"). Child clickables
-            // (tab arrows, meal steppers, agenda rail cells) win on their
-            // own bounds; the header above has none, so it still falls
-            // through to the shell (app-open on wide, +1 on narrow).
+            // The body has no tap action: dots/arrows page, everything else
+            // falls through to the shell's app-open tap. Child clickables
+            // (tab arrows, meal steppers) win on their own bounds.
             Column(
                 modifier = GlanceModifier
                     .defaultWeight()
-                    .fillMaxWidth()
-                    .clickable(
-                        onClick = actionRunCallback<HubTabCallback>(
-                            actionParametersOf(HubDirectionKey to 1),
-                        ),
-                        rippleOverride = NoPressFeedback,
-                    ),
+                    .fillMaxWidth(),
             ) {
                 when (data.sel) {
                     // Tall buckets scroll the full list. True strips never
@@ -596,13 +585,13 @@ private fun HubColumn(
 }
 
 /**
- * Slim layout for short strips (Compact bucket, ~110-150dp tall): header +
- * fitting rows, no dots bar. A stock Compact (bar + header + full rows)
- * leaves ~10dp for content at 110dp and squeezes rows to textless slivers
- * (seen-on-device). Paging works via the shell tap; the bar returns at
- * TallColumn and up. Fixed takes only (never lazy: weight-bound lazy lists
- * mismeasure in short bodies) with one height gate at 135dp so taller
- * shorts fill up instead of idling.
+ * Slim layout for short strips (Compact bucket, ~110-120dp slots):
+ * fitting rows plus the slim dots-only bar — no header while the bar
+ * shows (bar + header + paddings leave ~40dp for content at 110dp and
+ * squeeze rows to textless slivers, seen-on-device). Dots page,
+ * everything else opens the app. Fixed takes only (never lazy:
+ * weight-bound lazy lists mismeasure in short bodies) with a 135dp gate
+ * for taller shorts. Without the bar (single tab) the header returns.
  */
 @Composable
 private fun ShortHubColumn(
@@ -610,19 +599,24 @@ private fun ShortHubColumn(
     palette: ChroniclePalette,
     data: HubContentData,
     nowMs: Long,
+    hasBar: Boolean,
 ) {
     val header = hubHeaderData(data, compactTitle = true)
     // Taller shorts (drawn ~135dp+) take one more row instead of idling.
     val roomy = LocalSize.current.height.value >= 135
 
     Column(modifier = GlanceModifier.fillMaxSize()) {
-        HubHeaderRow(
-            palette = palette,
-            iconRes = header.iconRes,
-            title = header.title,
-            showSteppers = header.showSteppers,
-        )
-        Spacer(modifier = GlanceModifier.height(6.dp))
+        // Bar mode drops the header: ~58dp of content room at 110dp fits
+        // exactly one compact row — header + row (71dp) squeezes.
+        if (!hasBar) {
+            HubHeaderRow(
+                palette = palette,
+                iconRes = header.iconRes,
+                title = header.title,
+                showSteppers = header.showSteppers,
+            )
+            Spacer(modifier = GlanceModifier.height(6.dp))
+        }
         Column(
             modifier = GlanceModifier
                 .defaultWeight()
@@ -638,67 +632,124 @@ private fun ShortHubColumn(
                             data.snap.emptyText,
                         )
                     } else if (entry.startLabel.isEmpty()) {
-                        // Quiet: copy + Then-line (the SharedClassTab quiet
-                        // lead, ~61dp). Taller shorts add one lookahead row.
-                        Text(
-                            text = entry.className,
-                            style = TextStyle(
-                                color = palette.onSurfaceVariant,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                            maxLines = 1,
-                        )
-                        val thenRow = data.looks.firstOrNull {
-                            it.time == entry.thenWhen && it.name == entry.thenName
-                        }
-                        ThenLine(palette, entry, thenRow)
-                        if (roomy) {
-                            val extra = data.looks.filterNot {
-                                it.time == entry.thenWhen && it.name == entry.thenName
-                            }.take(1)
-                            for (row in extra) {
-                                Spacer(modifier = GlanceModifier.height(4.dp))
-                                FilledLookaheadRow(
-                                    palette = palette,
-                                    time = row.time,
-                                    name = row.name,
-                                    where = listOf(row.room, row.building)
-                                        .filter { it.isNotEmpty() }
-                                        .joinToString(" · "),
-                                    chipWidth = lookaheadChipWidth(),
+                        if (hasBar) {
+                            // Bar mode (~58dp at 110dp): copy + one plain
+                            // then-line. The Then-card (45dp) plus copy
+                            // plus paddings don't fit under the bar.
+                            Text(
+                                text = entry.className,
+                                style = TextStyle(
+                                    color = palette.onSurfaceVariant,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                                maxLines = 1,
+                            )
+                            val thenBits = listOf(entry.thenName, entry.thenWhen)
+                                .filter { it.isNotEmpty() }
+                            if (thenBits.isNotEmpty()) {
+                                Spacer(modifier = GlanceModifier.height(2.dp))
+                                Text(
+                                    text = thenBits.joinToString(" · "),
+                                    style = TextStyle(
+                                        color = palette.onSurfaceVariant,
+                                        fontSize = 11.sp,
+                                    ),
+                                    maxLines = 1,
                                 )
+                            }
+                        } else {
+                            // Quiet: copy + Then-line (the SharedClassTab quiet
+                            // lead, ~61dp). Taller shorts add one lookahead row.
+                            Text(
+                                text = entry.className,
+                                style = TextStyle(
+                                    color = palette.onSurfaceVariant,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                                maxLines = 1,
+                            )
+                            val thenRow = data.looks.firstOrNull {
+                                it.time == entry.thenWhen && it.name == entry.thenName
+                            }
+                            ThenLine(palette, entry, thenRow)
+                            if (roomy) {
+                                val extra = data.looks.filterNot {
+                                    it.time == entry.thenWhen && it.name == entry.thenName
+                                }.take(1)
+                                for (row in extra) {
+                                    Spacer(modifier = GlanceModifier.height(4.dp))
+                                    FilledLookaheadRow(
+                                        palette = palette,
+                                        time = row.time,
+                                        name = row.name,
+                                        where = listOf(row.room, row.building)
+                                            .filter { it.isNotEmpty() }
+                                            .joinToString(" · "),
+                                        chipWidth = lookaheadChipWidth(),
+                                    )
+                                }
                             }
                         }
                     } else {
-                        // Hero-short: name + status/range/room meta only. No
-                        // teacher line, no Then-line: neither fits ~110dp
-                        // (seen-on-device). Tall widgets show the full hero.
-                        // 15sp keeps name + 2-line meta inside a 110dp card
-                        // with margin (16sp ran ~3dp over the drawn box).
-                        Text(
-                            text = entry.className,
-                            style = TextStyle(
-                                color = palette.onSurface,
-                                fontSize = if (isNarrowSlot()) 15.sp else 20.sp,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                            maxLines = 2,
-                        )
-                        val meta = listOf(
-                            liveStatus(entry, data.snap, nowMs),
-                            entry.detailLine,
-                        ).filter { it.isNotEmpty() }.joinToString(" · ")
-                        if (meta.isNotEmpty()) {
-                            Spacer(modifier = GlanceModifier.height(2.dp))
+                        if (hasBar) {
+                            // Bar mode (~58dp at 110dp): name + live
+                            // status only. The range/room detail line
+                            // costs a second meta line that doesn't fit
+                            // under the bar — one tap opens the app for
+                            // the full hero.
                             Text(
-                                text = meta,
+                                text = entry.className,
                                 style = TextStyle(
-                                    color = palette.onSurfaceVariant,
-                                    fontSize = 10.sp,
+                                    color = palette.onSurface,
+                                    fontSize = if (isNarrowSlot()) 15.sp else 20.sp,
+                                    fontWeight = FontWeight.Bold,
                                 ),
                                 maxLines = 2,
                             )
+                            val status = liveStatus(entry, data.snap, nowMs)
+                            if (status.isNotEmpty()) {
+                                Spacer(modifier = GlanceModifier.height(2.dp))
+                                Text(
+                                    text = status,
+                                    style = TextStyle(
+                                        color = palette.onSurfaceVariant,
+                                        fontSize = 10.sp,
+                                    ),
+                                    maxLines = 1,
+                                )
+                            }
+                        } else {
+                            // Hero-short: name + status/range/room meta only. No
+                            // teacher line, no Then-line: neither fits ~110dp
+                            // (seen-on-device). Tall widgets show the full hero.
+                            // 15sp keeps name + 2-line meta inside a 110dp card
+                            // with margin (16sp ran ~3dp over the drawn box).
+                            Text(
+                                text = entry.className,
+                                style = TextStyle(
+                                    color = palette.onSurface,
+                                    fontSize = if (isNarrowSlot()) 15.sp else 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                                maxLines = 2,
+                            )
+                            val meta = listOf(
+                                liveStatus(entry, data.snap, nowMs),
+                                entry.detailLine,
+                            ).filter { it.isNotEmpty() }.joinToString(" · ")
+                            if (meta.isNotEmpty()) {
+                                Spacer(modifier = GlanceModifier.height(2.dp))
+                                Text(
+                                    text = meta,
+                                    style = TextStyle(
+                                        color = palette.onSurfaceVariant,
+                                        fontSize = 10.sp,
+                                    ),
+                                    maxLines = 2,
+                                )
+                            }
                         }
                     }
                 }
@@ -754,18 +805,23 @@ private fun ShortHubColumn(
 
 /**
  * Bottom tab bar: previous arrow, centered page dots, next arrow.
- * The narrow bar wraps the dots in a full-width tap row (anywhere on it
- * advances a tab — a small centered target lets near-misses fall through
- * to the whole-widget tap, reads as "can't switch pages"), but its fill
- * matches the shell exactly so no bubble shows: the dots keep the small
- * v1.12.0 pill look. Wide slots keep the hugging track between chevrons.
+ * Dots/arrows are the only paging targets: the narrow bar centers the
+ * dots pill with no row-level tap (misses open the app), and wide slots
+ * keep the hugging track between chevrons. The dots keep the small
+ * v1.12.0 pill look. Short strips pass slim=true: the container hugs the
+ * 24dp pill (28dp) instead of the 40dp touch row, leaving ~58dp of content
+ * room at 110dp.
  */
 @Composable
-private fun TabBar(context: Context, palette: ChroniclePalette, data: HubContentData) {
-    // The row itself advances too: taps landing between the arrows and
-    // the dots would otherwise fall through to the whole-widget tap and
-    // open the app instead of switching tabs. Child actions win over
-    // the parent's, so arrows keep their own directions.
+private fun TabBar(context: Context, palette: ChroniclePalette, data: HubContentData, slim: Boolean = false) {
+    // Single tab: nothing to page to — no bar (chevrons would wrap to the
+    // same tab, a no-op wasting ~48dp).
+    if (data.enabled.size <= 1) return
+    // Narrow bar: dots only. The outer box is a plain centering container
+    // with no tap action, so misses fall through to the shell (open app);
+    // only the dots pill itself (DotStrip) advances. (The whole row used
+    // to advance, which read as "can't open the app" from a 1-column
+    // widget.)
     if (isNarrowSlot()) {
         // Single-tab widgets get no bar at all (the dots row early-returns
         // under count <= 1).
@@ -773,14 +829,7 @@ private fun TabBar(context: Context, palette: ChroniclePalette, data: HubContent
             Box(
                 modifier = GlanceModifier
                     .fillMaxWidth()
-                    .height(40.dp)
-                    .background(widgetBg(context, palette.bg, data.snap.opacity))
-                    .clickable(
-                        onClick = actionRunCallback<HubTabCallback>(
-                            actionParametersOf(HubDirectionKey to 1),
-                        ),
-                        rippleOverride = NoPressFeedback,
-                    ),
+                    .height(if (slim) 28.dp else 40.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 DotStrip(palette, data)

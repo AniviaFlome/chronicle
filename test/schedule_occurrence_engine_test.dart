@@ -1,3 +1,4 @@
+import 'package:chronicle/data/schedule_repository.dart';
 import 'package:chronicle/domain/schedule_models.dart';
 import 'package:chronicle/domain/schedule_occurrence_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -484,6 +485,42 @@ void _dayRotationTests() {
       expect(rotationDayLabel(5, letters: false), '6');
       expect(rotationDayLabel(0, letters: true), 'A');
       expect(rotationDayLabel(5, letters: true), 'F');
+    });
+  });
+
+  group('decodeIntList', () {
+    test('falls back to [] on corrupt input', () {
+      expect(decodeIntList('[1,2]'), [1, 2]);
+      expect(decodeIntList('[]'), isEmpty);
+      expect(decodeIntList('[1, junk]'), isEmpty);
+      expect(decodeIntList('garbage'), isEmpty);
+    });
+  });
+
+  group('day rotation weekends', () {
+    test('Saturday slot does not fire when not a school day', () {
+      final engine = ScheduleOccurrenceEngine(
+        classes: const [ScheduledClass(id: 1)],
+        slots: [
+          slot(
+            id: 10,
+            classId: 1,
+            dayOfWeek: 6,
+            rotation: RotationType.dayRotation,
+            rotationDays: [1, 2, 3, 4, 5, 6],
+          ),
+        ],
+        weekABAnchor: d(2026, 9, 14),
+        dayRotation: _rotation,
+      );
+      // Sat 2026-09-19: schoolDays is Mon-Fri, so no occurrence.
+      expect(
+        engine.occurrences(
+          rangeStart: d(2026, 9, 19),
+          rangeEnd: d(2026, 9, 19),
+        ),
+        isEmpty,
+      );
     });
   });
 }

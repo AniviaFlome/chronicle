@@ -2,9 +2,12 @@ import 'package:chronicle/data/database.dart';
 import 'package:chronicle/data/tables.dart';
 import 'package:chronicle/domain/schedule_models.dart' as engine;
 import 'package:chronicle/domain/schedule_occurrence_engine.dart';
+import 'package:chronicle/utils/time_format.dart';
 
-String isoDate(DateTime d) =>
-    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+/// ISO-8601 date (yyyy-MM-dd). Canonical helper is
+/// [isoFromDateTime] in time_format; this delegates so call sites can
+/// import one symbol without behavior drift.
+String isoDate(DateTime d) => isoFromDateTime(d);
 
 engine.RotationType rotationFromDb(RotationKind kind) => switch (kind) {
   RotationKind.weekly => engine.RotationType.weekly,
@@ -14,13 +17,18 @@ engine.RotationType rotationFromDb(RotationKind kind) => switch (kind) {
 };
 
 /// Decodes a "[1,3]"-style int list column. Shared by cycle weeks,
-/// rotation days and rotation school days.
+/// rotation days and rotation school days. Corrupt entries fall back to []
+/// so one bad row can't kill the whole calendar load.
 List<int> decodeIntList(String json) {
-  final trimmed = json.trim();
-  if (trimmed.isEmpty || trimmed == '[]') return const [];
-  final inner = trimmed.substring(1, trimmed.length - 1);
-  if (inner.isEmpty) return const [];
-  return inner.split(',').map((s) => int.parse(s.trim())).toList();
+  try {
+    final trimmed = json.trim();
+    if (trimmed.isEmpty || trimmed == '[]') return const [];
+    final inner = trimmed.substring(1, trimmed.length - 1);
+    if (inner.isEmpty) return const [];
+    return inner.split(',').map((s) => int.parse(s.trim())).toList();
+  } catch (_) {
+    return const [];
+  }
 }
 
 List<int> decodeCycleWeeks(String json) => decodeIntList(json);
@@ -50,8 +58,8 @@ engine.DayRotationConfig? dayRotationFromYear(AcademicYear year) {
 extension ClassRowExt on ClassesData {
   engine.ScheduledClass toEngine() => engine.ScheduledClass(
     id: id,
-    startDate: startDate == null ? null : DateTime.parse(startDate!),
-    endDate: endDate == null ? null : DateTime.parse(endDate!),
+    startDate: startDate == null ? null : DateTime.tryParse(startDate!),
+    endDate: endDate == null ? null : DateTime.tryParse(endDate!),
   );
 }
 
@@ -70,15 +78,15 @@ extension ScheduleItemRowExt on ScheduleItem {
     cycleLength: cycleLength,
     cycleWeeks: cycleWeeks == null ? null : decodeCycleWeeks(cycleWeeks!),
     rotationDays: rotationDays == null ? null : decodeIntList(rotationDays!),
-    validFrom: validFrom == null ? null : DateTime.parse(validFrom!),
-    validTo: validTo == null ? null : DateTime.parse(validTo!),
+    validFrom: validFrom == null ? null : DateTime.tryParse(validFrom!),
+    validTo: validTo == null ? null : DateTime.tryParse(validTo!),
   );
 }
 
 extension ExceptionRowExt on ScheduleException {
   engine.ScheduleException toEngine() => engine.ScheduleException(
     scheduleItemId: scheduleItemId,
-    date: DateTime.parse(date),
+    date: DateTime.tryParse(date) ?? DateTime(1970),
     status: status == ExceptionKind.cancelled
         ? engine.ExceptionStatus.cancelled
         : engine.ExceptionStatus.moved,
@@ -90,8 +98,8 @@ extension ExceptionRowExt on ScheduleException {
 
 extension HolidayRowExt on Holiday {
   engine.HolidayRange toEngine() => engine.HolidayRange(
-    start: DateTime.parse(startDate),
-    end: DateTime.parse(endDate),
+    start: DateTime.tryParse(startDate) ?? DateTime(1970),
+    end: DateTime.tryParse(endDate) ?? DateTime(1970),
   );
 }
 
@@ -111,7 +119,11 @@ class ScheduleRepository {
       classQuery.where((c) => c.id.isIn(classIds));
     }
     final classes = await classQuery.get();
-    final items = await db.select(db.scheduleItems).get();
+    final itemsQuery = db.select(db.scheduleItems);
+    if (classIds != null && classIds.isNotEmpty) {
+      itemsQuery.where((s) => s.classId.isIn(classIds));
+    }
+    final items = await itemsQuery.get();
     final exceptions = await db.select(db.scheduleExceptions).get();
     final holidays = await db.select(db.holidays).get();
 
