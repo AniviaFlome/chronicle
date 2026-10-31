@@ -66,13 +66,7 @@ class ScheduleOccurrenceEngine {
     for (final h in holidays) {
       var d = _dayStart(h.start);
       final last = _dayStart(h.end);
-      // Intersect with the query range: a year-long holiday would otherwise
-      // materialize ~365 entries for every load.
-      if (last.isBefore(start) || d.isAfter(end)) continue;
-      if (d.isBefore(start)) d = start;
-      var lastClamped = last;
-      if (lastClamped.isAfter(end)) lastClamped = end;
-      while (!d.isAfter(lastClamped)) {
+      while (!d.isAfter(last)) {
         holidayDates.add(d);
         d = shiftDays(d, 1);
       }

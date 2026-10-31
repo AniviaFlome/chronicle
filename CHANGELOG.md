@@ -17,7 +17,7 @@
 - DST-safe date math: class/task reminder fire times, iCal multi-day durations and UNTIL comparisons use wall-clock calendar arithmetic, not exact `Duration` blocks.
 - iCal export stamps `DTSTAMP` with trailing `Z` (UTC); malformed VEVENTs log instead of vanishing silently; `_unescape` scans left-to-right so introduced backslashes aren't re-processed.
 - Schedule loading tolerates corrupt rows: `decodeIntList` falls back to `[]`, date parses use `tryParse` instead of throwing the whole calendar.
-- Day-rotation slots no longer fire on non-school days (Saturday sharing Friday's index); rotation/cycle indexes memoize per day; holiday ranges intersect the query range; `loadEngine` filters slots by `classIds` when present.
+- Day-rotation slots no longer fire on non-school days (Saturday sharing Friday's index); rotation/cycle indexes memoize per day; `loadEngine` filters slots by `classIds` when present.
 - Attachment inserts stamp `uuid`/`updatedAt` at creation (were backfilled only at export); folder import sanitizes peer-supplied filenames so `../../evil` can't escape the scope dir.
 - Class/task deletes bump FK-nulled victims (`tasks.classId`, `pomodoro_sessions.taskId`, `tasks.linkedExamId`) so the nulling wins on peers; linked-exam fixup skips no-op writes to stop perpetual export churn.
 - Migrations guard `createTable` with existence checks (killed-migration safe); legacy DB rescue logs unreadable files; new v14 migration normalizes en/em-dash rooms (`–`, `—`) to null with `updatedAt` bump.

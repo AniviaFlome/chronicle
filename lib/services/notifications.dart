@@ -421,15 +421,8 @@ class ReminderScheduler {
       if (classRow == null || !classRow.active) continue;
       final lead = classRow.reminderMinutes ?? defaultLead;
       if (lead == null) continue;
-      // Wall-clock start: Duration addition drifts the time of day across
-      // DST transitions (local midnight + minutes is not 24h-exact).
-      final start = DateTime(
-        occ.date.year,
-        occ.date.month,
-        occ.date.day,
-        occ.startMinutes ~/ 60,
-        occ.startMinutes % 60,
-      );
+      // Wall-clock fire time: minute arithmetic on the wall clock plus a
+      // calendar day shift (Duration math drifts across DST transitions).
       final total = occ.startMinutes - lead;
       final dayShift = total ~/ 1440 - (total < 0 && total % 1440 != 0 ? 1 : 0);
       final norm = ((total % 1440) + 1440) % 1440;
