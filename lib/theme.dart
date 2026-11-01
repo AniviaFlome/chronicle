@@ -357,3 +357,23 @@ Color classOnBlockColor(ColorScheme scheme, Color background) {
   if (brightness == Brightness.dark) return const Color(0xFFFFFFFF);
   return scheme.onSurface;
 }
+
+/// Middle quota escalation for exactly-at-limit (e.g. 4 / 4): a theme-aware
+/// tone between tertiary (one left) and error (over), so the three states
+/// stay visually distinct in every theme family.
+Color quotaAtLimitColor(ColorScheme scheme) =>
+    Color.lerp(scheme.tertiary, scheme.error, 0.45) ?? scheme.tertiary;
+
+/// Container tint pairing with [quotaAtLimitColor].
+Color quotaAtLimitContainer(ColorScheme scheme) => Color.lerp(
+  scheme.tertiaryContainer,
+  scheme.errorContainer,
+  0.45,
+)!;
+
+/// Foreground for [quotaAtLimitContainer].
+Color quotaAtLimitOnContainer(ColorScheme scheme) => Color.lerp(
+  scheme.onTertiaryContainer,
+  scheme.onErrorContainer,
+  0.45,
+)!;

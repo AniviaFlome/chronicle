@@ -287,6 +287,11 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String quotaAtLimit(Object unexcused, Object limit) {
+    return '$unexcused mazeretsiz devamsızlık — $limit sınırında, kalan yok';
+  }
+
+  @override
   String get examLabel => 'Sınav';
 
   @override
@@ -624,6 +629,9 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get quotasTitle => 'Kotalar';
+
+  @override
+  String get noLimitTitle => 'Devamsızlık sınırı yok';
 
   @override
   String get noAbsencesRecorded => 'Kayıtlı devamsızlık yok.';

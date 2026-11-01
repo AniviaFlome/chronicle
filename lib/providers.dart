@@ -517,6 +517,22 @@ final dayRangeProvider = FutureProvider<({int start, int end})>((ref) async {
 /// total-based against the single absence limit; theory/practical tags on
 /// records are informational only. A limit of 0 means "none allowed"
 /// (null maxAbsences rows never reach here: the producer skips them).
+/// Highlight state for a class quota: [oneLeft] (1 remaining), [atLimit]
+/// (exactly at the limit, none left but not exceeded) and [over]
+/// (limit exceeded) all highlight with escalating colors; [ok] never does.
+enum QuotaStatus { ok, oneLeft, atLimit, over }
+
+/// Shared quota classification: highlight only when 1 or fewer remain.
+/// Exactly at the limit is distinct from over it. A null limit never
+/// highlights.
+QuotaStatus quotaStatus(int? limit, int unexcused) {
+  if (limit == null) return QuotaStatus.ok;
+  if (unexcused > limit) return QuotaStatus.over;
+  if (limit >= 1 && unexcused == limit) return QuotaStatus.atLimit;
+  if (limit >= 2 && unexcused == limit - 1) return QuotaStatus.oneLeft;
+  return QuotaStatus.ok;
+}
+
 class QuotaWarning {
   final ClassesData classRow;
   final int unexcused;
@@ -525,9 +541,17 @@ class QuotaWarning {
 
   int get limit => classRow.maxAbsences ?? 0;
 
-  bool get overLimit => unexcused > 0 && unexcused >= limit;
+  /// Strictly over the limit (e.g. 5 / 4). Exactly at the limit (4 / 4)
+  /// is [atLimit], not over.
+  bool get overLimit => unexcused > limit;
+
+  bool get atLimit => limit >= 1 && unexcused == limit;
 
   bool get oneLeft => limit >= 2 && unexcused == limit - 1;
+
+  QuotaStatus get status => quotaStatus(classRow.maxAbsences, unexcused);
+
+  int get remaining => limit - unexcused;
 }
 
 /// Kind of an absence row; legacy null kinds count as theory.
@@ -547,7 +571,9 @@ final quotaWarningsProvider = Provider<List<QuotaWarning>>((ref) {
         .where((a) => a.classId == c.id && !a.isExcused)
         .length;
     final warning = QuotaWarning(classRow: c, unexcused: unexcused);
-    if (warning.overLimit || warning.oneLeft) warnings.add(warning);
+    if (warning.overLimit || warning.atLimit || warning.oneLeft) {
+      warnings.add(warning);
+    }
   }
   warnings.sort((a, b) => a.classRow.name.compareTo(b.classRow.name));
   return warnings;

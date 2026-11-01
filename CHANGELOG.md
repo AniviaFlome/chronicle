@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-11-01
+
+### Changed
+- Today page no longer shows absence warnings; quota urgency moved to the Absences page as per-class highlights (red only when strictly over the limit, a middle tone exactly at the limit, amber when one remains; no highlight otherwise and never for classes without a limit).
+- Absences list view shows every active class: quota cards for classes with a limit plus a neutral card for classes without one (previously limit-less classes were invisible there).
+- Task and class editors pin the save button in a bottom bar above the system navigation instead of at the end of the scroll list, so it stays tappable on long forms.
+- Absences week grid freezes the class-name column: names (and quota highlights) stay pinned on the left while only the weeks scroll.
+- Mouse, stylus and trackpad drags now scroll everywhere (e.g. the absence week grid in Waydroid), matching touch-drag behavior.
+
 ## [1.13.0] - 2026-10-30
 
 ### Added

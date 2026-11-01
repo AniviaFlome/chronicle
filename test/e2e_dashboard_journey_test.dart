@@ -8,11 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'e2e_harness.dart';
 
-/// The dashboard must aggregate one seeded day: the class, its quota
-/// warning, a due-today task and a timed xtra event. Navigation to the
-/// absences tab and back is by rail tap — the warning cards themselves
-/// are display-only. No dialog interactions here (covered by the xtra
-/// journey test).
+/// The dashboard must aggregate one seeded day: the class, a due-today
+/// task and a timed xtra event. Quota warnings no longer live on the
+/// dashboard; the one-left highlight lives on the absences quota card.
+/// Navigation to the absences tab and back is by rail tap. No dialog
+/// interactions here (covered by the xtra journey test).
 void main() {
   testWidgets('dashboard aggregates a seeded day', (tester) async {
     final db = AppDatabase(NativeDatabase.memory());
@@ -50,13 +50,8 @@ void main() {
     });
     await bootApp(tester, db);
 
-    // Dashboard is the initial route: quota warning, class, xtra, task.
-    await tester.scrollUntilVisible(find.text('Absence warnings'), 200);
-    expect(find.text('Absence warnings'), findsOneWidget);
-    expect(
-      find.textContaining('one left before the limit of 2'),
-      findsOneWidget,
-    );
+    // Dashboard is the initial route: no quota warnings, class, xtra, task.
+    expect(find.text('Absence warnings'), findsNothing);
     expect(find.text('Algebra'), findsWidgets);
     await tester.scrollUntilVisible(find.text('Gym session'), 200);
     expect(find.text('Gym session'), findsOneWidget);
@@ -66,6 +61,10 @@ void main() {
     await goTab(tester, Icons.event_busy_outlined);
     expect(find.text('Quotas'), findsOneWidget);
     expect(find.text('1 / 2 unexcused'), findsOneWidget);
+    expect(
+      find.textContaining('one left before the limit of 2'),
+      findsOneWidget,
+    );
 
     await goTab(tester, Icons.dashboard_outlined);
     expect(find.text('Algebra'), findsWidgets);

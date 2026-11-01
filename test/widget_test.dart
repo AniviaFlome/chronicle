@@ -560,7 +560,7 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
-  testWidgets('Dashboard shows absence quota warnings', (tester) async {
+  testWidgets('Dashboard no longer shows absence quota warnings', (tester) async {
     tester.view.physicalSize = const Size(800, 1400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -599,8 +599,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Absence warnings'), findsOneWidget);
-    expect(find.textContaining('over the limit of 1'), findsOneWidget);
+    expect(find.text('Absence warnings'), findsNothing);
+    expect(find.textContaining('over the limit of 1'), findsNothing);
     expect(find.text('Nothing due in the next 7 days.'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
@@ -799,6 +799,10 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    // The sticky save bar pins the form's bottom edge: nudge the list
+    // one step so the delete button clears it before tapping.
+    await tester.drag(find.byType(ListView).first, const Offset(0, -160));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Delete absence record'));
     await tester.pumpAndSettle();
     expect(await tester.runAsync(() => db.select(db.absences).get()), isEmpty);

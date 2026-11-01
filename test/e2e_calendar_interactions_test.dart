@@ -10,7 +10,7 @@ import 'e2e_harness.dart';
 
 /// Calendar interactions across tabs and a restart: the grid view choice
 /// and the current week survive reopening, and a mark made in the
-/// occurrence sheet still warns on the dashboard afterwards.
+/// occurrence sheet highlights the absences quota afterwards.
 void main() {
   testWidgets('calendar view and week survive restart, marks stick',
       (tester) async {
@@ -78,9 +78,13 @@ void main() {
       await pumpForAsync(tester);
       expect(find.text('Unexcused absence'), findsNothing);
 
-      // Dashboard shows the quota warning in the same session.
-      await goTab(tester, Icons.dashboard_outlined);
-      expect(find.text('Absence warnings'), findsOneWidget);
+      // Absences quota highlights the one-left class in the same session.
+      await goTab(tester, Icons.event_busy_outlined);
+      await tester.tap(find.byTooltip('List view'));
+      await tester.pumpAndSettle();
+      await pumpForAsync(tester);
+      expect(find.text('Quotas'), findsOneWidget);
+      expect(find.text('1 / 2 unexcused'), findsOneWidget);
       expect(
         find.textContaining('one left before the limit of 2'),
         findsOneWidget,
@@ -100,8 +104,11 @@ void main() {
       );
       expect(appBarTitle(), currentWeek);
 
-      await goTab(tester, Icons.dashboard_outlined);
-      expect(find.text('Absence warnings'), findsOneWidget);
+      await goTab(tester, Icons.event_busy_outlined);
+      await tester.tap(find.byTooltip('List view'));
+      await tester.pumpAndSettle();
+      await pumpForAsync(tester);
+      expect(find.text('Quotas'), findsOneWidget);
       expect(
         find.textContaining('one left before the limit of 2'),
         findsOneWidget,

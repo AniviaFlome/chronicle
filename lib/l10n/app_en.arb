@@ -164,6 +164,13 @@
       "limit": {}
     }
   },
+  "quotaAtLimit": "{unexcused} unexcused absences — at the limit of {limit}, none left",
+  "@quotaAtLimit": {
+    "placeholders": {
+      "unexcused": {},
+      "limit": {}
+    }
+  },
   "examLabel": "Exam",
   "overduePrefix": "Overdue · ",
   "dueOn": "Due {date}",
@@ -374,6 +381,7 @@
     }
   },
   "quotasTitle": "Quotas",
+  "noLimitTitle": "No absence limit",
   "noAbsencesRecorded": "No absences recorded.",
   "excusedBadge": "Excused",
   "unexcusedBadge": "Unexcused",

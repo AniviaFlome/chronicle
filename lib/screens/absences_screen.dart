@@ -111,11 +111,22 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                   };
                 }).toList();
 
+                // Global unexcused counts drive the quota highlight: the
+                // filter only affects cells, never the remaining quota.
+                final unexcusedByClass = <int, int>{};
+                for (final a in all) {
+                  if (!a.isExcused) {
+                    unexcusedByClass[a.classId] =
+                        (unexcusedByClass[a.classId] ?? 0) + 1;
+                  }
+                }
+
                 return _AbsencesGrid(
                   absences: visible,
                   byId: byId,
                   selectedClassId: selectedClassId,
                   createExcused: _filter == _ExcusedFilter.excused,
+                  unexcusedByClass: unexcusedByClass,
                   filterRow: _FilterRow(
                     filter: _filter,
                     onFilter: (f) => setState(() => _filter = f),
@@ -130,15 +141,25 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
               // One pass for all quota counts; previously each _QuotaCard
               // scanned the full absence list (O(quotaCards x absences)).
               final unexcusedByClass = <int, int>{};
+              final excusedByClass = <int, int>{};
               for (final a in all) {
                 if (!a.isExcused) {
                   unexcusedByClass[a.classId] =
                       (unexcusedByClass[a.classId] ?? 0) + 1;
+                } else {
+                  excusedByClass[a.classId] =
+                      (excusedByClass[a.classId] ?? 0) + 1;
                 }
               }
 
               final withQuota = classList
                   .where((c) => c.active && c.maxAbsences != null)
+                  .toList();
+              // Classes without a limit never highlight, but they must
+              // still be visible: otherwise a freshly added class looks
+              // like it vanished from this page.
+              final withoutQuota = classList
+                  .where((c) => c.active && c.maxAbsences == null)
                   .toList();
 
               return ListView(
@@ -171,6 +192,24 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                       ),
                     const SizedBox(height: 8),
                   ],
+                  if (withoutQuota.isNotEmpty) ...[
+                    Text(
+                      context.l10n.noLimitTitle,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    for (final c in withoutQuota)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _NoLimitCard(
+                          classRow: c,
+                          unexcused: unexcusedByClass[c.id] ?? 0,
+                          excused: excusedByClass[c.id] ?? 0,
+                        ),
+                      ),
+                  ],
                 ],
               );
             },
@@ -190,10 +229,135 @@ class _QuotaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final limit = classRow.maxAbsences ?? 0;
-    final over = unexcused > 0 && unexcused >= limit;
+    final status = quotaStatus(classRow.maxAbsences, unexcused);
+    final isOver = status == QuotaStatus.over;
+    final isAtLimit = status == QuotaStatus.atLimit;
+    final isOneLeft = status == QuotaStatus.oneLeft;
+    final highlighted = isOver || isAtLimit || isOneLeft;
     final progress = limit <= 0 ? 0.0 : (unexcused / limit).clamp(0.0, 1.0);
 
+    Color? cardColor() => isOver
+        ? scheme.errorContainer
+        : isAtLimit
+            ? quotaAtLimitContainer(scheme)
+            : isOneLeft
+                ? scheme.tertiaryContainer
+                : null;
+
+    Color? onCard() => isOver
+        ? scheme.onErrorContainer
+        : isAtLimit
+            ? quotaAtLimitOnContainer(scheme)
+            : isOneLeft
+                ? scheme.onTertiaryContainer
+                : null;
+
+    Color? signal() => isOver
+        ? scheme.error
+        : isAtLimit
+            ? quotaAtLimitColor(scheme)
+            : isOneLeft
+                ? scheme.tertiary
+                : null;
+
+    String? detail() => isOver
+        ? context.l10n.quotaOver(unexcused, limit)
+        : isAtLimit
+            ? context.l10n.quotaAtLimit(unexcused, limit)
+            : isOneLeft
+                ? context.l10n.quotaOneLeft(unexcused, limit)
+                : null;
+
+    return Card(
+      color: cardColor(),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 44,
+              decoration: BoxDecoration(
+                color: classAccentColor(
+                  theme.colorScheme,
+                  Color(classRow.colorValue),
+                ),
+                borderRadius: BorderRadius.circular(5),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          classRow.name,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: onCard(),
+                          ),
+                        ),
+                      ),
+                      if (highlighted)
+                        Icon(
+                          Icons.warning_amber_outlined,
+                          size: 18,
+                          color: signal(),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(
+                    value: progress,
+                    color: signal(),
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    context.l10n.quotaCount(unexcused, limit),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: onCard() ?? theme.colorScheme.outline,
+                    ),
+                  ),
+                  if (detail() != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      detail()!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: onCard(),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Neutral card for active classes without an absence limit: no quota,
+/// never highlighted, but always visible so no class looks missing.
+class _NoLimitCard extends StatelessWidget {
+  final ClassesData classRow;
+  final int unexcused;
+  final int excused;
+
+  const _NoLimitCard({
+    required this.classRow,
+    required this.unexcused,
+    required this.excused,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -217,18 +381,10 @@ class _QuotaCard extends StatelessWidget {
                 children: [
                   Text(classRow.name, style: theme.textTheme.titleSmall),
                   const SizedBox(height: 6),
-                  LinearProgressIndicator(
-                    value: progress,
-                    color: over ? theme.colorScheme.error : null,
-                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  ),
-                  const SizedBox(height: 6),
                   Text(
-                    context.l10n.quotaCount(unexcused, limit),
+                    context.l10n.absenceSummaryPlain(unexcused, excused),
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: over
-                          ? theme.colorScheme.error
-                          : theme.colorScheme.outline,
+                      color: theme.colorScheme.outline,
                     ),
                   ),
                 ],
@@ -451,6 +607,7 @@ class _AbsencesGrid extends ConsumerStatefulWidget {
   final Widget filterRow;
   final int? selectedClassId;
   final bool createExcused;
+  final Map<int, int> unexcusedByClass;
 
   const _AbsencesGrid({
     required this.absences,
@@ -458,6 +615,7 @@ class _AbsencesGrid extends ConsumerStatefulWidget {
     required this.filterRow,
     required this.selectedClassId,
     this.createExcused = false,
+    this.unexcusedByClass = const {},
   });
 
   @override
@@ -465,6 +623,11 @@ class _AbsencesGrid extends ConsumerStatefulWidget {
 }
 
 class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
+  // Fixed geometry keeps the frozen name column and the scrolling
+  // matrix rows pixel-aligned: header 16 + 8 gap, every row 30 + 8.
+  static const _headerHeight = 16.0;
+  static const _rowHeight = 30.0;
+
   final _hScroll = ScrollController();
   List<DateTime>? _lastWeeks;
   int _lastCurrentIndex = -1;
@@ -657,91 +820,186 @@ class _AbsencesGridState extends ConsumerState<_AbsencesGrid> {
             opacity: hideForJump ? 0 : 1,
             child: IgnorePointer(
               ignoring: hideForJump,
-              child: SingleChildScrollView(
-                controller: _hScroll,
-                scrollDirection: Axis.horizontal,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const SizedBox(width: nameWidth),
-                        for (var i = 0; i < weeks.length; i++)
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Frozen name column: class names (and quota
+                  // highlights) never scroll off-screen with the weeks.
+                  Column(
+                    children: [
+                      const SizedBox(height: _headerHeight + 8),
+                      for (final c in rows) _nameCell(c, theme, nameWidth),
+                    ],
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: _hScroll,
+                      scrollDirection: Axis.horizontal,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           SizedBox(
-                            width: cellWidth,
-                            child: Tooltip(
-                              message:
-                                  '${isoFromDateTime(weeks[i])} – '
-                                  '${isoFromDateTime(shiftDays(weeks[i], 6))}',
-                              child: Text(
-                                '${context.l10n.weekPrefix}${i + 1}',
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: weeks[i] == todayStart
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.outline,
-                                  fontWeight: weeks[i] == todayStart
-                                      ? FontWeight.bold
-                                      : null,
-                                ),
-                              ),
+                            height: _headerHeight,
+                            child: Row(
+                              children: [
+                                for (var i = 0; i < weeks.length; i++)
+                                  SizedBox(
+                                    width: cellWidth,
+                                    child: Tooltip(
+                                      message:
+                                          '${isoFromDateTime(weeks[i])} – '
+                                          '${isoFromDateTime(shiftDays(weeks[i], 6))}',
+                                      child: Text(
+                                        '${context.l10n.weekPrefix}${i + 1}',
+                                        textAlign: TextAlign.center,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          color: weeks[i] == todayStart
+                                              ? theme.colorScheme.primary
+                                              : theme.colorScheme.outline,
+                                          fontWeight: weeks[i] == todayStart
+                                              ? FontWeight.bold
+                                              : null,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    for (final c in rows)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: nameWidth,
+                          const SizedBox(height: 8),
+                          for (final c in rows)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
                               child: Row(
                                 children: [
-                                  Container(
-                                    width: 8,
-                                    height: 28,
-                                    decoration: BoxDecoration(
-                                      color: classAccentColor(
-                                        theme.colorScheme,
-                                        Color(c.colorValue),
-                                      ),
-                                      borderRadius: BorderRadius.circular(4),
+                                  for (var i = 0;
+                                      i < weeks.length;
+                                      i++)
+                                    _MatrixCell(
+                                      items: byCell[(c.id, weeks[i])] ??
+                                          const [],
+                                      color: Color(c.colorValue),
+                                      className: c.name,
+                                      weekLabel:
+                                          '${context.l10n.weekPrefix}${i + 1}',
+                                      classId: c.id,
+                                      weekStart: weeks[i],
+                                      weekEnd: shiftDays(weeks[i], 6),
+                                      createExcused: widget.createExcused,
                                     ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      c.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodyMedium,
-                                    ),
-                                  ),
                                 ],
                               ),
                             ),
-                            for (var i = 0; i < weeks.length; i++)
-                              _MatrixCell(
-                                items: byCell[(c.id, weeks[i])] ?? const [],
-                                color: Color(c.colorValue),
-                                className: c.name,
-                                weekLabel: '${context.l10n.weekPrefix}${i + 1}',
-                                classId: c.id,
-                                weekStart: weeks[i],
-                                weekEnd: shiftDays(weeks[i], 6),
-                                createExcused: widget.createExcused,
-                              ),
-                          ],
-                        ),
+                        ],
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
       ],
+    );
+  }
+
+  /// Quota highlight state for a class row: set only when 1 or fewer
+  /// remain (and the class has a limit at all). Exactly at the limit is
+  /// distinct from over it.
+  ({bool isOver, bool isAtLimit, bool isOneLeft, Color? highlight})
+  _quotaLook(
+    ClassesData c,
+    ThemeData theme,
+  ) {
+    final scheme = theme.colorScheme;
+    final status = quotaStatus(
+      c.maxAbsences,
+      widget.unexcusedByClass[c.id] ?? 0,
+    );
+    final hasLimit = c.active && c.maxAbsences != null;
+    final isOver = hasLimit && status == QuotaStatus.over;
+    final isAtLimit = hasLimit && status == QuotaStatus.atLimit;
+    final isOneLeft = hasLimit && status == QuotaStatus.oneLeft;
+    final highlight = isOver
+        ? scheme.errorContainer
+        : isAtLimit
+            ? quotaAtLimitContainer(scheme)
+            : isOneLeft
+                ? scheme.tertiaryContainer
+                : null;
+    return (
+      isOver: isOver,
+      isAtLimit: isAtLimit,
+      isOneLeft: isOneLeft,
+      highlight: highlight
+    );
+  }
+
+  Widget _nameCell(ClassesData c, ThemeData theme, double nameWidth) {
+    final look = _quotaLook(c, theme);
+    final scheme = theme.colorScheme;
+    final highlighted = look.isOver || look.isAtLimit || look.isOneLeft;
+    final onTint = look.isOver
+        ? scheme.onErrorContainer
+        : look.isAtLimit
+            ? quotaAtLimitOnContainer(scheme)
+            : look.isOneLeft
+                ? scheme.onTertiaryContainer
+                : null;
+    final signal = look.isOver
+        ? scheme.error
+        : look.isAtLimit
+            ? quotaAtLimitColor(scheme)
+            : look.isOneLeft
+                ? scheme.tertiary
+                : null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Container(
+        width: nameWidth,
+        height: _rowHeight,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
+          color: look.highlight,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 28,
+              decoration: BoxDecoration(
+                color: classAccentColor(
+                  theme.colorScheme,
+                  Color(c.colorValue),
+                ),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                c.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: onTint,
+                  fontWeight: highlighted ? FontWeight.bold : null,
+                ),
+              ),
+            ),
+            if (highlighted)
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Icon(
+                  Icons.warning_amber_outlined,
+                  size: 16,
+                  color: signal,
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

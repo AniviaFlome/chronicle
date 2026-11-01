@@ -8,10 +8,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'e2e_harness.dart';
 
 /// Matrix journey: marking sessions through the week grid updates the quota
-/// card and the dashboard warning, and each mark lives in exactly one week
+/// card highlight, and each mark lives in exactly one week
 /// (W1 = week containing the year start, Monday-start default).
 void main() {
-  testWidgets('matrix mark updates quota and dashboard', (tester) async {
+  testWidgets('matrix mark updates quota highlight', (tester) async {
     final db = AppDatabase(NativeDatabase.memory());
     final classId = (await tester.runAsync(
       () => seedClassToday(ClassRepository(db), 'Chemistry', maxAbsences: 2),
@@ -68,20 +68,21 @@ void main() {
     expect(find.text('1'), findsOneWidget);
     expect(filledMatrixWeek(tester), weekLabel);
 
-    // Quota card (list view) counts the unexcused mark.
+    // Quota card (list view) counts the unexcused mark and highlights
+    // the one-left state.
     await tester.tap(find.byTooltip('List view'));
     await tester.pumpAndSettle();
     await pumpForAsync(tester);
     expect(find.text('Quotas'), findsOneWidget);
     expect(find.text('1 / 2 unexcused'), findsOneWidget);
-
-    // Dashboard raises the one-left quota warning.
-    await goTab(tester, Icons.dashboard_outlined);
-    expect(find.text('Absence warnings'), findsOneWidget);
     expect(
       find.textContaining('one left before the limit of 2'),
       findsOneWidget,
     );
+
+    // Dashboard no longer warns; the highlight lives on absences.
+    await goTab(tester, Icons.dashboard_outlined);
+    expect(find.text('Absence warnings'), findsNothing);
 
     // Second session, excused this time: back to the matrix, tick another
     // empty cell with the Excused box checked.
@@ -114,11 +115,7 @@ void main() {
     expect(find.text('1 / 2 unexcused'), findsOneWidget);
 
     await goTab(tester, Icons.dashboard_outlined);
-    expect(find.text('Absence warnings'), findsOneWidget);
-    expect(
-      find.textContaining('one left before the limit of 2'),
-      findsOneWidget,
-    );
+    expect(find.text('Absence warnings'), findsNothing);
 
     await shutdownApp(tester, db);
   });

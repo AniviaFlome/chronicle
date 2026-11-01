@@ -7,7 +7,6 @@ import '../data/repositories.dart';
 import '../data/tables.dart';
 import '../domain/schedule_models.dart' as engine;
 import '../providers.dart';
-import '../theme.dart';
 import '../l10n/l10n.dart';
 import '../utils/time_format.dart';
 import 'occurrence_sheet.dart';
@@ -28,7 +27,6 @@ class DashboardScreen extends ConsumerWidget {
     final tomorrowOcc = ref.watch(occurrencesProvider((tomorrow, tomorrow)));
     final classes = ref.watch(classesByIdProvider);
     final absenceKeys = _absenceKeys(ref);
-    final warnings = ref.watch(quotaWarningsProvider);
     final tasks = ref.watch(tasksStreamProvider);
     final stats = ref.watch(statsProvider);
     final todayXtra = ref.watch(
@@ -51,11 +49,6 @@ class DashboardScreen extends ConsumerWidget {
         children: [
           _StatsCard(stats: stats),
           const SizedBox(height: 4),
-          if (warnings.isNotEmpty) ...[
-            _SectionTitle(context.l10n.absenceWarnings, Icons.warning_amber_outlined),
-            for (final w in warnings) _WarningCard(warning: w),
-            const SizedBox(height: 8),
-          ],
           _SectionTitle(context.l10n.todaysClasses, Icons.school_outlined),
           _OccurrenceList(
             async: todayOcc,
@@ -185,44 +178,6 @@ class _OccurrenceList extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _WarningCard extends StatelessWidget {
-  final QuotaWarning warning;
-
-  const _WarningCard({required this.warning});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = classAccentColor(
-      theme.colorScheme,
-      Color(warning.classRow.colorValue),
-    );
-    return Card(
-      color: theme.colorScheme.errorContainer.withValues(alpha: 0.35),
-      child: ListTile(
-        leading: Container(
-          width: 10,
-          height: 40,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(5),
-          ),
-        ),
-        title: Text(warning.classRow.name),
-        subtitle: Text(
-          warning.overLimit
-              ? context.l10n.quotaOver(warning.unexcused, warning.limit)
-              : context.l10n.quotaOneLeft(warning.unexcused, warning.limit),
-        ),
-        trailing: Icon(
-          Icons.warning_amber_outlined,
-          color: theme.colorScheme.error,
-        ),
-      ),
     );
   }
 }

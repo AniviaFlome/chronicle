@@ -602,6 +602,12 @@ abstract class AppLocalizations {
   /// **'{unexcused} unexcused absences — one left before the limit of {limit}'**
   String quotaOneLeft(Object unexcused, Object limit);
 
+  /// No description provided for @quotaAtLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'{unexcused} unexcused absences — at the limit of {limit}, none left'**
+  String quotaAtLimit(Object unexcused, Object limit);
+
   /// No description provided for @examLabel.
   ///
   /// In en, this message translates to:
@@ -1183,6 +1189,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Quotas'**
   String get quotasTitle;
+
+  /// No description provided for @noLimitTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No absence limit'**
+  String get noLimitTitle;
 
   /// No description provided for @noAbsencesRecorded.
   ///

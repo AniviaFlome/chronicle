@@ -284,10 +284,20 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
             ),
         ],
       ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: FilledButton.icon(
+            onPressed: _busy ? null : _save,
+            icon: const Icon(Icons.check),
+            label: Text(context.l10n.saveTask),
+          ),
+        ),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
             TextFormField(
               controller: _title,
@@ -544,11 +554,6 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
                   style: TextStyle(color: theme.colorScheme.error),
                 ),
               ),
-            FilledButton.icon(
-              onPressed: _busy ? null : _save,
-              icon: const Icon(Icons.check),
-              label: Text(context.l10n.saveTask),
-            ),
           ],
         ),
       ),

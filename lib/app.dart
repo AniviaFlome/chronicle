@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -57,6 +58,11 @@ class ChronicleApp extends ConsumerWidget {
     return MaterialApp.router(
       onGenerateTitle: (context) => context.l10n.appTitle,
       debugShowCheckedModeBanner: false,
+      // Waydroid/container mice report as mouse pointers, which the
+      // default Android behavior won't drag-scroll with. Accept mouse
+      // (and stylus/trackpad) drags app-wide so mouse-drag scrolling
+      // works everywhere touch-drag does.
+      scrollBehavior: const _ChronicleScrollBehavior(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: localeCode == null ? null : Locale(localeCode),
@@ -74,6 +80,21 @@ class ChronicleApp extends ConsumerWidget {
       routerConfig: router,
     );
   }
+}
+
+/// App-wide scroll behavior: like Material, but mouse (Waydroid),
+/// stylus and trackpad drags also scroll, not just touch.
+class _ChronicleScrollBehavior extends MaterialScrollBehavior {
+  const _ChronicleScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.unknown,
+  };
 }
 
 class _NavItem {

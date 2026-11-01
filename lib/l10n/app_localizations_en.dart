@@ -287,6 +287,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String quotaAtLimit(Object unexcused, Object limit) {
+    return '$unexcused unexcused absences — at the limit of $limit, none left';
+  }
+
+  @override
   String get examLabel => 'Exam';
 
   @override
@@ -640,6 +645,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get quotasTitle => 'Quotas';
+
+  @override
+  String get noLimitTitle => 'No absence limit';
 
   @override
   String get noAbsencesRecorded => 'No absences recorded.';

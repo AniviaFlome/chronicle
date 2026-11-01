@@ -25,6 +25,8 @@ void main() {
           endMinutes: 600,
         ),
       );
+      // Class without a limit: visible in list view, never highlighted.
+      await seedClassToday(ClassRepository(db), 'History');
       return id;
     }))!;
     await tester.runAsync(
@@ -35,6 +37,9 @@ void main() {
     await goTab(tester, Icons.event_busy_outlined);
     expect(find.text('Quotas'), findsOneWidget);
     expect(find.text('1 / 2 unexcused'), findsOneWidget);
+    expect(find.text('No absence limit'), findsOneWidget);
+    expect(find.text('History'), findsOneWidget);
+    expect(find.text('0 unexcused (0 excused)'), findsOneWidget);
 
     await tester.runAsync(
       () => AbsenceRepository(db).mark(
@@ -48,7 +53,32 @@ void main() {
     );
     await tester.pumpAndSettle();
     await pumpForAsync(tester);
+    // Exactly at the limit: distinct at-limit state, not the over state.
     expect(find.text('2 / 2 unexcused'), findsOneWidget);
+    expect(
+      find.textContaining('at the limit of 2, none left'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('over the limit of 2'), findsNothing);
+
+    // One more mark exceeds the limit: the over state takes over.
+    await tester.runAsync(
+      () => AbsenceRepository(db).mark(
+        AbsencesCompanion.insert(
+          classId: classId,
+          date: todayIso(),
+          startMinutes: 540,
+          endMinutes: 600,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await pumpForAsync(tester);
+    expect(find.text('3 / 2 unexcused'), findsOneWidget);
+    expect(
+      find.textContaining('over the limit of 2'),
+      findsOneWidget,
+    );
 
     await shutdownApp(tester, db);
   });

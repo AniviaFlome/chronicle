@@ -520,10 +520,20 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
             ),
         ],
       ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: FilledButton.icon(
+            onPressed: _busy ? null : _save,
+            icon: const Icon(Icons.check),
+            label: Text(context.l10n.saveClass),
+          ),
+        ),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
             TextFormField(
               controller: _name,
@@ -818,11 +828,6 @@ class _ClassEditScreenState extends ConsumerState<ClassEditScreen> {
               _FilesSection(classId: widget.existing!.id),
             ],
             const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: _busy ? null : _save,
-              icon: const Icon(Icons.check),
-              label: Text(context.l10n.saveClass),
-            ),
           ],
         ),
       ),
@@ -1094,7 +1099,9 @@ class _AbsenceSection extends ConsumerWidget {
             final summary = limit == null
                 ? context.l10n.absenceSummaryPlain(unexcused, excused)
                 : context.l10n.absenceSummaryQuota(unexcused, limit!, excused);
-            final over = limit != null && unexcused > 0 && unexcused >= limit!;
+            // Red only when strictly over the limit (5 / 4); exactly
+            // at the limit (4 / 4) is not a failure.
+            final over = limit != null && unexcused > limit!;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
