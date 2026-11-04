@@ -205,6 +205,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   final markersMode = ref.watch(gridMarkersModeProvider);
                   final fixed = ref.watch(fixedGridProvider);
                   final startToday = ref.watch(calendarStartTodayProvider);
+                  final weekStartDayAsync = ref.watch(weekStartDayProvider);
                   final weekError =
                       occurrences.error ??
                       classes.error ??
@@ -214,7 +215,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       dayRange.error ??
                       markersMode.error ??
                       fixed.error ??
-                      startToday.error;
+                      startToday.error ??
+                      weekStartDayAsync.error;
                   if (weekError != null) {
                     return Center(
                       child: Text(context.l10n.couldNotLoadWeek('$weekError')),
@@ -238,7 +240,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       dayRange.hasValue &&
                       markersMode.hasValue &&
                       fixed.hasValue &&
-                      startToday.hasValue;
+                      startToday.hasValue &&
+                      weekStartDayAsync.hasValue;
                   if (!ready) {
                     return _WeekSkeleton(
                       start: start,

@@ -39,6 +39,7 @@ import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.ColumnScope
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
@@ -639,18 +640,30 @@ private fun LookRow(palette: ChroniclePalette, row: TimeRow) {
 }
 
 /**
- * Keep-style checklist row: tonal block + filled square checkbox + 16sp
- * title + due chip (solid red w/ white text when urgent).
+ * Keep-style checklist row: tonal block with filled square checkbox, 14sp
+ * single-line title, 11sp details meta (class · steps) and due chip. Dense
+ * by design: the block is the unit that repeats 2/4/8 times per widget,
+ * so the title stays one line and the details ride a small meta line
+ * instead of a second tall row.
  */
 @Composable
-fun FilledCheckRow(palette: ChroniclePalette, title: String, date: String, urgent: Boolean) {
+fun FilledCheckRow(
+    palette: ChroniclePalette,
+    title: String,
+    date: String,
+    urgent: Boolean,
+    className: String = "",
+    steps: String = "",
+) {
     val blockBg = if (urgent) palette.errorContainer else palette.cardHigh
+    val meta = listOf(className, steps).filter { it.isNotEmpty() }
+        .joinToString(" · ")
     Box(
         modifier = GlanceModifier
             .fillMaxWidth()
             .background(blockBg)
             .cornerRadius(12.dp)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SquareCheck(
@@ -658,16 +671,30 @@ fun FilledCheckRow(palette: ChroniclePalette, title: String, date: String, urgen
                 inset = blockBg,
             )
             Spacer(modifier = GlanceModifier.width(10.dp))
-            Text(
-                text = title,
-                style = TextStyle(
-                    color = palette.onSurface,
-                    fontSize = 16.sp,
-                    fontWeight = if (urgent) FontWeight.Bold else FontWeight.Normal,
-                ),
-                maxLines = 2,
-                modifier = GlanceModifier.defaultWeight(),
-            )
+            Column(modifier = GlanceModifier.defaultWeight()) {
+                Text(
+                    text = title,
+                    style = TextStyle(
+                        color = palette.onSurface,
+                        fontSize = 14.sp,
+                        fontWeight = if (urgent) FontWeight.Bold else FontWeight.Normal,
+                    ),
+                    maxLines = 1,
+                    modifier = GlanceModifier.fillMaxWidth(),
+                )
+                if (meta.isNotEmpty()) {
+                    Spacer(modifier = GlanceModifier.height(2.dp))
+                    Text(
+                        text = meta,
+                        style = TextStyle(
+                            color = palette.onSurfaceVariant,
+                            fontSize = 11.sp,
+                        ),
+                        maxLines = 1,
+                        modifier = GlanceModifier.fillMaxWidth(),
+                    )
+                }
+            }
             if (date.isNotEmpty()) {
                 Spacer(modifier = GlanceModifier.width(6.dp))
                 if (urgent) {
@@ -696,23 +723,24 @@ fun FilledCheckRow(palette: ChroniclePalette, title: String, date: String, urgen
     }
 }
 
-/** Drawn square checkbox: accent fill + block-colored inset (no stroke). */
+/** Drawn square checkbox: accent fill + block-colored inset (no stroke).
+ *  16dp: rows repeat up to 8 per widget, so the box stays compact. */
 @Composable
 private fun SquareCheck(fill: androidx.glance.unit.ColorProvider, inset: androidx.glance.unit.ColorProvider) {
     Box(
         modifier = GlanceModifier
-            .width(20.dp)
-            .height(20.dp)
+            .width(16.dp)
+            .height(16.dp)
             .background(fill)
-            .cornerRadius(6.dp),
+            .cornerRadius(5.dp),
         contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = GlanceModifier
-                .width(16.dp)
-                .height(16.dp)
+                .width(12.dp)
+                .height(12.dp)
                 .background(inset)
-                .cornerRadius(4.dp),
+                .cornerRadius(3.dp),
         ) {}
     }
 }
@@ -820,6 +848,80 @@ fun DishRow(palette: ChroniclePalette, text: String) {
     )
 }
 
+/**
+ * Shared scrolling dish list: the hub menu tab and the standalone
+ * cafeteria-menu widget render the very same rows (a copy, not a second
+ * design — same rule as [SharedClassTab]). Short/narrow tiers keep their
+ * fitting-take variants as the documented space adjustment; everything
+ * tall scrolls this full list.
+ */
+@Composable
+fun ColumnScope.SharedMenuList(palette: ChroniclePalette, dishes: List<String>) {
+    // Weight-bound LazyColumn inside a bounded body (a wrap-content list
+    // would measure only its first item); items wrap in their own Column
+    // (bare single-node items mismeasure, spacers collapse to zero).
+    LazyColumn(modifier = GlanceModifier.defaultWeight()) {
+        items(dishes.size) { i ->
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
+                if (i > 0) Spacer(modifier = GlanceModifier.height(4.dp))
+                DishRow(palette, dishes[i])
+            }
+        }
+    }
+}
+
+/**
+ * Shared scrolling agenda list: the hub agenda tab and the standalone
+ * agenda widget render the very same rows (a copy, not a second design).
+ * Short tiers keep their fitting-take variants as the documented space
+ * adjustment; everything tall scrolls this full list.
+ */
+@Composable
+fun ColumnScope.SharedAgendaList(
+    context: Context,
+    palette: ChroniclePalette,
+    rows: List<TimeRow>,
+) {
+    LazyColumn(modifier = GlanceModifier.defaultWeight()) {
+        items(rows.size) { i ->
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
+                if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
+                val row = rows[i]
+                ClassRow(context, palette, row.time, row.name, row.colorHex)
+            }
+        }
+    }
+}
+
+/**
+ * Shared scrolling tasks list: the hub tasks tab and the standalone
+ * due-tasks widget render the very same rows (a copy, not a second
+ * design). Short tiers keep their fitting-take variants as the documented
+ * space adjustment; everything tall scrolls this full list.
+ */
+@Composable
+fun ColumnScope.SharedTasksList(
+    palette: ChroniclePalette,
+    tasks: List<TaskRow>,
+) {
+    LazyColumn(modifier = GlanceModifier.defaultWeight()) {
+        items(tasks.size) { i ->
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
+                if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
+                val task = tasks[i]
+                TaskRow(
+                    palette,
+                    task.title,
+                    task.date,
+                    task.urgent,
+                    task.className,
+                    task.steps,
+                )
+            }
+        }
+    }
+}
+
 /** Subtle full-width divider (fill, not stroke). */
 @Composable
 fun Hairline(palette: ChroniclePalette) {
@@ -864,8 +966,15 @@ fun ClassRow(
  * data-class constructor (arity differs, so call sites resolve cleanly).
  */
 @Composable
-fun TaskRow(palette: ChroniclePalette, title: String, date: String, urgent: Boolean) {
-    FilledCheckRow(palette, title, date, urgent)
+fun TaskRow(
+    palette: ChroniclePalette,
+    title: String,
+    date: String,
+    urgent: Boolean,
+    className: String = "",
+    steps: String = "",
+) {
+    FilledCheckRow(palette, title, date, urgent, className, steps)
 }
 
 /**
@@ -992,9 +1101,11 @@ private fun MealArrow(
  * Meal switcher row: ‹ centered meal title ›. Arrows step the native-owned
  * meal-kind override via [arrowAction] (±1); hidden when a single meal is
  * servable. One Row with 3 children — safely under the RemoteViews limit.
- * The row itself also advances (+1) so near-misses don't fall through to
- * the whole-widget tap and open the app instead. Compact 40.dp arrows
- * (the ≥40dp hit-target floor) and a 12.sp title leave room for dishes.
+ * Arrows-only tap targets: no row-level tap, so near-misses fall through
+ * to the whole-widget tap (open app) instead of stepping the meal by
+ * accident — same contract as the hub tab bar.
+ * Compact 40.dp arrows (the ≥40dp hit-target floor) and a 12.sp title
+ * leave room for dishes.
  */
 @Composable
 fun MealSwitcher(
@@ -1006,10 +1117,7 @@ fun MealSwitcher(
     arrowAction: (Int) -> Action,
 ) {
     Row(
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .background(fixedProvider(0x00000000L))
-            .clickable(onClick = arrowAction(1), rippleOverride = NoPressFeedback),
+        modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showArrows) {

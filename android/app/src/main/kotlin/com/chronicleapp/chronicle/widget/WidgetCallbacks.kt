@@ -107,8 +107,10 @@ internal fun widgetPrefs(context: Context) =
 /**
  * Meal arrow step shared by the hub menu tab and the standalone menu
  * widget: moves the native-owned meal-kind override to the previous/next
- * servable meal, wrapping around. The override persists across pushes;
- * renders fall back to the pushed default when it is unset or stale.
+ * servable meal, wrapping around. The pick sticks for the day (its date
+ * rides alongside); renders fall back to the lunch-first default when it
+ * is unset, from another day, or stale — same reset-to-today contract as
+ * the agenda's selectedDay.
  */
 private fun stepMenuMeal(prefs: SharedPreferences, prefix: String, direction: Int) {
     // Same read-modify-write race as hub tabs (see hubTabLock): serialize
@@ -116,11 +118,23 @@ private fun stepMenuMeal(prefs: SharedPreferences, prefix: String, direction: In
     synchronized(menuMealLock) {
         val meals = cachedParseMenuMeals(prefs.str("$prefix.${Keys.MENU_MEALS}"))
         if (meals.size <= 1) return
+        val today = deviceTodayIso()
         val stored = prefs.str("$prefix.${Keys.MENU_MEAL_KIND}")
-        val current = meals.indexOfFirst { it.kind == stored }.takeIf { it >= 0 }
+        val storedDate = prefs.str("$prefix.${Keys.MENU_MEAL_KIND_DATE}")
+        // Stepping starts from today's pick when there is one, else lunch
+        // when servable, else the pushed default — never from a stale
+        // (previous-day or pre-update dateless) selection.
+        val current = if (stored.isNotEmpty() && storedDate == today) {
+            meals.indexOfFirst { it.kind == stored }.takeIf { it >= 0 }
+        } else {
+            null
+        } ?: meals.indexOfFirst { it.kind == "ogle" }.takeIf { it >= 0 }
             ?: prefs.int("$prefix.${Keys.MENU_MEAL_DEFAULT}", 0).coerceIn(meals.indices)
         val next = ((current + direction) % meals.size + meals.size) % meals.size
-        prefs.edit().putString("$prefix.${Keys.MENU_MEAL_KIND}", meals[next].kind).commit()
+        prefs.edit()
+            .putString("$prefix.${Keys.MENU_MEAL_KIND}", meals[next].kind)
+            .putString("$prefix.${Keys.MENU_MEAL_KIND_DATE}", today)
+            .commit()
     }
 }
 

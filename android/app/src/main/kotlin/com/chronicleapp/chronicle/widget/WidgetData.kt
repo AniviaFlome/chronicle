@@ -54,10 +54,15 @@ object Keys {
     const val MENU_ROWS = "menuRows"
     // All servable meals: [{kind, title, dishes[]}] in day order.
     const val MENU_MEALS = "menuMeals"
-    // Pushed default index (menu-page rule: first with dishes).
+    // Pushed default index (menu-page rule: lunch when servable, else first with dishes).
     const val MENU_MEAL_DEFAULT = "menuMealDefault"
     // Native-owned kind override from the meal arrows; never pushed.
+    // Day-scoped by MENU_MEAL_KIND_DATE (yyyy-MM-dd, written natively on
+    // every arrow step): the pick sticks for the day, then the default
+    // wins again — same reset-to-today contract as the agenda's
+    // selectedDay. Dateless overrides predate this rule and read as stale.
     const val MENU_MEAL_KIND = "menuMealKind"
+    const val MENU_MEAL_KIND_DATE = "menuMealKindDate"
     const val TITLE_CLASS = "titleClass"
     const val TITLE_AGENDA = "titleAgenda"
 
@@ -123,11 +128,15 @@ data class TimeRow(
     val range: String = "",
 )
 
-/** Task row (due-tasks widget, hub tasks tab). */
+/** Task row (due-tasks widget, hub tasks tab). className/steps ride the
+ *  details meta line under the title ("Physics · 1/2 steps"); blank when
+ *  unset (old pushes). */
 data class TaskRow(
     val title: String,
     val date: String,
     val urgent: Boolean,
+    val className: String = "",
+    val steps: String = "",
 )
 
 /** Week-rail cell (agenda widget). */
@@ -248,6 +257,8 @@ fun parseTaskRows(json: String): List<TaskRow> {
                         title = o.s("title"),
                         date = o.s("date"),
                         urgent = o.optBoolean("urgent", false) || o.s("urgent") == "1",
+                        className = o.s("class"),
+                        steps = o.s("steps"),
                     ),
                 )
             }
@@ -325,21 +336,34 @@ fun parseMenuMeals(json: String): List<MenuMeal> {
 }
 
 /**
- * Picks the meal to show: the native-owned kind override wins when it is
- * still servable, otherwise the pushed default (clamped). Mirrors the
- * menu page's `_syncMealToDay`.
+ * Picks the meal to show: the native-owned kind override wins when it was
+ * picked today and is still servable, otherwise lunch when servable,
+ * otherwise the pushed default (clamped). Day-scoping mirrors the menu
+ * page's lunch default plus the agenda's reset-to-today contract — and it
+ * flips long-stuck Breakfast widgets back to Lunch on update, since every
+ * pre-update override is dateless and therefore stale.
  */
 fun resolveMenuMeal(
     meals: List<MenuMeal>,
     defaultIdx: Int,
     overrideKind: String,
+    overrideDate: String = "",
+    deviceToday: String = "",
 ): MenuMeal? {
     if (meals.isEmpty()) return null
-    if (overrideKind.isNotEmpty()) {
+    if (overrideKind.isNotEmpty() &&
+        overrideDate.isNotEmpty() &&
+        overrideDate == deviceToday
+    ) {
         meals.firstOrNull { it.kind == overrideKind }?.let { return it }
     }
+    meals.firstOrNull { it.kind == "ogle" }?.let { return it }
     return meals[defaultIdx.coerceIn(meals.indices)]
 }
+
+/** Device-local `yyyy-MM-dd` — day-scopes the native meal-kind override. */
+fun deviceTodayIso(): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
 /** Per-entry "looks" lookahead rows (nested inside a timeline entry). */
 private fun parseLooksArr(arr: JSONArray?): List<TimeRow> {
@@ -619,9 +643,9 @@ object Samples {
     )
 
     val tasks = listOf(
-        TaskRow("Submit lab report", "tomorrow", urgent = false),
-        TaskRow("Read chapter 4", "Fri", urgent = false),
-        TaskRow("Problem set 5", "yesterday", urgent = true),
+        TaskRow("Submit lab report", "tomorrow", urgent = false, className = "Physics", steps = "1/2 steps"),
+        TaskRow("Read chapter 4", "Fri", urgent = false, className = "History"),
+        TaskRow("Problem set 5", "yesterday", urgent = true, className = "Mathematics", steps = "0/1 steps"),
     )
 
     /** "Looks" rows for the hub class tab: chip time + "Then/Later <name>". */

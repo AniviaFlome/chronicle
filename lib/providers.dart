@@ -229,19 +229,21 @@ final statsProvider = Provider<StudyStats>((ref) {
   final sessions = ref.watch(sessionsStreamProvider).value ?? const [];
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
-  final weekAgo = shiftDays(today, -7);
+  // Trailing 7 days inclusive: today + 6 priors. shiftDays(today, -7)
+  // would cover 8 distinct dates (off-by-one, inclusive bound below).
+  final windowStart = shiftDays(today, -6);
 
   var completedThisWeek = 0;
   for (final t in tasks) {
     final doneAt = t.task.doneAt;
     if (doneAt == null) continue;
     final day = DateTime(doneAt.year, doneAt.month, doneAt.day);
-    if (!day.isBefore(weekAgo)) completedThisWeek++;
+    if (!day.isBefore(windowStart)) completedThisWeek++;
   }
   var focusMinutes = 0;
   for (final s in sessions) {
     final day = DateTime(s.startedAt.year, s.startedAt.month, s.startedAt.day);
-    if (!day.isBefore(weekAgo)) focusMinutes += s.workMinutes;
+    if (!day.isBefore(windowStart)) focusMinutes += s.workMinutes;
   }
   return StudyStats(
     completedThisWeek: completedThisWeek,

@@ -30,7 +30,17 @@ Future<void> recordTombstone(
   String uuid, [
   int? at,
 ]) async {
-  if (uuid.isEmpty) return;
+  if (uuid.isEmpty) {
+    // Unstamped (pre-v6) rows carry no uuid to key the tombstone on; the
+    // v6/v10 backfill plus folder-import fix() close this window, but log
+    // so a delete-that-cannot-propagate is visible instead of silent.
+    assert(() {
+      // ignore: avoid_print
+      print('recordTombstone: refusing empty uuid for $table');
+      return true;
+    }());
+    return;
+  }
   final deletedAt = at ?? syncNow();
   final existing =
       await (db.select(db.syncTombstones)
@@ -145,6 +155,9 @@ class ClassRepository {
           for (final f in files) {
             await recordTombstone(db, SyncTables.yearFiles, f.uuid, now);
           }
+          await (db.delete(
+            db.yearFiles,
+          )..where((f) => f.yearId.equals(id))).go();
           for (final f in files) {
             try {
               final file = File(await resolveAttachmentPath(f.storedPath));
@@ -227,6 +240,23 @@ class ClassRepository {
         for (final f in classFiles) {
           await recordTombstone(db, SyncTables.classFiles, f.uuid, now);
         }
+        // Explicit child cleanup so correctness never depends on the
+        // connection's FK pragma (e.g. in-memory test DBs). Sync stays
+        // correct because children were tombstoned above.
+        for (final item in items) {
+          await (db.delete(
+            db.scheduleExceptions,
+          )..where((e) => e.scheduleItemId.equals(item.id))).go();
+        }
+        await (db.delete(
+          db.scheduleItems,
+        )..where((s) => s.classId.equals(id))).go();
+        await (db.delete(
+          db.absences,
+        )..where((a) => a.classId.equals(id))).go();
+        await (db.delete(
+          db.classFiles,
+        )..where((f) => f.classId.equals(id))).go();
         // Remove file blobs from disk; rows go via FK cascade (or
         // explicit delete when cascade is off, e.g. tests).
         try {
@@ -242,7 +272,7 @@ class ClassRepository {
           // Best-effort cleanup only.
         }
       }
-      final deleted = (db.delete(
+      final deleted = await (db.delete(
         db.classes,
       )..where((c) => c.id.equals(id))).go();
       // Bump FK-nulled tasks so the nulling wins on peers. Handles both
@@ -304,6 +334,11 @@ class ClassRepository {
         for (final e in exceptions) {
           await recordTombstone(db, SyncTables.exceptions, e.uuid, now);
         }
+        // Explicit child cleanup so correctness never depends on the
+        // connection's FK pragma (e.g. in-memory test DBs).
+        await (db.delete(
+          db.scheduleExceptions,
+        )..where((e) => e.scheduleItemId.equals(id))).go();
       }
       return (db.delete(db.scheduleItems)..where((s) => s.id.equals(id))).go();
     });
@@ -378,11 +413,15 @@ class AbsenceRepository {
   Future<List<Absence>> forClass(int classId) =>
       (db.select(db.absences)..where((a) => a.classId.equals(classId))).get();
 
-  Future<int> mark(AbsencesCompanion entry) => db
-      .into(db.absences)
-      .insert(
-        entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
-      );
+  Future<int> mark(AbsencesCompanion entry) async {
+    final classId = entry.classId.value;
+    final date = entry.date.value;
+    final existing = await forClassOnDate(classId, date);
+    if (existing != null) return existing.id;
+    return db.into(db.absences).insert(
+      entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
+    );
+  }
 
   Future<int> countForClass(int classId, {bool? excused}) {
     final count = db.absences.id.count();
@@ -665,8 +704,21 @@ class TaskRepository {
         for (final g in grades) {
           await recordTombstone(db, SyncTables.grades, g.uuid, now);
         }
+        // Explicit child cleanup so correctness never depends on the
+        // connection's FK pragma (e.g. in-memory test DBs).
+        await (db.delete(
+          db.subtasks,
+        )..where((s) => s.taskId.equals(id))).go();
+        await (db.delete(
+          db.taskReminders,
+        )..where((r) => r.taskId.equals(id))).go();
+        await (db.delete(
+          db.grades,
+        )..where((g) => g.examTaskId.equals(id))).go();
       }
-      final deleted = (db.delete(db.tasks)..where((t) => t.id.equals(id))).go();
+      final deleted = await (db.delete(
+        db.tasks,
+      )..where((t) => t.id.equals(id))).go();
       for (final s in linkedSessions) {
         await (db.update(
           db.pomodoroSessions,
@@ -748,11 +800,18 @@ class TaskRepository {
     return out;
   }
 
-  Future<int> createReminder(TaskRemindersCompanion entry) => db
-      .into(db.taskReminders)
-      .insert(
-        entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
-      );
+  Future<int> createReminder(TaskRemindersCompanion entry) async {
+    final existing = await (db.select(db.taskReminders)..where(
+          (r) =>
+              r.taskId.equals(entry.taskId.value) &
+              r.offsetMinutes.equals(entry.offsetMinutes.value),
+        ))
+        .getSingleOrNull();
+    if (existing != null) return existing.id;
+    return db.into(db.taskReminders).insert(
+      entry.copyWith(uuid: Value(newUuid()), updatedAt: Value(syncNow())),
+    );
+  }
 
   Future<int> deleteReminder(int id) {
     return db.transaction(() async {
@@ -848,6 +907,23 @@ class PomodoroRepository {
   Stream<List<PomodoroSession>> watchAll() => (db.select(
     db.pomodoroSessions,
   )..orderBy([(s) => OrderingTerm.desc(s.startedAt)])).watch();
+
+  /// Deletes a session, tombstoning it so the delete converges on peers.
+  Future<int> delete(int id) {
+    return db.transaction(() async {
+      return tombstoneAndDeleteRow<PomodoroSession>(
+        db: db,
+        fetch: () => (db.select(
+          db.pomodoroSessions,
+        )..where((s) => s.id.equals(id))).getSingleOrNull(),
+        remove: () => (db.delete(
+          db.pomodoroSessions,
+        )..where((s) => s.id.equals(id))).go(),
+        uuidOf: (row) => row.uuid,
+        tombstoneTable: SyncTables.sessions,
+      );
+    });
+  }
 }
 
 class XtraRepository {
@@ -898,6 +974,37 @@ class XtraRepository {
         continue;
       }
       var d = DateTime(anchor.year, anchor.month, anchor.day);
+      // Fast-forward old forever-series to the window: stepping day-by-day
+      // from a 2000 anchor would exhaust the 3700 guard before reaching a
+      // 2026 window and silently return nothing. Jump arithmetically to
+      // just before fromIso (wall-clock arithmetic, no Duration drift).
+      final fromDate = DateTime.tryParse(fromIso);
+      if (fromDate != null && d.isBefore(fromDate)) {
+        d = switch (kind) {
+          RepeatKind.daily => DateTime(
+            fromDate.year,
+            fromDate.month,
+            fromDate.day,
+          ),
+          RepeatKind.weekly => () {
+            final gap = daysBetween(d, fromDate);
+            final steps = gap ~/ 7;
+            return shiftDays(d, steps * 7);
+          }(),
+          RepeatKind.monthly => () {
+            var months =
+                (fromDate.year - d.year) * 12 + (fromDate.month - d.month);
+            // Step back one so the main loop still emits a fromDate-month
+            // instance when the anchor day allows it.
+            if (months > 0) months -= 1;
+            var jumped = d;
+            for (var i = 0; i < months; i++) {
+              jumped = shiftMonths(jumped, 1);
+            }
+            return jumped;
+          }(),
+        };
+      }
       // ~10 years of daily occurrences; the loop also breaks at the
       // range end or repeatUntil, so monthly/weekly series stop much
       // earlier. Keeps pathological forever-daily anchors bounded.
@@ -1008,8 +1115,11 @@ class SettingsRepository {
 
   static final _anchorFallback = DateTime(2026, 9, 7);
 
+  static const weekABAnchorKey = 'week_ab_anchor';
+  static const weekStartDayKey = 'week_start_day';
+
   Future<DateTime> weekABAnchor() async {
-    final v = await get('week_ab_anchor');
+    final v = await get(weekABAnchorKey);
     if (v == null) return _anchorFallback;
     try {
       return DateTime.parse(v);
@@ -1019,7 +1129,7 @@ class SettingsRepository {
   }
 
   Future<int> weekStartDay() async {
-    final raw = int.tryParse(await get('week_start_day') ?? '') ?? 1;
+    final raw = int.tryParse(await get(weekStartDayKey) ?? '') ?? 1;
     return raw.clamp(1, 7);
   }
 
@@ -1141,10 +1251,12 @@ class SettingsRepository {
   }
 
   /// 'list' or 'grid'. Defaults to 'grid'.
-  Future<String> absencesView() async =>
-      (await get('absences_view')) == 'list' ? 'list' : 'grid';
+  static const absencesViewKey = 'absences_view';
 
-  Future<void> setAbsencesView(String value) => set('absences_view', value);
+  Future<String> absencesView() async =>
+      (await get(absencesViewKey)) == 'list' ? 'list' : 'grid';
+
+  Future<void> setAbsencesView(String value) => set(absencesViewKey, value);
 
   static const gridMarkersModeKey = 'grid_markers_mode';
 
@@ -1538,24 +1650,26 @@ class MenuCacheRepository {
     String isoDate,
     MenuDay day,
   ) async {
-    await (db.delete(db.menuCache)..where(
-          (t) =>
-              t.providerId.equals(providerId) &
-              t.locationId.equals(locationId) &
-              t.date.equals(isoDate),
-        ))
-        .go();
-    await db
-        .into(db.menuCache)
-        .insert(
-          MenuCacheCompanion.insert(
-            providerId: providerId,
-            locationId: locationId,
-            date: isoDate,
-            payload: jsonEncode(day.toJson()),
-            fetchedAt: Value(DateTime.now().millisecondsSinceEpoch),
-          ),
-        );
+    await db.transaction(() async {
+      await (db.delete(db.menuCache)..where(
+            (t) =>
+                t.providerId.equals(providerId) &
+                t.locationId.equals(locationId) &
+                t.date.equals(isoDate),
+          ))
+          .go();
+      await db
+          .into(db.menuCache)
+          .insert(
+            MenuCacheCompanion.insert(
+              providerId: providerId,
+              locationId: locationId,
+              date: isoDate,
+              payload: jsonEncode(day.toJson()),
+              fetchedAt: Value(DateTime.now().millisecondsSinceEpoch),
+            ),
+          );
+    });
   }
 }
 

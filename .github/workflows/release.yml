@@ -36,15 +36,16 @@ jobs:
 
       - name: Build signed split APKs
         env:
-          CHRONICLE_KEYSTORE: ${{ github.workspace }}/android/keystore/chronicle-upload.jks
           CHRONICLE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           CHRONICLE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           CHRONICLE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -f android/keystore/chronicle-upload.jks ]; then
+            export CHRONICLE_KEYSTORE=${{ github.workspace }}/android/keystore/chronicle-upload.jks
             flutter build apk --release --split-per-abi
           else
             echo 'No keystore secret — building unsigned (debug keys).'
+            unset CHRONICLE_KEYSTORE
             flutter build apk --release --split-per-abi
           fi
           # Per-ABI splits (~28MB each) instead of one ~80MB universal:
@@ -67,6 +68,10 @@ jobs:
           # bundle/lib. The chronicle binary carries $ORIGIN/lib in its
           # RUNPATH, so it finds the bundled copy with no launcher script.
           SQLITE_SO=$(ldconfig -p | grep -m1 'libsqlite3.so.0 ' | awk '{print $NF}')
+          if [ -z "$SQLITE_SO" ] || [ ! -f "$SQLITE_SO" ]; then
+            echo "Could not locate libsqlite3.so.0 via ldconfig -p" >&2
+            exit 1
+          fi
           cp "$SQLITE_SO" build/linux/x64/release/bundle/lib/libsqlite3.so
           cd build/linux/x64/release/bundle
           tar -czvf $GITHUB_WORKSPACE/chronicle-linux-${{ github.ref_name }}.tar.gz *

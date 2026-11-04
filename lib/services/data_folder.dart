@@ -176,27 +176,42 @@ class DataFolderService {
   /// When [pruneBlobs] is false (auto-sync path) unreferenced blobs are
   /// left alone: pruning without a prior merge would delete a peer's
   /// just-uploaded attachment that this device hasn't imported yet.
-  /// Manual Export prunes to reclaim space.
+  /// Manual Export prunes to reclaim space, after a best-effort merge so
+  /// unseen peer blobs are adopted before the prune scan.
   Future<DataFolderResult> exportData({bool pruneBlobs = true}) async {
     final dir = await dataDir();
     if (dir == null) {
       return const DataFolderResult(error: 'no-folder');
     }
+    String? lockOwner;
     try {
       await ensureSyncIdentity();
       if (!await dir.exists()) await dir.create(recursive: true);
+      if (pruneBlobs) {
+        try {
+          await importData();
+        } catch (_) {}
+      }
       // Best-effort export lock so concurrent auto-imports skip this
       // generation instead of merging half-written tables (per-file
       // writes below are atomic tmp+renames; this covers the
-      // between-files window). Never fails the export.
+      // between-files window). Never fails the export. The lock carries
+      // a random owner so concurrent exporters don't delete each other.
       try {
+        lockOwner =
+            '${DateTime.now().millisecondsSinceEpoch}_${newUuid()}';
         final lockTarget = File('${dir.path}/$exportLockFile');
         final lockTmp = File('${lockTarget.path}.tmp');
         await lockTmp.writeAsString(
-          jsonEncode({'startedAt': DateTime.now().millisecondsSinceEpoch}),
+          jsonEncode({
+            'startedAt': DateTime.now().millisecondsSinceEpoch,
+            'owner': lockOwner,
+          }),
         );
         await lockTmp.rename(lockTarget.path);
-      } catch (_) {}
+      } catch (_) {
+        lockOwner = null;
+      }
       // One batch: all table scans plus tombstones run concurrently
       // instead of 15 sequential round-trips (drift serializes them safely).
       final scansFuture = Future.wait([
@@ -337,9 +352,15 @@ class DataFolderService {
       } catch (_) {}
       return result;
     } finally {
-      // Best-effort: a leftover lock only delays imports until stale.
+      // Best-effort: only delete our own lock so a concurrent exporter
+      // isn't unprotected mid-generation. A leftover lock only delays
+      // imports until stale.
       try {
-        await File('${dir.path}/$exportLockFile').delete();
+        final current = await _readDecoded(dir, exportLockFile);
+        final owner = current is Map ? current['owner'] : null;
+        if (lockOwner != null && owner == lockOwner) {
+          await File('${dir.path}/$exportLockFile').delete();
+        }
       } catch (_) {}
     }
   }
@@ -371,7 +392,11 @@ class DataFolderService {
     final referenced = <String>{};
     for (final r in rows) {
       if (r.uuid.isEmpty) continue;
-      final src = File(r.storedPath);
+      final resolved = await ClassFilesService.resolveStoredPath(
+        root: storageRoot,
+        stored: r.storedPath,
+      );
+      final src = File(resolved);
       if (!await src.exists()) continue;
       final name = blobNameFor(r.uuid, r.fileName);
       referenced.add(name);
@@ -380,7 +405,9 @@ class DataFolderService {
         final sizes = await Future.wait([src.length(), target.length()]);
         if (sizes[0] == sizes[1]) continue;
       }
-      await src.copy(target.path);
+      final tmp = File('${target.path}.tmp');
+      await src.copy(tmp.path);
+      await tmp.rename(target.path);
     }
     return referenced;
   }
@@ -409,14 +436,23 @@ class DataFolderService {
     if (dir == null) {
       return const DataFolderResult(error: 'no-folder');
     }
+    Future<DataFolderResult> fail(String error, {bool surface = true}) async {
+      if (surface) {
+        try {
+          await settings.setDataSyncError(error);
+        } catch (_) {}
+      }
+      return DataFolderResult(error: error);
+    }
+
     try {
       if (!await dir.exists()) {
-        return const DataFolderResult(error: 'folder-missing');
+        return await fail('folder-missing', surface: false);
       }
       final manifestHandle = File('${dir.path}/$manifestFile');
       if (!await manifestHandle.exists()) {
         // Folder exists but no export landed here yet.
-        return const DataFolderResult(error: 'manifest-missing');
+        return await fail('manifest-missing', surface: false);
       }
       final Map<String, dynamic>? manifestRaw;
       try {
@@ -426,17 +462,15 @@ class DataFolderService {
             : null;
       } catch (e) {
         debugPrint('Data folder: unreadable $manifestFile: $e');
-        return DataFolderResult(error: 'manifest-unreadable: $e');
+        return await fail('manifest-unreadable: $e');
       }
       if (manifestRaw == null) {
         // File exists but isn't a manifest object (e.g. truncated sync).
-        return const DataFolderResult(
-          error: 'manifest-unreadable: not-a-json-object',
-        );
+        return await fail('manifest-unreadable: not-a-json-object');
       }
       final manifest = manifestRaw;
       if (!_isOurManifest(manifest)) {
-        return const DataFolderResult(error: 'not-a-data-folder');
+        return await fail('not-a-data-folder');
       }
       final tables = <String, List<Map<String, dynamic>>>{};
       for (final entry in tableFiles.entries) {
@@ -510,14 +544,17 @@ class DataFolderService {
   }
 
   /// True when any synced file (manifest, tables, tombstones, blobs) was
-  /// modified after [sinceMs]. Compares local filesystem mtimes, so peer
-  /// wall-clock skew can't hide late-arriving Syncthing files.
+  /// modified at or after [sinceMs]. Compares local filesystem mtimes, so
+  /// peer wall-clock skew can't hide late-arriving Syncthing files. Note:
+  /// Syncthing preserves source mtimes, so a late-arriving old-mtime file
+  /// can still compare older than [sinceMs]; callers must not rely on
+  /// mtime alone when the manifest generation is unseen (see import gate).
   Future<bool> folderHasNewerFiles(Directory dir, int sinceMs) async {
     Future<bool> newer(String path) async {
       try {
         final stat = await FileStat.stat(path);
         if (stat.type == FileSystemEntityType.notFound) return false;
-        return stat.modified.millisecondsSinceEpoch > sinceMs;
+        return stat.modified.millisecondsSinceEpoch >= sinceMs;
       } catch (_) {
         return false;
       }
@@ -536,7 +573,7 @@ class DataFolderService {
           if (e is File) {
             try {
               final stat = await e.stat();
-              if (stat.modified.millisecondsSinceEpoch > sinceMs) return true;
+              if (stat.modified.millisecondsSinceEpoch >= sinceMs) return true;
             } catch (_) {}
           }
         }
@@ -748,6 +785,9 @@ class DataFolderService {
     SettingsRepository.calendarViewKey,
     SettingsRepository.calendarOrientationKey,
     SettingsRepository.calendarStartTodayKey,
+    SettingsRepository.weekStartDayKey,
+    SettingsRepository.weekABAnchorKey,
+    SettingsRepository.absencesViewKey,
     SettingsRepository.dayStartMinutesKey,
     SettingsRepository.dayEndMinutesKey,
     SettingsRepository.gridMarkersModeKey,
@@ -1720,9 +1760,12 @@ class DataFolderService {
       if (uuid.isEmpty || isTombstoned(tombTable, uuid, updatedAt)) continue;
       final parentId = resolveParent(parentIdOf(row));
       if (parentId == null) continue;
+      final existing = await fetchExisting(uuid);
+      if (existing != null && updatedAt <= (existing.updatedAt as int)) {
+        continue;
+      }
       final blob = await _findBlob(dir, uuid, row.fileName as String);
       if (blob == null) continue;
-      final existing = await fetchExisting(uuid);
       final localPath = await _storeBlob(
         scope,
         parentId,
@@ -1732,7 +1775,7 @@ class DataFolderService {
       if (existing == null) {
         await insert(row, parentId, localPath);
         count++;
-      } else if (updatedAt > (existing.updatedAt as int)) {
+      } else {
         final int localUpdatedAt = existing.updatedAt as int;
         if (localUpdatedAt > lastImportBefore) {
           try {
@@ -1746,13 +1789,42 @@ class DataFolderService {
               localJson,
               m,
             );
+            // Preserve losing bytes alongside the JSON conflict so the
+            // overwritten attachment remains recoverable.
+            try {
+              final oldResolved =
+                  await ClassFilesService.resolveStoredPath(
+                    root: storageRoot,
+                    stored: existing.storedPath as String,
+                  );
+              final oldFile = File(oldResolved);
+              if (await oldFile.exists()) {
+                final outDir = Directory('${dir.path}/$conflictsDir');
+                if (!await outDir.exists()) {
+                  await outDir.create(recursive: true);
+                }
+                final at = DateTime.now().millisecondsSinceEpoch;
+                final safeUuid = uuid.replaceAll(
+                  RegExp('[^a-zA-Z0-9-]'),
+                  '_',
+                );
+                await oldFile.copy(
+                  '${outDir.path}/conflict_${tombTable}_${safeUuid}_$at.bin',
+                );
+              }
+            } catch (_) {}
           } catch (_) {}
         }
         final oldPath = existing.storedPath as String;
         await update(row, existing, parentId, localPath);
         if (oldPath != localPath) {
           try {
-            final old = File(oldPath);
+            final resolved =
+                await ClassFilesService.resolveStoredPath(
+                  root: storageRoot,
+                  stored: oldPath,
+                );
+            final old = File(resolved);
             if (await old.exists()) await old.delete();
           } catch (_) {}
         }

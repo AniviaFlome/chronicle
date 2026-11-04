@@ -26,6 +26,7 @@ import com.chronicleapp.chronicle.widget.EmptyState
 import com.chronicleapp.chronicle.widget.Hairline
 import com.chronicleapp.chronicle.widget.Keys
 import com.chronicleapp.chronicle.widget.Samples
+import com.chronicleapp.chronicle.widget.SharedTasksList
 import com.chronicleapp.chronicle.widget.TaskRow
 import com.chronicleapp.chronicle.widget.WidgetHeader
 import com.chronicleapp.chronicle.widget.WidgetShell
@@ -67,7 +68,7 @@ class DueTasksCompactHomeWidget : GlanceAppWidget() {
         val locales = ConfigurationCompat.getLocales(context.resources.configuration)
         val loc = (0 until locales.size()).mapNotNull { locales[it] }.joinToString(",")
         val snap = HomeWidgetPlugin.getData(context).snapshot(Keys.DUE_TASKS)
-        return "v2|dt|$loc|${snap.useYou}|${snap.themeCode}"
+        return "v3|dt|$loc|${snap.useYou}|${snap.themeCode}"
     }
 }
 
@@ -103,9 +104,16 @@ private fun TasksContent(
                 if (tasks.isEmpty()) {
                     // "All caught up" — an intentional, reassuring empty state.
                     EmptyState(palette, R.drawable.ic_widget_done_all, snap.emptyText)
+                } else if (h >= 250.dp) {
+                    // Same rows as the hub tasks tab ([SharedTasksList]):
+                    // a copy, not a second design. Short tiers below keep
+                    // their fitting take as the space adjustment.
+                    SharedTasksList(palette, tasks)
                 } else {
-                    for (task in tasks.take(take)) {
-                        TaskRow(palette, task.title, task.date, task.urgent)
+                    val shown = tasks.take(take)
+                    for ((i, task) in shown.withIndex()) {
+                        if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
+                        TaskRow(palette, task.title, task.date, task.urgent, task.className, task.steps)
                     }
                 }
             }

@@ -22,7 +22,6 @@ import androidx.core.os.ConfigurationCompat
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalSize
-import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.action.actionParametersOf
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.GlanceAppWidget
@@ -45,6 +44,7 @@ import com.chronicleapp.chronicle.widget.Hairline
 import com.chronicleapp.chronicle.widget.Keys
 import com.chronicleapp.chronicle.widget.MoreIndicator
 import com.chronicleapp.chronicle.widget.Samples
+import com.chronicleapp.chronicle.widget.SharedAgendaList
 import com.chronicleapp.chronicle.widget.TimeRow
 import com.chronicleapp.chronicle.widget.WeekCell
 import com.chronicleapp.chronicle.widget.WeekCellView
@@ -211,23 +211,9 @@ private fun AgendaContent(
                         Spacer(modifier = GlanceModifier.height(6.dp))
                         MoreIndicator(palette, rows.size - shown.size)
                     } else {
-                        // Scrollable day rows: LazyColumn fills the remaining
-                        // space via weight, so every class is reachable at
-                        // any widget height — no cap, no "+N more". (A
-                        // wrap-content list would measure only its first
-                        // item; weight against the bounded shell is what
-                        // makes this work — same mechanism as the menu.)
-                        // Each item wraps in a Column: multi-root items do
-                        // not stack reliably (spacers collapse to zero).
-                        LazyColumn(modifier = GlanceModifier.defaultWeight()) {
-                            items(rows.size) { i ->
-                                Column(modifier = GlanceModifier.fillMaxWidth()) {
-                                    if (i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
-                                    val row = rows[i]
-                                    ClassRow(context, palette, row.time, row.name, row.colorHex)
-                                }
-                            }
-                        }
+                        // Same rows as the hub agenda tab
+                        // ([SharedAgendaList]): a copy, not a second design.
+                        SharedAgendaList(context, palette, rows)
                     }
                 }
             }

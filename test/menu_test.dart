@@ -6,6 +6,7 @@ import 'package:chronicle/data/repositories.dart';
 import 'package:chronicle/l10n/l10n.dart';
 import 'package:chronicle/providers.dart';
 import 'package:chronicle/screens/menu_screen.dart';
+import 'package:chronicle/services/home_widgets.dart';
 import 'package:chronicle/services/menu/hacettepe_provider.dart';
 import 'package:chronicle/services/menu/itu_provider.dart';
 import 'package:chronicle/services/menu/menu_provider.dart';
@@ -1285,6 +1286,67 @@ void main() {
       expect(find.text('Beytepe'), findsOneWidget);
       expect(find.text('Sıhhiye'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('widget push dishes', () {
+    // Live Hacettepe breakfast serves 9 items; the old per-meal cap of 8
+    // silently dropped the last one (Ekmek) from every widget.
+    ServedMeal nineItemBreakfast() => ServedMeal(
+      kind: 'sabah',
+      serviceHours: '07:00 - 09:00',
+      dishes: [
+        for (final n in const [
+          'Çay',
+          'Poğaça',
+          'Haşlanmış Yumurta',
+          'Kaşar Peynir',
+          'Domates',
+          'Salatalık',
+          'Siyah Zeytin',
+          'Tereyağ-Reçel',
+          'Ekmek (50 gr)',
+        ])
+          MenuDish(name: n, category: ''),
+      ],
+    );
+
+    test('pushedDishNames keeps a full live-size breakfast', () {
+      final names = pushedDishNames(nineItemBreakfast());
+      expect(names, hasLength(9));
+      expect(names.last, 'Ekmek (50 gr)');
+    });
+
+    test('pushedDishNames drops blanks and respects the cap', () {
+      final meal = ServedMeal(
+        kind: 'ogle',
+        serviceHours: '',
+        dishes: [
+          const MenuDish(name: 'Çorba', category: ''),
+          const MenuDish(name: '   ', category: ''),
+          for (var i = 0; i < pushedDishesPerMeal + 4; i++)
+            MenuDish(name: 'Dish $i', category: ''),
+        ],
+      );
+      // take(12) keeps [Çorba, blank, Dish 0..9]; the blank is dropped.
+      final names = pushedDishNames(meal);
+      expect(names, hasLength(pushedDishesPerMeal - 1));
+      expect(names.first, 'Çorba');
+      expect(names.last, 'Dish ${pushedDishesPerMeal - 3}');
+      expect(names.every((n) => n.trim().isNotEmpty), isTrue);
+
+      // Without blanks the cap fills exactly.
+      final full = ServedMeal(
+        kind: 'ogle',
+        serviceHours: '',
+        dishes: [
+          for (var i = 0; i < pushedDishesPerMeal + 4; i++)
+            MenuDish(name: 'Dish $i', category: ''),
+        ],
+      );
+      final capped = pushedDishNames(full);
+      expect(capped, hasLength(pushedDishesPerMeal));
+      expect(capped.last, 'Dish ${pushedDishesPerMeal - 1}');
     });
   });
 }

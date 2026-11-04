@@ -62,6 +62,17 @@ String buildIcs({required List<IcsEvent> events}) {
         e.start.minute == 0 &&
         e.start.second == 0) {
       buffer.writeln('DTSTART;VALUE=DATE:${_date(e.start)}');
+    } else if (e.start.hour == 0 &&
+        e.start.minute == 0 &&
+        e.start.second == 0 &&
+        e.end != null &&
+        e.end!.hour == 0 &&
+        e.end!.minute == 0 &&
+        e.end!.second == 0) {
+      // All-day range: keep the DATE form so re-import/re-export round-trips
+      // instead of degrading to timed midnight instances.
+      buffer.writeln('DTSTART;VALUE=DATE:${_date(e.start)}');
+      buffer.writeln('DTEND;VALUE=DATE:${_date(e.end!)}');
     } else {
       buffer.writeln('DTSTART:${_stamp(e.start)}');
       if (e.end != null) buffer.writeln('DTEND:${_stamp(e.end!)}');
@@ -134,26 +145,42 @@ DateTime? _parseIcsDate(String value) {
   final core = utc ? v.substring(0, v.length - 1) : v;
   DateTime? parsed;
   if (RegExp(r'^\d{8}$').hasMatch(core)) {
-    parsed = DateTime(
-      int.parse(core.substring(0, 4)),
-      int.parse(core.substring(4, 6)),
-      int.parse(core.substring(6, 8)),
-    );
+    final y = int.parse(core.substring(0, 4));
+    final mo = int.parse(core.substring(4, 6));
+    final d = int.parse(core.substring(6, 8));
+    if (!_validYmd(y, mo, d)) return null;
+    parsed = utc
+        ? DateTime.utc(y, mo, d)
+        : DateTime(y, mo, d);
   } else {
     final m = RegExp(r'^(\d{8})T(\d{6})$').firstMatch(core);
     if (m == null) return null;
     final d = m.group(1)!;
     final t = m.group(2)!;
-    parsed = DateTime(
-      int.parse(d.substring(0, 4)),
-      int.parse(d.substring(4, 6)),
-      int.parse(d.substring(6, 8)),
-      int.parse(t.substring(0, 2)),
-      int.parse(t.substring(2, 4)),
-      int.parse(t.substring(4, 6)),
-    );
+    final y = int.parse(d.substring(0, 4));
+    final mo = int.parse(d.substring(4, 6));
+    final dd = int.parse(d.substring(6, 8));
+    final hh = int.parse(t.substring(0, 2));
+    final mi = int.parse(t.substring(2, 4));
+    final ss = int.parse(t.substring(4, 6));
+    if (!_validYmd(y, mo, dd)) return null;
+    if (hh < 0 || hh > 23 || mi < 0 || mi > 59 || ss < 0 || ss > 59) {
+      return null;
+    }
+    parsed = utc
+        ? DateTime.utc(y, mo, dd, hh, mi, ss)
+        : DateTime(y, mo, dd, hh, mi, ss);
   }
   return utc ? parsed.toLocal() : parsed;
+}
+
+/// Range-checks a calendar date: the DateTime constructor rolls over
+/// out-of-range values (month 13 -> next January, Feb 30 -> March), so
+/// validate before constructing to honor the null-on-bad-input contract.
+bool _validYmd(int y, int mo, int d) {
+  if (mo < 1 || mo > 12 || d < 1) return false;
+  final last = DateTime(y, mo + 1, 0).day;
+  return d <= last;
 }
 
 int _weekdayFromByDay(String code) => switch (code) {
@@ -269,9 +296,18 @@ List<IcsEvent> _expandEvent(Map<String, String> props) {
   final freq = rule['FREQ'];
   if (freq != 'DAILY' && freq != 'WEEKLY') return [at(start)];
 
-  var count = int.tryParse(rule['COUNT'] ?? '');
+  // Fail closed on malformed COUNT/UNTIL: a present-but-unparsable bound
+  // must not widen expansion to the horizon/500 cap.
+  int? count;
+  if (rule.containsKey('COUNT')) {
+    count = int.tryParse(rule['COUNT'] ?? '');
+    if (count == null) return [at(start)];
+  }
   DateTime? until;
-  if (rule['UNTIL'] != null) until = _parseIcsDate(rule['UNTIL']!);
+  if (rule['UNTIL'] != null) {
+    until = _parseIcsDate(rule['UNTIL']!);
+    if (until == null) return [at(start)];
+  }
   final byDay = (rule['BYDAY'] ?? '')
       .split(',')
       .map(_weekdayFromByDay)
@@ -293,8 +329,11 @@ List<IcsEvent> _expandEvent(Map<String, String> props) {
       break;
     }
     if (count != null && produced >= count) break;
+    // DAILY with BYDAY filters to the listed weekdays (e.g. weekdays-only
+    // feeds); DAILY without BYDAY keeps every day. WEEKLY without BYDAY
+    // keeps the start weekday.
     final matches = freq == 'DAILY'
-        ? true
+        ? (byDay.isEmpty || byDay.contains(cursor.weekday))
         : byDay.isEmpty
         ? cursor.weekday == start.weekday
         : byDay.contains(cursor.weekday);

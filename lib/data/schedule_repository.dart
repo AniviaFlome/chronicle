@@ -120,7 +120,7 @@ class ScheduleRepository {
     }
     final classes = await classQuery.get();
     final itemsQuery = db.select(db.scheduleItems);
-    if (classIds != null && classIds.isNotEmpty) {
+    if (classIds != null) {
       itemsQuery.where((s) => s.classId.isIn(classIds));
     }
     final items = await itemsQuery.get();

@@ -7,6 +7,7 @@ import '../data/repositories.dart';
 import '../data/tables.dart';
 import '../domain/schedule_models.dart' as engine;
 import '../providers.dart';
+import '../services/home_widgets.dart';
 import '../l10n/l10n.dart';
 import '../utils/time_format.dart';
 import 'occurrence_sheet.dart';
@@ -202,17 +203,27 @@ class _TaskTile extends ConsumerWidget {
         value: task.isDone,
         controlAffinity: ListTileControlAffinity.leading,
         onChanged: (v) async {
-          final done = v ?? false;
-          final spawned = await ref
-              .read(taskRepositoryProvider)
-              .setDone(task.id, done);
-          if (done) {
-            await ref.read(reminderSchedulerProvider).cancelTask(task.id);
-          } else {
-            await ref.read(reminderSchedulerProvider).refreshTask(task.id);
-          }
-          if (spawned != null) {
-            await ref.read(reminderSchedulerProvider).refreshTask(spawned);
+          final container = ProviderScope.containerOf(context);
+          try {
+            final done = v ?? false;
+            final spawned = await ref
+                .read(taskRepositoryProvider)
+                .setDone(task.id, done);
+            if (done) {
+              await ref.read(reminderSchedulerProvider).cancelTask(task.id);
+            } else {
+              await ref.read(reminderSchedulerProvider).refreshTask(task.id);
+            }
+            if (spawned != null) {
+              await ref.read(reminderSchedulerProvider).refreshTask(spawned);
+            }
+            await refreshHomeWidgets(container);
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('$e')));
+            }
           }
         },
         title: Text(

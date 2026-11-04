@@ -60,9 +60,14 @@ android {
         release {
             // Release signing comes from the environment (CI secrets). When
             // absent — local builds — fall back to debug keys so
-            // `flutter run --release` keeps working.
+            // `flutter run --release` keeps working. The keystore path must
+            // point at an existing file; a dangling path (e.g. CI without
+            // the secret) also falls back instead of breaking the build.
             signingConfig = signingConfigs.getByName(
-                if (!System.getenv("CHRONICLE_KEYSTORE").isNullOrEmpty()) "release" else "debug"
+                run {
+                    val p = System.getenv("CHRONICLE_KEYSTORE")
+                    if (!p.isNullOrEmpty() && file(p).exists()) "release" else "debug"
+                }
             )
             // R8 keep rules for Glance ActionCallbacks (see
             // proguard-rules.pro): release builds minify, and stripped

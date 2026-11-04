@@ -184,7 +184,7 @@ class ScheduleOccurrenceEngine {
   }
 
   /// Days (local midnight) between [from] and [to] inclusive that would have
-  /// occurrences, ignoring holidays — used for attendance statistics like
+  /// occurrences, excluding holidays — used for attendance statistics like
   /// "3 of 15 lessons missed".
   List<DateTime> teachingDays({
     required DateTime from,
