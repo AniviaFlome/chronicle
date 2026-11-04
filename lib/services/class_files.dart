@@ -115,14 +115,26 @@ class ClassFilesService {
   }
 
   /// Absolutizes a stored path: absolute (legacy) rows pass through,
-  /// relative rows resolve against the app support directory.
+  /// relative rows resolve against the app support directory. Relative
+  /// paths are normalized and must stay inside the base directory:
+  /// `../../` escapes (e.g. from a tampered local DB) throw instead of
+  /// resolving outside the support dir.
   static Future<String> resolveStoredPath({
     required Directory? root,
     required String stored,
   }) async {
     if (stored.startsWith('/')) return stored;
     final base = root ?? await getApplicationSupportDirectory();
-    return '${base.path}/$stored';
+    final normalized = Uri.file(
+      '${base.path}/$stored',
+    ).toFilePath();
+    final baseWithSep = base.path.endsWith('/')
+        ? base.path
+        : '${base.path}/';
+    if (normalized != base.path && !normalized.startsWith(baseWithSep)) {
+      throw StateError('Stored path escapes support directory');
+    }
+    return normalized;
   }
 
   /// Opens a stored file by name and path: share sheet where supported

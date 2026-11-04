@@ -372,7 +372,10 @@ class ReminderScheduler {
       if (item.fire.isAfter(now)) continue;
       if (now.difference(item.fire) > const Duration(minutes: 15)) continue;
       final key = 'fired_class_${item.id}';
-      if (await settings.get(key) != null) continue;
+      // Compare the stored fire instant (not mere existence): a lead-time or
+      // schedule edit that moves the fire must re-fire instead of being
+      // suppressed by a stale marker. Matches the task-reminder gate above.
+      if (await settings.get(key) == item.fire.toIso8601String()) continue;
       await NotificationService.instance.showNow(
         id: item.id,
         title: item.title,

@@ -98,6 +98,12 @@ class FolderSyncController {
     _debounceTimer = Timer(exportDebounce, () => _exportIfNeeded());
   }
 
+  /// Explicit export trigger for portable settings changes (theme,
+  /// calendar geometry, menu source, …), which live in the settings table
+  /// that [start] deliberately does not watch to avoid bookkeeping churn.
+  /// Call after changing a key in [DataFolderService.syncedSettingKeys].
+  void scheduleExport() => _markDirty();
+
   /// Watches the data folder for external (Syncthing) changes. Debounced
   /// into [importIfNewer]; re-arms when the user picks a new folder.
   Future<void> _ensureWatching() async {

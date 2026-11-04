@@ -22,6 +22,19 @@ import '../utils/ui_feedback.dart';
 import './menu/menu_sources.dart';
 import 'widget_push.dart';
 
+/// Dish names pushed per servable meal, in day order. The cap exists to
+/// bound the prefs payload and the RemoteViews list — but it must cover a
+/// full serving: live Hacettepe breakfast has 9 items, and the old cap of
+/// 8 silently dropped the last one (Ekmek). Visible for tests.
+const pushedDishesPerMeal = 12;
+
+/// Maps one servable meal to its pushed dish-name list ([pushedDishesPerMeal]
+/// cap, blanks dropped). Visible for tests.
+List<String> pushedDishNames(ServedMeal m) => [
+  for (final d in m.dishes.take(pushedDishesPerMeal))
+    if (d.name.trim().isNotEmpty) d.name,
+];
+
 /// Last-sent payload fingerprint per widget prefix (in-memory only).
 /// See `updateIfChanged` inside `_push`.
 final _lastWidgetPayload = <String, String>{};
@@ -412,6 +425,14 @@ Future<void> _push(ProviderContainer container) async {
         'title': t.task.title,
         'date': taskDateLabel(t.task.dueDate!, t.task.dueMinutes),
         'urgent': daysUntil(t.task.dueDate!, now) < 0,
+        // Details meta line on the native side ("Physics · 1/2 steps").
+        'class': t.classRow?.name ?? '',
+        'steps': t.subtasks.isEmpty
+            ? ''
+            : l10n.stepsCount(
+                t.subtasks.where((s) => s.isDone).length,
+                t.subtasks.length,
+              ),
       },
   ];
   final tasksCount = '${dated.length}';
@@ -426,32 +447,52 @@ Future<void> _push(ProviderContainer container) async {
   final tabAgenda = await settings.hubTabAgenda();
   final tabTasks = await settings.hubTabTasks();
   final tabMenu = await settings.hubTabMenu();
-  // Menu: every servable meal today, in day order. The default index
-  // mirrors the menu page's own rule (_syncMealToDay without a previous
-  // selection: first meal with dishes). The widget keeps a native-owned
-  // kind override (arrows); it falls back to this default when the
-  // override is unset or no longer servable.
+  // Menu: every servable meal today, in day order. The default mirrors
+  // the menu page's lunch-first rule: lunch when servable, otherwise the
+  // first servable meal. The widget keeps a native-owned kind override
+  // (arrows); it falls back to this default when the override is unset or
+  // no longer servable.
   String hubMenuTitle = l10n.navMenu;
   var hubMenu = const <String>[];
   var menuMeals = const <Map<String, Object?>>[];
-  const menuMealDefault = 0;
+  var menuMealDefault = 0;
   {
     final providerId = await settings.menuProviderId();
-    final locationId = await settings.menuLocation();
+    final savedLocation = await settings.menuLocation();
     if (providerId.isNotEmpty) {
       final db = container.read(appDatabaseProvider);
       final repo = MenuCacheRepository(db);
+      final factory = menuSources[providerId]?.create;
+      final probe = factory?.call();
+      final locationId = (probe != null && probe.locations.isNotEmpty)
+          ? (probe.locations.containsKey(savedLocation)
+              ? savedLocation
+              : probe.locations.keys.first)
+          : savedLocation;
+      probe?.close();
       var cached = await repo.cachedDay(
         providerId,
         locationId,
         isoFromDateTime(today),
       );
+      MenuProvider? selfHealProvider;
+      if (cached != null && factory != null) {
+        try {
+          selfHealProvider = factory();
+          if (!selfHealProvider.isCacheValid(cached.day)) {
+            cached = null;
+          }
+        } catch (_) {
+        } finally {
+          selfHealProvider?.close();
+          selfHealProvider = null;
+        }
+      }
       // Self-healing: the widget push only ever reads the cache, so a
       // missing day (source picked but menu page never opened) would leave
       // widgets permanently empty. Best-effort fetch with a short timeout;
       // any failure keeps the previous behavior (empty state).
       if (cached == null) {
-        final factory = menuSources[providerId]?.create;
         if (factory != null) {
           try {
             final provider = factory();
@@ -459,12 +500,17 @@ Future<void> _push(ProviderContainer container) async {
               final day = await provider
                   .fetchDay(today, locationId)
                   .timeout(const Duration(seconds: 8));
-              await repo.storeDay(
-                providerId,
-                locationId,
-                isoFromDateTime(today),
-                day,
-              );
+              // Mirror the menu page: never cache an all-empty day, or the
+              // fresh-but-empty row would satisfy the TTL gate and hide a
+              // later publish until expiry.
+              if (day.meals.any((m) => m.dishes.isNotEmpty)) {
+                await repo.storeDay(
+                  providerId,
+                  locationId,
+                  isoFromDateTime(today),
+                  day,
+                );
+              }
               cached = await repo.cachedDay(
                 providerId,
                 locationId,
@@ -498,10 +544,14 @@ Future<void> _push(ProviderContainer container) async {
               {
                 'kind': m.kind,
                 'title': mealTitle(m),
-                'dishes': [for (final d in m.dishes.take(8)) d.name],
+                'dishes': pushedDishNames(m),
               },
         ];
         if (menuMeals.isNotEmpty) {
+          // Lunch default: the lunch tab when it is servable, else the
+          // first servable meal (mirrors the menu page).
+          final lunchIdx = menuMeals.indexWhere((e) => e['kind'] == 'ogle');
+          if (lunchIdx >= 0) menuMealDefault = lunchIdx;
           hubMenuTitle = menuMeals[menuMealDefault]['title'] as String;
           hubMenu = [
             for (final d in (menuMeals[menuMealDefault]['dishes'] as List))

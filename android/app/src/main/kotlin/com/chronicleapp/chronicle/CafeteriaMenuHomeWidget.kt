@@ -36,9 +36,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
-import androidx.glance.appwidget.lazy.LazyColumn
 import com.chronicleapp.chronicle.widget.ChroniclePalette
-import com.chronicleapp.chronicle.widget.DishRow
 import com.chronicleapp.chronicle.widget.EmptyState
 import com.chronicleapp.chronicle.widget.Keys
 import com.chronicleapp.chronicle.widget.MealSwitcher
@@ -46,11 +44,13 @@ import com.chronicleapp.chronicle.widget.MenuMeal
 import com.chronicleapp.chronicle.widget.MenuMealDirectionKey
 import com.chronicleapp.chronicle.widget.menuNavBump
 import com.chronicleapp.chronicle.widget.SectionHeader
+import com.chronicleapp.chronicle.widget.SharedMenuList
 import com.chronicleapp.chronicle.widget.StandaloneMenuMealCallback
 import com.chronicleapp.chronicle.widget.VerticalBucket
 import com.chronicleapp.chronicle.widget.VerticalShell
 import com.chronicleapp.chronicle.widget.WidgetSnapshot
 import com.chronicleapp.chronicle.widget.currentVerticalBucket
+import com.chronicleapp.chronicle.widget.deviceTodayIso
 import com.chronicleapp.chronicle.widget.int
 import com.chronicleapp.chronicle.widget.parseMenuMeals
 import com.chronicleapp.chronicle.widget.parseStrings
@@ -134,6 +134,8 @@ class CafeteriaMenuHomeWidget : GlanceAppWidget() {
                 meals,
                 prefs.int("$prefix.${Keys.MENU_MEAL_DEFAULT}", 0),
                 prefs.str("$prefix.${Keys.MENU_MEAL_KIND}"),
+                prefs.str("$prefix.${Keys.MENU_MEAL_KIND_DATE}"),
+                deviceTodayIso(),
             )
             val title = meal?.title ?: prefs.str("$prefix.${Keys.MENU_TITLE}")
             val served = meal?.dishes ?: dishes
@@ -230,19 +232,9 @@ private fun TallColumn(
             Spacer(modifier = GlanceModifier.height(4.dp))
         }
         val rows = state.dishes
-        // Scrollable list: LazyColumn fills the remaining space via weight
-        // (a wrap-content list would measure only its first item — the exact
-        // failure that got LazyColumn banned here before). Every dish is
-        // reachable by scrolling: no cap, no "+N more". Items wrap in
-        // their own Column: bare single-node items mismeasure.
-        LazyColumn(modifier = GlanceModifier.defaultWeight()) {
-            items(rows.size) { i ->
-                Column(modifier = GlanceModifier.fillMaxWidth()) {
-                    if (i > 0) Spacer(modifier = GlanceModifier.height(4.dp))
-                    DishRow(palette, rows[i])
-                }
-            }
-        }
+        // Same rows as the hub menu tab ([SharedMenuList]): a copy,
+        // not a second design.
+        SharedMenuList(palette, rows)
     }
 }
 
@@ -286,15 +278,8 @@ private fun FullPortrait(
             }
         }
         val rows = state.dishes
-        // Scrollable list (see TallColumn): every dish reachable, no cap.
-        // Items wrap in their own Column: bare single-node items mismeasure.
-        LazyColumn(modifier = GlanceModifier.defaultWeight()) {
-            items(rows.size) { i ->
-                Column(modifier = GlanceModifier.fillMaxWidth()) {
-                    if (i > 0) Spacer(modifier = GlanceModifier.height(4.dp))
-                    DishRow(palette, rows[i])
-                }
-            }
-        }
+        // Same rows as the hub menu tab ([SharedMenuList]): a copy,
+        // not a second design.
+        SharedMenuList(palette, rows)
     }
 }

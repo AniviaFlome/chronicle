@@ -2,8 +2,9 @@
 <!-- Static picker preview for the Due tasks checklist widget (WD-1).
      Hand-written RemoteViews-safe markup (no bare <View>): checkboxes are
      ring ImageViews, the hairline an ImageView. Mirrors TasksContent in
-     DueTasksCompactHomeWidget.kt + Samples.tasks (urgent row bold with an
-     error chip). Palette = theme-0 light (FEF7FF / 1C1B1F / 4F6BED). -->
+     DueTasksCompactHomeWidget.kt + Samples.tasks (dense rows: 14sp
+     single-line title, 11sp class · steps meta, 16dp box, urgent row bold
+     with an error chip). Palette = theme-0 light (FEF7FF / 1C1B1F / 4F6BED). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -61,27 +62,48 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:background="@drawable/preview_shape_block"
+        android:backgroundTint="#F3EDF7"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp">
 
         <ImageView
-            android:layout_width="18dp"
-            android:layout_height="18dp"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
             android:background="@drawable/preview_shape_ring"
             android:backgroundTint="#79747E"
             android:contentDescription="@null" />
 
-        <TextView
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginStart="10dp"
-            android:text="Submit lab report"
-            android:textSize="15sp"
-            android:textColor="#1C1B1F"
-            android:maxLines="2"
-            android:ellipsize="end" />
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Submit lab report"
+                android:textSize="14sp"
+                android:textColor="#1C1B1F"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Physics · 1/2 steps"
+                android:textSize="11sp"
+                android:textColor="#49454F"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
@@ -101,27 +123,48 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:background="@drawable/preview_shape_block"
+        android:backgroundTint="#F3EDF7"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp">
 
         <ImageView
-            android:layout_width="18dp"
-            android:layout_height="18dp"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
             android:background="@drawable/preview_shape_ring"
             android:backgroundTint="#79747E"
             android:contentDescription="@null" />
 
-        <TextView
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginStart="10dp"
-            android:text="Read chapter 4"
-            android:textSize="15sp"
-            android:textColor="#1C1B1F"
-            android:maxLines="2"
-            android:ellipsize="end" />
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Read chapter 4"
+                android:textSize="14sp"
+                android:textColor="#1C1B1F"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="History"
+                android:textSize="11sp"
+                android:textColor="#49454F"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
@@ -141,34 +184,55 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:background="@drawable/preview_shape_block"
+        android:backgroundTint="#F9DEDC"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp">
 
         <ImageView
-            android:layout_width="18dp"
-            android:layout_height="18dp"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
             android:background="@drawable/preview_shape_ring"
             android:backgroundTint="#79747E"
             android:contentDescription="@null" />
 
-        <TextView
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginStart="10dp"
-            android:text="Problem set 5"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:textColor="#1C1B1F"
-            android:maxLines="2"
-            android:ellipsize="end" />
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Problem set 5"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#1C1B1F"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Mathematics · 0/1 steps"
+                android:textSize="11sp"
+                android:textColor="#49454F"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@drawable/preview_shape_chip"
-            android:backgroundTint="#F9DEDC"
+            android:backgroundTint="#BA1A1A"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
             android:paddingTop="3dp"
@@ -176,6 +240,6 @@
             android:text="yesterday"
             android:textSize="11sp"
             android:textStyle="bold"
-            android:textColor="#601410" />
+            android:textColor="#FFFFFF" />
     </LinearLayout>
 </LinearLayout>

@@ -49,8 +49,9 @@ abstract final class WidgetKeys {
   static const week = 'week';
   // day0..day6 built as 'day$index'.
 
-  // DueTasksCompact. `tasks` is [{title, date, urgent}]. tasksCount is the
-  // string form of the number shown in the count pill.
+  // DueTasksCompact. `tasks` is [{title, date, urgent, class, steps}];
+  // class/steps ride the details meta line ("Physics · 1/2 steps").
+  // tasksCount is the string form of the number shown in the count pill.
   static const headerTitle = 'headerTitle';
   static const tasksCount = 'tasksCount';
   static const tasks = 'tasks';
@@ -69,17 +70,21 @@ abstract final class WidgetKeys {
   static const tasksTitle = 'tasksTitle';
   // Menu (hub tab + standalone widget). `menuMeals` is every servable
   // meal today: [{kind, title, dishes[]}] in day order; `menuMealDefault`
-  // is the index the menu page itself would open (_syncMealToDay without a
-  // previous selection: first meal with dishes). `menuMealKind` is
+  // is the lunch-first index the menu page itself would open (lunch when
+  // servable, else first servable). `menuMealKind` is
   // native-owned (the kind the user picked with the widget arrows) and
-  // never pushed — native falls back to the default when it is absent or
-  // no longer servable. `menuTitle`/`menuRows` stay as the default meal's
-  // snapshot for backward compatibility.
+  // never pushed — native falls back to the lunch-first default when it
+  // is absent or no longer servable. `menuMealKindDate` day-scopes that
+  // pick (yyyy-MM-dd, written natively on every arrow step): it sticks
+  // for the day, then the default wins again — same reset-to-today
+  // contract as the agenda's `selectedDay`. `menuTitle`/`menuRows` stay
+  // as the default meal's snapshot for backward compatibility.
   static const menuTitle = 'menuTitle';
   static const menuRows = 'menuRows';
   static const menuMeals = 'menuMeals';
   static const menuMealDefault = 'menuMealDefault';
   static const menuMealKind = 'menuMealKind';
+  static const menuMealKindDate = 'menuMealKindDate';
   static const titleClass = 'titleClass';
   static const titleAgenda = 'titleAgenda';
   static const emptyTasks = 'emptyTasks';

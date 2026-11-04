@@ -1,5 +1,6 @@
 import 'package:chronicle/data/database.dart';
 import 'package:chronicle/data/repositories.dart';
+import 'package:chronicle/utils/time_format.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,8 @@ import 'e2e_harness.dart';
 /// live: seeding marks and adding more updates the count without a restart.
 void main() {
   testWidgets('quota card tracks unexcused marks', (tester) async {
+    String isoDaysFromNow(int days) =>
+        isoFromDateTime(shiftDays(DateTime.now(), days));
     final db = AppDatabase(NativeDatabase.memory());
     final classId = (await tester.runAsync(() async {
       final id = await seedClassToday(
@@ -20,7 +23,7 @@ void main() {
       await AbsenceRepository(db).mark(
         AbsencesCompanion.insert(
           classId: id,
-          date: todayIso(),
+          date: isoDaysFromNow(0),
           startMinutes: 540,
           endMinutes: 600,
         ),
@@ -45,7 +48,7 @@ void main() {
       () => AbsenceRepository(db).mark(
         AbsencesCompanion.insert(
           classId: classId,
-          date: todayIso(),
+          date: isoDaysFromNow(7),
           startMinutes: 540,
           endMinutes: 600,
         ),
@@ -66,7 +69,7 @@ void main() {
       () => AbsenceRepository(db).mark(
         AbsencesCompanion.insert(
           classId: classId,
-          date: todayIso(),
+          date: isoDaysFromNow(14),
           startMinutes: 540,
           endMinutes: 600,
         ),

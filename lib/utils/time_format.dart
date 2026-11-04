@@ -122,7 +122,7 @@ generateFixedGrid({
 String shortWeekdayName(int weekday, String locale) {
   const en = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const tr = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-  final list = locale == 'tr' ? tr : en;
+  final list = locale.toLowerCase().startsWith('tr') ? tr : en;
   return list[weekday.clamp(1, 7) - 1];
 }
 
@@ -146,6 +146,6 @@ String fullWeekdayName(int weekday, String locale) {
     'Cumartesi',
     'Pazar',
   ];
-  final list = locale == 'tr' ? tr : en;
+  final list = locale.toLowerCase().startsWith('tr') ? tr : en;
   return list[weekday.clamp(1, 7) - 1];
 }

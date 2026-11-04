@@ -12,6 +12,8 @@ finish-args:
   - --socket=fallback-x11
   - --socket=wayland
   - --device=dri
+  # Dining menus + course catalog fetch over HTTPS.
+  - --share=network
   # flutter_local_notifications shows Linux reminders via libnotify.
   - --talk-name=org.freedesktop.Notifications
   # No --filesystem=host: the app DB lives in XDG app-data (sandboxed

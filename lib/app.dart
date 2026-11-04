@@ -186,9 +186,11 @@ class _Shell extends StatelessWidget {
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
     final items = _navItems(context.l10n);
-    final selectedIndex = items
-        .indexWhere((i) => i.location == location)
-        .clamp(0, items.length - 1);
+    // Unknown locations (editors, grades, focus) must not highlight Today:
+    // indexWhere returns -1, which maps to null (no selection) instead of
+    // clamping to 0.
+    final rawIndex = items.indexWhere((i) => i.location == location);
+    final int? selectedIndex = rawIndex < 0 ? null : rawIndex;
     final width = MediaQuery.of(context).size.width;
     final wide = width >= 900;
     final rail = width >= 600;
@@ -231,7 +233,7 @@ class _Shell extends StatelessWidget {
 /// instead gives each destination an equal [Expanded] slot with a
 /// single-line ellipsis label, so nothing wraps and nothing moves.
 class _PhoneNavBar extends StatelessWidget {
-  final int selectedIndex;
+  final int? selectedIndex;
   final List<_NavItem> items;
   final ValueChanged<int> onSelect;
 

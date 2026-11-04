@@ -196,16 +196,25 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     await _load();
   }
 
-  /// Keeps the meal tab pointing at something servable after a load: the
-  /// previous selection wins when it still has dishes, otherwise the first
-  /// meal with dishes (e.g. breakfast-only days default to breakfast
-  /// instead of an empty lunch tab), otherwise the first meal.
+  /// Canonical breakfast/lunch/dinner order. Lunch (`ogle`) is the default
+  /// tab; vegan rides along as a fourth tab only when the day carries it.
+  static const _mealOrder = ['sabah', 'ogle', 'aksam'];
+
+  /// Keeps the meal tab pointing at something servable after a load, with
+  /// lunch preferred: the previous selection wins when it still has dishes,
+  /// otherwise lunch when it has dishes, otherwise the first meal with
+  /// dishes (e.g. breakfast-only days default to breakfast instead of an
+  /// empty lunch tab), otherwise lunch when present (all-empty days open on
+  /// lunch, not breakfast), otherwise the first meal.
   void _syncMealToDay(MenuDay day) {
     if (day.meals.isEmpty) return;
     for (final m in day.meals) {
-      if (m.kind == _meal) {
-        if (m.dishes.isNotEmpty) return;
-        break;
+      if (m.kind == _meal && m.dishes.isNotEmpty) return;
+    }
+    for (final m in day.meals) {
+      if (m.kind == 'ogle' && m.dishes.isNotEmpty) {
+        _meal = 'ogle';
+        return;
       }
     }
     for (final m in day.meals) {
@@ -214,7 +223,25 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         return;
       }
     }
+    for (final m in day.meals) {
+      if (m.kind == 'ogle') {
+        _meal = 'ogle';
+        return;
+      }
+    }
     _meal = day.meals.first.kind;
+  }
+
+  /// Meal tabs to show: always breakfast/lunch/dinner (so ITU days without
+  /// a breakfast section still offer the switcher), plus vegan and any other
+  /// provider-specific kinds carried by the day, in day order after the
+  /// canonical three.
+  List<String> _visibleMealKinds(MenuDay day) {
+    final kinds = <String>[..._mealOrder];
+    for (final m in day.meals) {
+      if (!kinds.contains(m.kind)) kinds.add(m.kind);
+    }
+    return kinds;
   }
 
   String _mealLabel(String kind) {
@@ -232,9 +259,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final day = _day;
+    // The selected tab may name a canonical kind with no section on this
+    // day (e.g. breakfast on ITU, which publishes lunch + dinner only):
+    // that is an empty selection, not the first meal, so the page shows
+    // the empty state until the user switches tabs.
     ServedMeal? meal;
     if (day != null && day.meals.isNotEmpty) {
-      meal = day.meals.first;
       for (final m in day.meals) {
         if (m.kind == _meal) {
           meal = m;
@@ -350,7 +380,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 ),
               ],
             ),
-            if (day != null && day.meals.length > 1) ...[
+            if (day != null) ...[
               const SizedBox(height: 12),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -360,16 +390,18 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                     tapTargetSize: MaterialTapTargetSize.padded,
                   ),
                   segments: [
-                    for (final m in day.meals)
+                    for (final kind in _visibleMealKinds(day))
                       ButtonSegment(
-                        value: m.kind,
-                        label: Text(_mealLabel(m.kind)),
+                        value: kind,
+                        label: Text(_mealLabel(kind)),
                       ),
                   ],
                   selected: {
-                    day.meals.any((m) => m.kind == _meal)
+                    _visibleMealKinds(day).contains(_meal)
                         ? _meal
-                        : day.meals.first.kind,
+                        : (_visibleMealKinds(day).contains('ogle')
+                              ? 'ogle'
+                              : _visibleMealKinds(day).first),
                   },
                   showSelectedIcon: false,
                   onSelectionChanged: (s) =>

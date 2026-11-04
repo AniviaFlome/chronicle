@@ -10,6 +10,7 @@ import '../l10n/l10n.dart';
 import '../providers.dart';
 import '../services/home_widgets.dart';
 import '../utils/time_format.dart';
+import '../utils/room_format.dart';
 import 'task_edit_screen.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
@@ -207,111 +208,261 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   }
 }
 
-class _TaskTile extends ConsumerWidget {
+class _TaskTile extends ConsumerStatefulWidget {
   final TaskWithDetails details;
   final VoidCallback onOpen;
 
   const _TaskTile({required this.details, required this.onOpen});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_TaskTile> createState() => _TaskTileState();
+}
+
+class _TaskTileState extends ConsumerState<_TaskTile> {
+  bool _expanded = false;
+
+  Future<void> _toggleDone(bool v) async {
+    try {
+      final container = ProviderScope.containerOf(context);
+      final spawned = await ref
+          .read(taskRepositoryProvider)
+          .setDone(widget.details.task.id, v);
+      if (v) {
+        await ref.read(reminderSchedulerProvider).cancelTask(widget.details.task.id);
+      } else {
+        await ref
+            .read(reminderSchedulerProvider)
+            .refreshTask(widget.details.task.id);
+      }
+      if (spawned != null) {
+        await ref.read(reminderSchedulerProvider).refreshTask(spawned);
+      }
+      await refreshHomeWidgets(container);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final task = details.task;
+    final task = widget.details.task;
     final color = classAccentColor(
       theme.colorScheme,
-      details.classRow == null
+      widget.details.classRow == null
           ? theme.colorScheme.primary
-          : Color(details.classRow!.colorValue),
+          : Color(widget.details.classRow!.colorValue),
     );
-    final doneCount = details.subtasks.where((s) => s.isDone).length;
+    final doneCount = widget.details.subtasks.where((s) => s.isDone).length;
+    final notes = task.notes?.trim() ?? '';
+    // Exam location: the linked class's room (placeholder-cleaned; null
+    // when the exam has no class or no room).
+    final examRoom = task.type == TaskKind.exam
+        ? cleanRoom(widget.details.classRow?.room)
+        : null;
 
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onOpen,
+        onTap: widget.onOpen,
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(width: 6, color: color),
-              Checkbox(
-                value: task.isDone,
-                onChanged: (v) async {
-                  final container = ProviderScope.containerOf(context);
-                  final spawned = await ref
-                      .read(taskRepositoryProvider)
-                      .setDone(task.id, v ?? false);
-                  if (v ?? false) {
-                    await ref
-                        .read(reminderSchedulerProvider)
-                        .cancelTask(task.id);
-                  } else {
-                    await ref
-                        .read(reminderSchedulerProvider)
-                        .refreshTask(task.id);
-                  }
-                  if (spawned != null) {
-                    await ref
-                        .read(reminderSchedulerProvider)
-                        .refreshTask(spawned);
-                  }
-                  await refreshHomeWidgets(container);
-                },
-              ),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        task.title,
-                        style: task.isDone
-                            ? const TextStyle(
-                                decoration: TextDecoration.lineThrough,
-                              )
-                            : theme.textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        [
-                          taskTypeLabel(context.l10n, task.type),
-                          if (task.dueDate != null)
-                            context.l10n.dueOnTime(
-                              task.dueDate!,
-                              task.dueMinutes == null
-                                  ? ''
-                                  : ' ${hhmm(task.dueMinutes!)}',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header row: the checkbox centers against the title
+                    // block by the Row itself, so it stays aligned whether
+                    // the tile is collapsed or expanded.
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Checkbox(
+                          value: task.isDone,
+                          onChanged: (v) => _toggleDone(v ?? false),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  task.title,
+                                  style: task.isDone
+                                      ? const TextStyle(
+                                          decoration:
+                                              TextDecoration.lineThrough,
+                                        )
+                                      : theme.textTheme.titleSmall,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  [
+                                    taskTypeLabel(context.l10n, task.type),
+                                    if (task.dueDate != null)
+                                      context.l10n.dueOnTime(
+                                        task.dueDate!,
+                                        task.dueMinutes == null
+                                            ? ''
+                                            : ' ${hhmm(task.dueMinutes!)}',
+                                      ),
+                                    if (widget.details.classRow != null)
+                                      widget.details.classRow!.name,
+                                    examRoom,
+                                    if (widget.details.subtasks.isNotEmpty)
+                                      context.l10n.stepsCount(
+                                        doneCount,
+                                        widget.details.subtasks.length,
+                                      ),
+                                    if (task.progressPercent != null)
+                                      '${task.progressPercent}%',
+                                    if (task.repeatKind != null)
+                                      context.l10n.repeatsLabel,
+                                  ].whereType<String>().join(' · '),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
-                          if (details.classRow != null) details.classRow!.name,
-                          if (details.subtasks.isNotEmpty)
-                            context.l10n.stepsCount(doneCount, details.subtasks.length),
-                          if (task.progressPercent != null)
-                            '${task.progressPercent}%',
-                          if (task.repeatKind != null) context.l10n.repeatsLabel,
-                        ].join(' · '),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
+                          ),
+                        ),
+                        if (task.priority == TaskPriority.high)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: Icon(
+                              Icons.priority_high,
+                              size: 18,
+                              color: theme.colorScheme.error,
+                            ),
+                          ),
+                        IconButton(
+                          tooltip: _expanded ? 'Collapse' : 'Expand',
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(
+                            _expanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                            size: 20,
+                          ),
+                          onPressed: () =>
+                              setState(() => _expanded = !_expanded),
+                        ),
+                      ],
+                    ),
+                    if (_expanded)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 12, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              [
+                                if (widget.details.subtasks.isNotEmpty)
+                                  context.l10n.stepsCount(
+                                    doneCount,
+                                    widget.details.subtasks.length,
+                                  ),
+                                if (task.progressPercent != null)
+                                  '${task.progressPercent}%',
+                                if (task.repeatKind != null)
+                                  context.l10n.repeatsLabel,
+                                if (task.priority == TaskPriority.high)
+                                  context.l10n.priorityHigh,
+                              ].join(' · '),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
+                            ),
+                            if (notes.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                notes,
+                                style: theme.textTheme.bodySmall,
+                                maxLines: 4,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            if (task.progressPercent != null) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: LinearProgressIndicator(
+                                      value: (task.progressPercent ?? 0) / 100,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${task.progressPercent}%',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.outline,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            if (widget.details.subtasks.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              for (final s
+                                  in widget.details.subtasks.take(5))
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        s.isDone
+                                            ? Icons.check_box
+                                            : Icons.check_box_outline_blank,
+                                        size: 14,
+                                        color: theme.colorScheme.outline,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          s.title,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                            decoration: s.isDone
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (widget.details.subtasks.length > 5)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    '+${widget.details.subtasks.length - 5} more',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.outline,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                  ],
                 ),
               ),
-              if (task.type == TaskKind.exam)
-                const Padding(
-                  padding: EdgeInsets.only(right: 4),
-                  child: Icon(Icons.quiz_outlined),
-                ),
-              if (task.priority == TaskPriority.high)
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: Icon(
-                    Icons.priority_high,
-                    size: 18,
-                    color: theme.colorScheme.error,
-                  ),
-                ),
             ],
           ),
         ),
@@ -369,6 +520,14 @@ class _CountdownCard extends StatelessWidget {
       1 => context.l10n.tomorrowWord,
       _ => context.l10n.inDays(days),
     };
+    // Exam location: the linked class's room plus the due time, shown
+    // under the class name (either part omitted when absent).
+    final room = cleanRoom(details.classRow?.room);
+    final time = task.dueMinutes != null ? hhmm(task.dueMinutes!) : null;
+    final roomLine = [
+      room,
+      time,
+    ].whereType<String>().join(' · ');
 
     return Card(
       color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
@@ -379,8 +538,6 @@ class _CountdownCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              const Icon(Icons.quiz_outlined),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,6 +546,13 @@ class _CountdownCard extends StatelessWidget {
                     if (details.classRow != null)
                       Text(
                         details.classRow!.name,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                    if (roomLine.isNotEmpty)
+                      Text(
+                        roomLine,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.outline,
                         ),

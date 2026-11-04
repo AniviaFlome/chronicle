@@ -35,6 +35,7 @@ void main() {
       expect(WidgetKeys.menuMeals, 'menuMeals');
       expect(WidgetKeys.menuMealDefault, 'menuMealDefault');
       expect(WidgetKeys.menuMealKind, 'menuMealKind');
+      expect(WidgetKeys.menuMealKindDate, 'menuMealKindDate');
       expect(WidgetKeys.week, 'week');
     });
 

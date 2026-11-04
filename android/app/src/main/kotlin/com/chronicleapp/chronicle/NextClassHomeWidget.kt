@@ -88,7 +88,18 @@ class NextClassHomeWidget : GlanceAppWidget() {
                 entries.drop(idx + 2)
                     .filter { !it.isSentinel }
                     .take(12)
-                    .map { TimeRow(it.startLabel, it.className, it.colorHex) }
+                    .map {
+                        TimeRow(
+                            it.startLabel,
+                            it.className,
+                            it.colorHex,
+                            at = it.at,
+                            teacher = it.teacher,
+                            room = it.room,
+                            building = it.building,
+                            range = it.range,
+                        )
+                    }
             } else {
                 emptyList()
             }

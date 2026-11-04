@@ -376,6 +376,13 @@ Future<bool> copyLegacyDatabaseFile({
       }
     }
     if (await target.exists()) await target.delete();
+    // Drop stale target journals first: if the legacy DB has no -wal but
+    // the (empty) target does, the leftover WAL would be applied to the
+    // wrong image on next open.
+    for (final suffix in ['-wal', '-shm', '-journal']) {
+      final stale = File('${target.path}$suffix');
+      if (await stale.exists()) await stale.delete();
+    }
     await incoming.rename(target.path);
     for (final suffix in ['-wal', '-shm', '-journal']) {
       final companion = File('${incoming.path}$suffix');
