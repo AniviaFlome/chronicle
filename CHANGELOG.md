@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.14.1] - 2026-11-04
+
 ### Fixed
 - Widget menu push keeps full servings: the per-meal dish cap is 12, not 8 (live Hacettepe breakfast serves 9 items — the old cap silently dropped Ekmek from every widget), and blank dish names are dropped instead of rendering empty bullets.
 - Hub menu/agenda/tasks tabs are copies of the standalone widgets, not second designs: new `SharedMenuList`/`SharedAgendaList`/`SharedTasksList` render the tall dish/class/task rows in both places (same row components, gaps, scrolling contract as `SharedClassTab` does for classes); short/narrow tiers keep their fitting-take variants as the documented space adjustment. The standalone tasks widget's tall tiers now scroll the full list instead of capping at 4/8.
