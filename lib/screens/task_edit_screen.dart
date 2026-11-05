@@ -9,6 +9,7 @@ import '../data/tables.dart';
 import '../providers.dart';
 import '../l10n/l10n.dart';
 import '../services/home_widgets.dart';
+import '../utils/room_format.dart';
 import '../utils/time_format.dart';
 import '../utils/ui_feedback.dart';
 
@@ -59,6 +60,7 @@ class TaskEditScreen extends ConsumerStatefulWidget {
 class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
   late final TextEditingController _title;
   late final TextEditingController _notes;
+  late final TextEditingController _location;
   late final TextEditingController _subtaskInput;
   int? _classId;
   TaskKind _type = TaskKind.homework;
@@ -86,6 +88,7 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
     final e = widget.existing?.task;
     _title = TextEditingController(text: e?.title ?? '');
     _notes = TextEditingController(text: e?.notes ?? '');
+    _location = TextEditingController(text: e?.location ?? '');
     _subtaskInput = TextEditingController();
     _classId = e?.classId;
     _type = e?.type ?? TaskKind.homework;
@@ -107,6 +110,7 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
   void dispose() {
     _title.dispose();
     _notes.dispose();
+    _location.dispose();
     _subtaskInput.dispose();
     super.dispose();
   }
@@ -169,6 +173,9 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
             : isoFromDateTime(_repeatUntil!),
       ),
       linkedExamId: Value(_type == TaskKind.revision ? _linkedExamId : null),
+      location: Value(
+        _type == TaskKind.exam ? cleanRoom(_location.text) : null,
+      ),
       notes: Value(_notes.text.trim().isEmpty ? null : _notes.text.trim()),
     );
 
@@ -386,6 +393,16 @@ class _TaskEditScreenState extends ConsumerState<TaskEditScreen> {
               },
             ),
             const SizedBox(height: 12),
+            if (_type == TaskKind.exam) ...[
+              TextFormField(
+                controller: _location,
+                decoration: InputDecoration(
+                  labelText: context.l10n.examLocationLabel,
+                  hintText: context.l10n.examLocationHint,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Row(
               children: [
                 Expanded(

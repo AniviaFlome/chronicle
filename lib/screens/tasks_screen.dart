@@ -259,10 +259,10 @@ class _TaskTileState extends ConsumerState<_TaskTile> {
     );
     final doneCount = widget.details.subtasks.where((s) => s.isDone).length;
     final notes = task.notes?.trim() ?? '';
-    // Exam location: the linked class's room (placeholder-cleaned; null
-    // when the exam has no class or no room).
+    // Exam location: explicit override wins; otherwise the linked class's
+    // room (placeholder-cleaned; null when neither is set).
     final examRoom = task.type == TaskKind.exam
-        ? cleanRoom(widget.details.classRow?.room)
+        ? cleanRoom(task.location) ?? cleanRoom(widget.details.classRow?.room)
         : null;
 
     return Card(
@@ -520,9 +520,10 @@ class _CountdownCard extends StatelessWidget {
       1 => context.l10n.tomorrowWord,
       _ => context.l10n.inDays(days),
     };
-    // Exam location: the linked class's room plus the due time, shown
+    // Exam location: the override plus the due time, shown
     // under the class name (either part omitted when absent).
-    final room = cleanRoom(details.classRow?.room);
+    final room =
+        cleanRoom(task.location) ?? cleanRoom(details.classRow?.room);
     final time = task.dueMinutes != null ? hhmm(task.dueMinutes!) : null;
     final roomLine = [
       room,

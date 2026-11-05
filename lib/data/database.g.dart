@@ -4530,6 +4530,17 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
       'REFERENCES tasks (id) ON DELETE SET NULL',
     ),
   );
+  static const VerificationMeta _locationMeta = const VerificationMeta(
+    'location',
+  );
+  @override
+  late final GeneratedColumn<String> location = GeneratedColumn<String>(
+    'location',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
   @override
   late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
@@ -4569,6 +4580,7 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     repeatKind,
     repeatUntil,
     linkedExamId,
+    location,
     uuid,
     updatedAt,
   ];
@@ -4664,6 +4676,12 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         ),
       );
     }
+    if (data.containsKey('location')) {
+      context.handle(
+        _locationMeta,
+        location.isAcceptableOrUnknown(data['location']!, _locationMeta),
+      );
+    }
     if (data.containsKey('uuid')) {
       context.handle(
         _uuidMeta,
@@ -4751,6 +4769,10 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.int,
         data['${effectivePrefix}linked_exam_id'],
       ),
+      location: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location'],
+      ),
       uuid: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}uuid'],
@@ -4804,6 +4826,10 @@ class Task extends DataClass implements Insertable<Task> {
   /// For revision tasks: the exam task they prepare for.
   final int? linkedExamId;
 
+  /// Exam location override (exam tasks only). Null/blank = fall back to
+  /// the linked class room. Cleaned with cleanRoom on write.
+  final String? location;
+
   /// Stable cross-device identity for folder sync (Syncthing transport).
   /// '' only transiently for pre-v6 rows until the v6 migration backfills.
   final String uuid;
@@ -4827,6 +4853,7 @@ class Task extends DataClass implements Insertable<Task> {
     this.repeatKind,
     this.repeatUntil,
     this.linkedExamId,
+    this.location,
     required this.uuid,
     required this.updatedAt,
   });
@@ -4874,6 +4901,9 @@ class Task extends DataClass implements Insertable<Task> {
     if (!nullToAbsent || linkedExamId != null) {
       map['linked_exam_id'] = Variable<int>(linkedExamId);
     }
+    if (!nullToAbsent || location != null) {
+      map['location'] = Variable<String>(location);
+    }
     map['uuid'] = Variable<String>(uuid);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -4914,6 +4944,9 @@ class Task extends DataClass implements Insertable<Task> {
       linkedExamId: linkedExamId == null && nullToAbsent
           ? const Value.absent()
           : Value(linkedExamId),
+      location: location == null && nullToAbsent
+          ? const Value.absent()
+          : Value(location),
       uuid: Value(uuid),
       updatedAt: Value(updatedAt),
     );
@@ -4946,6 +4979,7 @@ class Task extends DataClass implements Insertable<Task> {
       ),
       repeatUntil: serializer.fromJson<String?>(json['repeatUntil']),
       linkedExamId: serializer.fromJson<int?>(json['linkedExamId']),
+      location: serializer.fromJson<String?>(json['location']),
       uuid: serializer.fromJson<String>(json['uuid']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -4975,6 +5009,7 @@ class Task extends DataClass implements Insertable<Task> {
       ),
       'repeatUntil': serializer.toJson<String?>(repeatUntil),
       'linkedExamId': serializer.toJson<int?>(linkedExamId),
+      'location': serializer.toJson<String?>(location),
       'uuid': serializer.toJson<String>(uuid),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -4996,6 +5031,7 @@ class Task extends DataClass implements Insertable<Task> {
     Value<RepeatKind?> repeatKind = const Value.absent(),
     Value<String?> repeatUntil = const Value.absent(),
     Value<int?> linkedExamId = const Value.absent(),
+    Value<String?> location = const Value.absent(),
     String? uuid,
     int? updatedAt,
   }) => Task(
@@ -5016,6 +5052,7 @@ class Task extends DataClass implements Insertable<Task> {
     repeatKind: repeatKind.present ? repeatKind.value : this.repeatKind,
     repeatUntil: repeatUntil.present ? repeatUntil.value : this.repeatUntil,
     linkedExamId: linkedExamId.present ? linkedExamId.value : this.linkedExamId,
+    location: location.present ? location.value : this.location,
     uuid: uuid ?? this.uuid,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -5046,6 +5083,7 @@ class Task extends DataClass implements Insertable<Task> {
       linkedExamId: data.linkedExamId.present
           ? data.linkedExamId.value
           : this.linkedExamId,
+      location: data.location.present ? data.location.value : this.location,
       uuid: data.uuid.present ? data.uuid.value : this.uuid,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -5069,6 +5107,7 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('repeatKind: $repeatKind, ')
           ..write('repeatUntil: $repeatUntil, ')
           ..write('linkedExamId: $linkedExamId, ')
+          ..write('location: $location, ')
           ..write('uuid: $uuid, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -5092,6 +5131,7 @@ class Task extends DataClass implements Insertable<Task> {
     repeatKind,
     repeatUntil,
     linkedExamId,
+    location,
     uuid,
     updatedAt,
   );
@@ -5114,6 +5154,7 @@ class Task extends DataClass implements Insertable<Task> {
           other.repeatKind == this.repeatKind &&
           other.repeatUntil == this.repeatUntil &&
           other.linkedExamId == this.linkedExamId &&
+          other.location == this.location &&
           other.uuid == this.uuid &&
           other.updatedAt == this.updatedAt);
 }
@@ -5134,6 +5175,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<RepeatKind?> repeatKind;
   final Value<String?> repeatUntil;
   final Value<int?> linkedExamId;
+  final Value<String?> location;
   final Value<String> uuid;
   final Value<int> updatedAt;
   const TasksCompanion({
@@ -5152,6 +5194,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.repeatKind = const Value.absent(),
     this.repeatUntil = const Value.absent(),
     this.linkedExamId = const Value.absent(),
+    this.location = const Value.absent(),
     this.uuid = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -5171,6 +5214,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.repeatKind = const Value.absent(),
     this.repeatUntil = const Value.absent(),
     this.linkedExamId = const Value.absent(),
+    this.location = const Value.absent(),
     this.uuid = const Value.absent(),
     this.updatedAt = const Value.absent(),
   }) : title = Value(title);
@@ -5190,6 +5234,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<String>? repeatKind,
     Expression<String>? repeatUntil,
     Expression<int>? linkedExamId,
+    Expression<String>? location,
     Expression<String>? uuid,
     Expression<int>? updatedAt,
   }) {
@@ -5209,6 +5254,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (repeatKind != null) 'repeat_kind': repeatKind,
       if (repeatUntil != null) 'repeat_until': repeatUntil,
       if (linkedExamId != null) 'linked_exam_id': linkedExamId,
+      if (location != null) 'location': location,
       if (uuid != null) 'uuid': uuid,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -5230,6 +5276,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<RepeatKind?>? repeatKind,
     Value<String?>? repeatUntil,
     Value<int?>? linkedExamId,
+    Value<String?>? location,
     Value<String>? uuid,
     Value<int>? updatedAt,
   }) {
@@ -5249,6 +5296,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       repeatKind: repeatKind ?? this.repeatKind,
       repeatUntil: repeatUntil ?? this.repeatUntil,
       linkedExamId: linkedExamId ?? this.linkedExamId,
+      location: location ?? this.location,
       uuid: uuid ?? this.uuid,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -5308,6 +5356,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (linkedExamId.present) {
       map['linked_exam_id'] = Variable<int>(linkedExamId.value);
     }
+    if (location.present) {
+      map['location'] = Variable<String>(location.value);
+    }
     if (uuid.present) {
       map['uuid'] = Variable<String>(uuid.value);
     }
@@ -5335,6 +5386,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('repeatKind: $repeatKind, ')
           ..write('repeatUntil: $repeatUntil, ')
           ..write('linkedExamId: $linkedExamId, ')
+          ..write('location: $location, ')
           ..write('uuid: $uuid, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -13074,6 +13126,7 @@ typedef $$TasksTableCreateCompanionBuilder = TasksCompanion Function({
   Value<RepeatKind?> repeatKind,
   Value<String?> repeatUntil,
   Value<int?> linkedExamId,
+  Value<String?> location,
   Value<String> uuid,
   Value<int> updatedAt,
 });
@@ -13093,6 +13146,7 @@ typedef $$TasksTableUpdateCompanionBuilder = TasksCompanion Function({
   Value<RepeatKind?> repeatKind,
   Value<String?> repeatUntil,
   Value<int?> linkedExamId,
+  Value<String?> location,
   Value<String> uuid,
   Value<int> updatedAt,
 });
@@ -13285,6 +13339,11 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<String> get repeatUntil => $composableBuilder(
     column: $table.repeatUntil,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get location => $composableBuilder(
+    column: $table.location,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13519,6 +13578,11 @@ class $$TasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get location => $composableBuilder(
+    column: $table.location,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get uuid => $composableBuilder(
     column: $table.uuid,
     builder: (column) => ColumnOrderings(column),
@@ -13632,6 +13696,9 @@ class $$TasksTableAnnotationComposer
     column: $table.repeatUntil,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get location =>
+      $composableBuilder(column: $table.location, builder: (column) => column);
 
   GeneratedColumn<String> get uuid =>
       $composableBuilder(column: $table.uuid, builder: (column) => column);
@@ -13836,6 +13903,7 @@ class $$TasksTableTableManager
                 Value<RepeatKind?> repeatKind = const Value.absent(),
                 Value<String?> repeatUntil = const Value.absent(),
                 Value<int?> linkedExamId = const Value.absent(),
+                Value<String?> location = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
               }) => TasksCompanion(
@@ -13854,6 +13922,7 @@ class $$TasksTableTableManager
                 repeatKind: repeatKind,
                 repeatUntil: repeatUntil,
                 linkedExamId: linkedExamId,
+                location: location,
                 uuid: uuid,
                 updatedAt: updatedAt,
               ),
@@ -13874,6 +13943,7 @@ class $$TasksTableTableManager
                 Value<RepeatKind?> repeatKind = const Value.absent(),
                 Value<String?> repeatUntil = const Value.absent(),
                 Value<int?> linkedExamId = const Value.absent(),
+                Value<String?> location = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
               }) => TasksCompanion.insert(
@@ -13892,6 +13962,7 @@ class $$TasksTableTableManager
                 repeatKind: repeatKind,
                 repeatUntil: repeatUntil,
                 linkedExamId: linkedExamId,
+                location: location,
                 uuid: uuid,
                 updatedAt: updatedAt,
               ),

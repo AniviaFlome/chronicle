@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [1.14.2] - 2026-11-06
+
+### Added
+- Exam tasks accept a location override (exam editor `Exam location`, empty = use class room). The override is stored on the task, cleaned like class rooms, synced through the data folder, and shown in the task tile meta and exam countdown card instead of the class room.
+
+### Fixed
+- Next-class widget no longer drops the Then-line location when two or more classes remain: it renders `entry.looks` like the hub (looks[0] carries the Then class room/building) instead of re-deriving from `entries.drop(idx+2)`, and carries Then + 3 lookahead rows to fill the tall budget. Tiny strips show `name · room` (or start time / next class when quiet); Compact caps lookahead at 1 with a smaller hero title.
+
 ## [1.14.1] - 2026-11-04
 
 ### Fixed

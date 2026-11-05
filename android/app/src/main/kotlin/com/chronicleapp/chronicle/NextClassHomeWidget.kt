@@ -24,7 +24,6 @@ import com.chronicleapp.chronicle.widget.EmptyState
 import com.chronicleapp.chronicle.widget.Keys
 import com.chronicleapp.chronicle.widget.Samples
 import com.chronicleapp.chronicle.widget.SharedClassTab
-import com.chronicleapp.chronicle.widget.TimeRow
 import com.chronicleapp.chronicle.widget.VerticalBucket
 import com.chronicleapp.chronicle.widget.VerticalShell
 import com.chronicleapp.chronicle.widget.WidgetSnapshot
@@ -84,25 +83,13 @@ class NextClassHomeWidget : GlanceAppWidget() {
                     ?: snap.staleName.ifEmpty { snap.emptyText }
                 return NextClassWidgetUiState.Empty(msg.ifEmpty { "No classes" })
             }
-            val lookahead = if (idx >= 0) {
-                entries.drop(idx + 2)
-                    .filter { !it.isSentinel }
-                    .take(12)
-                    .map {
-                        TimeRow(
-                            it.startLabel,
-                            it.className,
-                            it.colorHex,
-                            at = it.at,
-                            teacher = it.teacher,
-                            room = it.room,
-                            building = it.building,
-                            range = it.range,
-                        )
-                    }
-            } else {
-                emptyList()
-            }
+            // Render entry.looks (same contract as the hub class tab):
+            // looks[0] is the Then-line class, so SharedClassTab can
+            // resolve its room/building via thenRow. Re-deriving from
+            // future timeline entries skipped the immediate next class and
+            // dropped its location (the Then-line fell back to the hero's
+            // room or empty).
+            val lookahead = entry.looks.filter { !it.isSentinel }
             NextClassWidgetUiState.Success(entry, lookahead, snap, now)
         } catch (e: Exception) {
             NextClassWidgetUiState.Error(e.message ?: "Load failed")
@@ -141,13 +128,27 @@ private fun NextClassContent(context: Context, state: NextClassWidgetUiState) {
     }
 }
 
-/** Tiny strip (1x1/2x1): dense dot + hero class name. */
+/** Tiny strip (1x1/2x1): dense dot + hero class + location when known.
+ * Mirrors the hub Tiny class line: hero name with its room, else its
+ * start time; quiet entries show the next class instead of a bare copy. */
 @Composable
 private fun Tiny(
     state: NextClassWidgetUiState.Success,
     palette: ChroniclePalette,
 ) {
-    TinyRow(palette, state.hero.colorHex, state.hero.className)
+    val hero = state.hero
+    val where = listOf(hero.room, hero.building)
+        .filter { it.isNotEmpty() }
+        .joinToString(" · ")
+    val line = when {
+        hero.startLabel.isNotEmpty() ->
+            if (where.isNotEmpty()) "${hero.className} · $where"
+            else "${hero.className} · ${hero.startLabel}"
+        hero.thenName.isNotEmpty() ->
+            "${hero.className} · ${hero.thenName} ${hero.thenWhen}".trim()
+        else -> hero.className
+    }
+    TinyRow(palette, hero.colorHex, line.ifEmpty { hero.className })
 }
 
 /** Compact Square (2x2): hero + at most 2 whole rows, like the hub. */

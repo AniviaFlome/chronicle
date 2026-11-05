@@ -172,6 +172,11 @@
     }
   },
   "examLabel": "Exam",
+  "@examLabel": {},
+  "examLocationLabel": "Exam location",
+  "@examLocationLabel": {},
+  "examLocationHint": "Empty = use class room",
+  "@examLocationHint": {},
   "overduePrefix": "Overdue · ",
   "dueOn": "Due {date}",
   "@dueOn": {

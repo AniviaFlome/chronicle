@@ -228,6 +228,10 @@ class Tasks extends Table {
     onDelete: KeyAction.setNull,
   )();
 
+  /// Exam location override (exam tasks only). Null/blank = fall back to
+  /// the linked class room. Cleaned with cleanRoom on write.
+  TextColumn get location => text().nullable()();
+
   /// Stable cross-device identity for folder sync (Syncthing transport).
   /// '' only transiently for pre-v6 rows until the v6 migration backfills.
   TextColumn get uuid => text().withDefault(const Constant(''))();

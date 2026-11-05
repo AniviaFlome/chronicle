@@ -614,6 +614,18 @@ abstract class AppLocalizations {
   /// **'Exam'**
   String get examLabel;
 
+  /// No description provided for @examLocationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Exam location'**
+  String get examLocationLabel;
+
+  /// No description provided for @examLocationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Empty = use class room'**
+  String get examLocationHint;
+
   /// No description provided for @overduePrefix.
   ///
   /// In en, this message translates to:

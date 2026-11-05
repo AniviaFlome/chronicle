@@ -35,7 +35,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   static QueryExecutor _openConnection() {
     return driftDatabase(
@@ -244,18 +244,31 @@ class AppDatabase extends _$AppDatabase {
           [now],
         );
       }
+      if (from < 15) {
+        // Exam location override on tasks (nullable, no backfill:
+        // null = fall back to the linked class room).
+        await _addColumnIfMissing(m, tasks, tasks.location);
+      }
     },
     beforeOpen: (_) => customStatement('PRAGMA foreign_keys = ON'),
   );
 
   /// Adds [column] unless it already exists. Drift does not run migrations
   /// in a transaction, so a killed process can leave a half-migrated
-  /// database behind — every step must be safe to re-run.
+  /// database behind — every step must be safe to re-run. Missing tables
+  /// are skipped (minimal test fixtures may omit untouched tables).
   Future<void> _addColumnIfMissing(
     Migrator m,
     TableInfo<Table, dynamic> table,
     GeneratedColumn<Object> column,
   ) async {
+    final existing = await m.database
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+          variables: [Variable<String>(table.actualTableName)],
+        )
+        .get();
+    if (existing.isEmpty) return;
     final info = await m.database
         .customSelect("PRAGMA table_info('${table.actualTableName}')")
         .get();

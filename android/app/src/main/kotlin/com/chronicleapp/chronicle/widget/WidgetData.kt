@@ -616,13 +616,20 @@ object Samples {
         then = "Then Physics · 10:20",
         color = "FF4F6BED",
         thenColor = "FF30A46C",
-    ).copy(thenName = "Physics", thenWhen = "10:20")
+    ).copy(
+        thenName = "Physics",
+        thenWhen = "10:20",
+        teacher = "Dr. Smith",
+        room = "Room B4",
+        building = "C Blok",
+        range = "08:40–09:30",
+    )
 
     /** Extra lookahead rows shown by the tall hero (dot + "Class · 13:00"),
      *  i.e. the classes after the one already shown by [nextClass]'s thenLine. */
     val later = listOf(
-        TimeRow("13:00", "Chemistry lab", "FFE5484D"),
-        TimeRow("15:40", "History", "FFF76B15"),
+        TimeRow("13:00", "Chemistry lab", "FFE5484D", room = "Lab 2", range = "13:00–13:50"),
+        TimeRow("15:40", "History", "FFF76B15", room = "Room A1", range = "15:40–16:30"),
     )
 
     val week = listOf(
@@ -650,8 +657,8 @@ object Samples {
 
     /** "Looks" rows for the hub class tab: chip time + "Then/Later <name>". */
     val looks = listOf(
-        TimeRow("10:20", "Physics", "FF30A46C"),
-        TimeRow("13:00", "Chemistry lab", "FFE5484D"),
+        TimeRow("10:20", "Physics", "FF30A46C", room = "Room C3", range = "10:20–11:10"),
+        TimeRow("13:00", "Chemistry lab", "FFE5484D", room = "Lab 2", range = "13:00–13:50"),
     )
 
     val menu = listOf("Lentil soup", "Grilled chicken", "Rice pilaf", "Ayran")

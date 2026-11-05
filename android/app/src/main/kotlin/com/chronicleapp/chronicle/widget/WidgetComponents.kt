@@ -567,8 +567,11 @@ fun SharedClassTab(
     // mismeasures weight-bound lazy lists past the second row —
     // seen-on-device as 1px rows). The take follows the vertical budget:
     // every shown row must have real room, or Glance squeezes it to a
-    // sliver instead of clipping (seen-on-device).
-    val budget = lookRowBudget(leadDp = if (quiet) 65 else 137)
+    // sliver instead of clipping (seen-on-device). Compact buckets cap
+    // at 1 lookahead row: hero + Then + 1 fits a 2x2, a second row
+    // squeezed to a textless sliver (seen-on-device).
+    val rawBudget = lookRowBudget(leadDp = if (quiet) 65 else 137)
+    val budget = if (compact) rawBudget.coerceAtMost(1) else rawBudget
     if (quiet) {
         // 12sp keeps "No classes today" on one line in a 1-column card
         // (15sp wrapped it to two and pushed the row budget to zero —
@@ -594,7 +597,7 @@ fun SharedClassTab(
             entry = entry,
             snap = snap,
             nowMs = nowMs,
-            titleSizeSp = 20,
+            titleSizeSp = if (compact) 18 else 20,
             thenRow = thenRow,
         )
         // The pushed looks start with the Then-line class itself

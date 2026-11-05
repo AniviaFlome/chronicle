@@ -299,7 +299,7 @@ void main() {
     addTearDown(db.close);
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data['user_version'], 14);
+    expect(version.data['user_version'], 15);
 
     final classes = await db.select(db.classes).get();
     final byName = {for (final c in classes) c.name: c};
@@ -373,7 +373,7 @@ void main() {
     addTearDown(db.close);
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data['user_version'], 14);
+    expect(version.data['user_version'], 15);
 
     final classes = await db.select(db.classes).get();
     final byName = {for (final c in classes) c.name: c};
@@ -383,6 +383,52 @@ void main() {
     expect(byName['En']!.updatedAt, greaterThan(1000));
     expect(byName['Em']!.updatedAt, greaterThan(1000));
     expect(byName['Real']!.updatedAt, 1000);
+
+    await dir.delete(recursive: true);
+  });
+
+  test('v15 adds nullable task location', () async {
+    final dir = await Directory.systemTemp.createTemp('chronicle-mig15');
+    final path = '${dir.path}/v14.sqlite';
+    final setup = sqlite.sqlite3.open(path);
+    setup.execute('PRAGMA foreign_keys = OFF');
+    setup.execute('''
+          CREATE TABLE tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            class_id INTEGER,
+            title TEXT NOT NULL,
+            notes TEXT,
+            type TEXT NOT NULL DEFAULT 'homework',
+            due_date TEXT,
+            due_minutes INTEGER,
+            priority INTEGER NOT NULL DEFAULT 1,
+            is_done INTEGER NOT NULL DEFAULT 0,
+            done_at INTEGER,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            uuid TEXT NOT NULL DEFAULT '',
+            updated_at INTEGER NOT NULL DEFAULT 0
+          )''');
+    setup.execute(
+      "INSERT INTO tasks (title, uuid, updated_at) VALUES ('Midterm', 't1', 1000)",
+    );
+    setup.execute('PRAGMA user_version = 14');
+    setup.close();
+
+    final db = AppDatabase(NativeDatabase(File(path)));
+    addTearDown(db.close);
+
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data['user_version'], 15);
+
+    final columns = await db.customSelect("PRAGMA table_info('tasks')").get();
+    expect([
+      for (final c in columns) c.data['name'] as String,
+    ], contains('location'));
+
+    final tasks = await db.select(db.tasks).get();
+    expect(tasks, hasLength(1));
+    expect(tasks.single.location, isNull);
+    expect(tasks.single.updatedAt, 1000);
 
     await dir.delete(recursive: true);
   });

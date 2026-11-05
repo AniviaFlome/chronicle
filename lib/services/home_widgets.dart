@@ -242,12 +242,14 @@ Future<void> _push(ProviderContainer container) async {
   // Hub class-tab lookahead rows: the classes after the hero entry,
   // display names with course codes (no Then/Later prefix — the native
   // side lays out time and name separately). Rides inside each timeline
-  // entry so the native side can slice it at render time. Each row also
-  // carries its expand key (`at`, negated class start so it can never
-  // collide with a timeline entry key) plus the detail fields shown when
-  // tapped (teacher / room / building / range).
+  // entry so the native side can slice it at render time (the standalone
+  // Next-class widget and the hub both render entry.looks; the native
+  // budget caps at 3 rows after the Then-line, so carry Then + 3 more).
+  // Each row also carries its expand key (`at`, negated class start so
+  // it can never collide with a timeline entry key) plus the detail
+  // fields shown when tapped (teacher / room / building / range).
   List<Map<String, Object?>> looksFor(int i) => [
-    for (var j = i + 1; j < listed.length && j <= i + 2; j++)
+    for (var j = i + 1; j < listed.length && j <= i + 4; j++)
       {
         // Cross-day rows carry a weekday hint ("Fri 18:09"); the native
         // chip wraps instead of clipping when the time has a space.

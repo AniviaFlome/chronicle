@@ -295,6 +295,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get examLabel => 'Exam';
 
   @override
+  String get examLocationLabel => 'Exam location';
+
+  @override
+  String get examLocationHint => 'Empty = use class room';
+
+  @override
   String get overduePrefix => 'Overdue · ';
 
   @override

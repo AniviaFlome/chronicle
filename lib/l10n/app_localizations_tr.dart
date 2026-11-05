@@ -295,6 +295,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get examLabel => 'Sınav';
 
   @override
+  String get examLocationLabel => 'Sınav konumu';
+
+  @override
+  String get examLocationHint => 'Boş = ders odasını kullan';
+
+  @override
   String get overduePrefix => 'Gecikmiş · ';
 
   @override

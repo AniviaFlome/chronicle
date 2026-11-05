@@ -103,6 +103,8 @@
   "quotaOneLeft": "{unexcused} mazeretsiz devamsızlık — {limit} sınırına bir kaldı",
   "quotaAtLimit": "{unexcused} mazeretsiz devamsızlık — {limit} sınırında, kalan yok",
   "examLabel": "Sınav",
+  "examLocationLabel": "Sınav konumu",
+  "examLocationHint": "Boş = ders odasını kullan",
   "overduePrefix": "Gecikmiş · ",
   "dueOn": "Vade {date}",
   "doneThisWeek": "bu hafta tamamlanan",
