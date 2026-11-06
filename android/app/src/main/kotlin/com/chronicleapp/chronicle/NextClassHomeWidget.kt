@@ -89,7 +89,7 @@ class NextClassHomeWidget : GlanceAppWidget() {
             // future timeline entries skipped the immediate next class and
             // dropped its location (the Then-line fell back to the hero's
             // room or empty).
-            val lookahead = entry.looks.filter { !it.isSentinel }
+            val lookahead = entry.looks
             NextClassWidgetUiState.Success(entry, lookahead, snap, now)
         } catch (e: Exception) {
             NextClassWidgetUiState.Error(e.message ?: "Load failed")

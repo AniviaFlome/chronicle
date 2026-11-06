@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.14.3] - 2026-11-06
+
+### Fixed
+- Release build compiles again: the v1.14.2 Next-class widget refactor filtered `entry.looks` (`List<TimeRow>`) with `isSentinel`, which is only defined on `TimedEntry`, breaking `compileDebugKotlin`. The push side only puts real classes in `looks` and the hub passes them unfiltered, so the widget now passes `entry.looks` through (the shared tab already drops the Then-duplicate and budgets rows itself).
+
 ## [1.14.2] - 2026-11-06
 
 ### Added
