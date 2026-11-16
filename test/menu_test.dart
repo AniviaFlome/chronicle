@@ -283,6 +283,59 @@ void main() {
       expect(breakfast.dishes.map((d) => d.name), ['Çay', 'Kek']);
     });
 
+    test('parses garnish sides into MenuDish.side, not the name', () {
+      // Live cards carry the side line (e.g. "(Parmak Patates Garnitür ·
+      // 314 kcal)") in a `.garnitur-inline` child. It must not be mashed
+      // into the dish name — the page renders it as a subtitle row.
+      const html = '''
+<section id="ogle" class="tab-content">
+<div class="daily-view">
+<div class="menu-grid"><div class="menu-card-wrapper">
+<div class="menu-card" data-id="1" data-title="İsveç Köfte" data-cal="939" data-category="ANAYEMEK">
+<h3 class="meal-title">İsveç Köfte</h3>
+<div class="garnitur-inline"><span>(Parmak Patates Garnitür · 314 kcal)</span></div>
+</div>
+</div></div>
+</div>
+</section>
+''';
+      final day = HacettepeMenuProvider().parseDay(
+        html,
+        DateTime(2026, 11, 16),
+        '1',
+      );
+      final lunch = day.meals.singleWhere((m) => m.kind == 'ogle');
+      expect(lunch.dishes.single.name, 'İsveç Köfte');
+      expect(
+        lunch.dishes.single.side,
+        '(Parmak Patates Garnitür · 314 kcal)',
+      );
+    });
+
+    test('MenuDish.fromJson splits legacy baked garnish out of the name', () {
+      // Rows cached before the side split carry the garnish appended to
+      // the name; they separate lazily instead of forcing a refetch.
+      final dish = MenuDish.fromJson({
+        'name': 'İsveç Köfte (Parmak Patates Garnitür · 314 kcal)',
+        'category': 'ANAYEMEK',
+      });
+      expect(dish.name, 'İsveç Köfte');
+      expect(dish.side, '(Parmak Patates Garnitür · 314 kcal)');
+      // Round-trips cleanly through the new shape.
+      final again = MenuDish.fromJson(dish.toJson());
+      expect(again.name, 'İsveç Köfte');
+      expect(again.side, '(Parmak Patates Garnitür · 314 kcal)');
+    });
+
+    test('MenuDish.fromJson leaves plain parentheticals in the name', () {
+      final dish = MenuDish.fromJson({
+        'name': 'Ekmek (50 gr)',
+        'category': '',
+      });
+      expect(dish.name, 'Ekmek (50 gr)');
+      expect(dish.side, isEmpty);
+    });
+
     test('collects the allergen legend for the day', () {
       final day = HacettepeMenuProvider().parseDay(
         _fixture,
@@ -1287,6 +1340,95 @@ void main() {
       expect(find.text('Sıhhiye'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    test('groupDishesByCategory keeps first-appearance order', () {
+      final groups = groupDishesByCategory(const [
+        MenuDish(name: 'A', category: 'Çorba'),
+        MenuDish(name: 'B', category: 'Ana Yemek'),
+        MenuDish(name: 'C', category: 'Çorba'),
+        MenuDish(name: 'Çay', category: ''),
+      ]);
+      expect([for (final g in groups) g.category], [
+        'Çorba',
+        'Ana Yemek',
+        '',
+      ]);
+      expect([for (final d in groups[0].dishes) d.name], ['A', 'C']);
+    });
+
+    testWidgets('duplicate categories render under one header', (tester) async {
+      // ITU repeats its long dessert category once per dish: one section
+      // header, not a chip on every card.
+      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(() => db.close());
+      final fake = _FakeMenuProvider()
+        ..day = MenuDay(
+          date: DateTime(2026, 9, 21),
+          locationId: '1',
+          locationName: 'Test',
+          meals: const [
+            ServedMeal(
+              kind: 'ogle',
+              serviceHours: '',
+              dishes: [
+                MenuDish(name: 'Fındıklı', category: 'Tatlı-Salata'),
+                MenuDish(name: 'Salata', category: 'Tatlı-Salata'),
+              ],
+            ),
+          ],
+        );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MenuScreen(provider: fake),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Tatlı-Salata'), findsOneWidget);
+      expect(find.text('Fındıklı'), findsOneWidget);
+      expect(find.text('Salata'), findsOneWidget);
+    });
+
+    testWidgets('unknown meal kinds use the localized Other label', (
+      tester,
+    ) async {
+      // A site-added section the app does not know yet must not leak its
+      // raw id into the tab bar and summary header.
+      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(() => db.close());
+      final fake = _FakeMenuProvider()
+        ..day = MenuDay(
+          date: DateTime(2026, 9, 21),
+          locationId: '1',
+          locationName: 'Test',
+          meals: const [
+            ServedMeal(
+              kind: 'brunch',
+              serviceHours: '10:00 - 12:00',
+              totalKcal: 500,
+              dishes: [MenuDish(name: 'Börek', category: '')],
+            ),
+          ],
+        );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MenuScreen(provider: fake),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Other'), findsOneWidget);
+      expect(find.text('Börek'), findsOneWidget);
+      expect(find.text('brunch'), findsNothing);
+    });
   });
 
   group('widget push dishes', () {
@@ -1347,6 +1489,25 @@ void main() {
       final capped = pushedDishNames(full);
       expect(capped, hasLength(pushedDishesPerMeal));
       expect(capped.last, 'Dish ${pushedDishesPerMeal - 1}');
+    });
+
+    test('pushedDishNames combines name and side for single-line widgets', () {
+      // Widgets cannot render the subtitle row, so they keep the combined
+      // string the page used to show baked into the name.
+      final meal = ServedMeal(
+        kind: 'ogle',
+        serviceHours: '',
+        dishes: const [
+          MenuDish(
+            name: 'İsveç Köfte',
+            side: '(Parmak Patates Garnitür · 314 kcal)',
+            category: 'ANAYEMEK',
+          ),
+        ],
+      );
+      expect(pushedDishNames(meal), [
+        'İsveç Köfte (Parmak Patates Garnitür · 314 kcal)',
+      ]);
     });
   });
 }

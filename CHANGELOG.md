@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-11-16
+
+### Added
+- Dining menu groups dishes under one header per category: ITU repeats its long "Tatlı-Salata-Meyve-İçecek Çeşitleri" category once per dish, so the page now renders a single section header instead of a chip on every card (empty-category dishes, e.g. Hacettepe breakfast, render headerless as before).
+- Dining menu localizes unknown meal kinds: a site-added section the app does not know yet shows "Other" ("Diğer", new `mealOther` string) in the tab bar and summary header instead of leaking the raw site id.
+
+### Fixed
+- Dining menu: Hacettepe side/garnish lines (`.garnitur-inline`, e.g. "(Parmak Patates Garnitür · 314 kcal)") are stored as a separate `MenuDish.side` and rendered as a subtitle row instead of being mashed into the dish name; rows cached before the split separate lazily on read. Widgets keep the combined single-line string (no native change).
+- Widgets "Hide course codes" option (renamed from the inverted "Show full class names"; now names the hub class tab too): the code-vs-plain formatting is a single tested helper shared by the standalone Next-class widget and the hub class tab so the two can never diverge, and the flag is saved to prefs alongside both timeline pushes (plus the update fingerprint) instead of living fingerprint-only with no native mirror (`Keys.WIDGET_FULL_NAME`).
+
 ## [1.14.3] - 2026-11-06
 
 ### Fixed

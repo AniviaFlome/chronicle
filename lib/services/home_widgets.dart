@@ -29,10 +29,12 @@ import 'widget_push.dart';
 const pushedDishesPerMeal = 12;
 
 /// Maps one servable meal to its pushed dish-name list ([pushedDishesPerMeal]
-/// cap, blanks dropped). Visible for tests.
+/// cap, blanks dropped). Single-line surfaces (widgets) take the combined
+/// [MenuDish.displayName] (name + side); the menu page renders the side as
+/// a subtitle row instead. Visible for tests.
 List<String> pushedDishNames(ServedMeal m) => [
   for (final d in m.dishes.take(pushedDishesPerMeal))
-    if (d.name.trim().isNotEmpty) d.name,
+    if (d.displayName.trim().isNotEmpty) d.displayName,
 ];
 
 /// Last-sent payload fingerprint per widget prefix (in-memory only).
@@ -166,15 +168,14 @@ Future<void> _push(ProviderContainer container) async {
       byId[o.classId]?.teacher?.trim() ?? '';
   // Display name with the saved university course code when one exists
   // ("MAT 103E · Müzik Teorisi I"), plain name otherwise — or always plain
-  // when the full-name widget option is on. Used by the timeline
-  // (hero/then/looks); agenda day rows keep plain names.
-  String displayNameOf(engine.ClassOccurrence o) {
-    final name = nameOf(o);
-    if (showFullName) return name;
-    final code = codeOf(o);
-    if (code.isEmpty || name == '—') return name;
-    return '$code · $name';
-  }
+  // when the hide-codes widget option is on. Used by the timeline
+  // (hero/then/looks) of both the standalone Next-class widget and the hub
+  // class tab (same pre-baked strings); agenda day rows keep plain names.
+  String displayNameOf(engine.ClassOccurrence o) => widgetClassDisplayName(
+    name: nameOf(o),
+    code: codeOf(o),
+    hideCodes: showFullName,
+  );
 
   String colorOf(engine.ClassOccurrence o) =>
       _hexColor(byId[o.classId]?.colorValue ?? 0);
@@ -620,6 +621,10 @@ Future<void> _push(ProviderContainer container) async {
     '${WidgetKeys.nextClass}.${WidgetKeys.timedData}',
     timed,
   );
+  await widgetSave(
+    '${WidgetKeys.nextClass}.${WidgetKeys.widgetFullName}',
+    showFullName,
+  );
   await updateIfChanged(WidgetKeys.nextClass, WidgetReceivers.nextClass, {
     ...nextCommon,
     WidgetKeys.timedData: timed,
@@ -677,6 +682,10 @@ Future<void> _push(ProviderContainer container) async {
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.tabTasks}', tabTasks);
   await widgetSave('${WidgetKeys.hub}.${WidgetKeys.tabMenu}', tabMenu);
   await widgetSaveJson('${WidgetKeys.hub}.${WidgetKeys.timedData}', timed);
+  await widgetSave(
+    '${WidgetKeys.hub}.${WidgetKeys.widgetFullName}',
+    showFullName,
+  );
   await widgetSaveJson(
     '${WidgetKeys.hub}.${WidgetKeys.agendaRows}',
     agendaDays[0],

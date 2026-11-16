@@ -1569,6 +1569,8 @@ class SettingsRepository {
   /// Next-class timeline names: true shows the plain class name
   /// ("Müzik Teorisi I"), false keeps the course-code prefix
   /// ("MAT 103E · Müzik Teorisi I"). Defaults to false (code prefix).
+  /// Applies to the standalone Next-class widget and the hub class tab
+  /// (hero, Then-line and lookahead rows share the same pre-baked strings).
   /// Agenda day rows always use plain names.
   Future<bool> widgetFullName() => _getBool(widgetFullNameKey);
 

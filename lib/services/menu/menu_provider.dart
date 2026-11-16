@@ -35,7 +35,16 @@ String decodeMenuBody(http.Response response) {
 @immutable
 class MenuDish {
   /// Display name, exactly as published (usually the site's language).
+  ///
+  /// Never carries the garnish/side line (Hacettepe's `.garnitur-inline`,
+  /// e.g. "(Parmak Patates Garnitür · 314 kcal)"): that rides [side] so
+  /// the page can render it as a subtitle. Rows cached before the split
+  /// still carry it baked into [name]; [fromJson] separates those lazily.
   final String name;
+
+  /// Side/garnish line served with the dish, e.g. "(Parmak Patates
+  /// Garnitür · 314 kcal)". Empty when the publisher lists none.
+  final String side;
 
   /// Category as published, e.g. soup / main / salad (`ÇORBA`, `ANAYEMEK`).
   final String category;
@@ -48,26 +57,60 @@ class MenuDish {
 
   const MenuDish({
     required this.name,
+    this.side = '',
     required this.category,
     this.kcal,
     this.allergens = const [],
   });
 
+  /// Combined display string (name + side) for single-line surfaces
+  /// (home widgets) that cannot render the subtitle row.
+  String get displayName =>
+      side.isEmpty ? name : (name.isEmpty ? side : '$name $side');
+
+  /// Trailing "(… Garnitür …)" baked into [name] by older parsers.
+  /// Matches the site's side line ("(Parmak Patates Garnitür · 314 kcal)");
+  /// plain parentheticals the kitchen puts in the name itself stay put.
+  static final RegExp _legacySide = RegExp(
+    r'^(.*\S)\s+(\([^()]*garnit[^()]*\))$',
+    caseSensitive: false,
+  );
+
+  /// Splits a legacy baked name into (name, side). Returns (name, '') when
+  /// no side line is present.
+  static (String, String) splitLegacySide(String raw) {
+    final match = _legacySide.firstMatch(raw.trim());
+    if (match == null) return (raw, '');
+    return (match.group(1)!, match.group(2)!);
+  }
+
   Map<String, dynamic> toJson() => {
     'name': name,
+    'side': side,
     'category': category,
     'kcal': kcal,
     'allergens': allergens,
   };
 
-  factory MenuDish.fromJson(Map<String, dynamic> json) => MenuDish(
-    name: json['name'] as String? ?? '',
-    category: json['category'] as String? ?? '',
-    kcal: (json['kcal'] as num?)?.toInt(),
-    allergens: [
-      for (final a in (json['allergens'] as List?) ?? const []) a.toString(),
-    ],
-  );
+  factory MenuDish.fromJson(Map<String, dynamic> json) {
+    final rawName = json['name'] as String? ?? '';
+    var side = json['side'] as String? ?? '';
+    var name = rawName;
+    if (side.isEmpty) {
+      final split = MenuDish.splitLegacySide(rawName);
+      name = split.$1;
+      side = split.$2;
+    }
+    return MenuDish(
+      name: name,
+      side: side,
+      category: json['category'] as String? ?? '',
+      kcal: (json['kcal'] as num?)?.toInt(),
+      allergens: [
+        for (final a in (json['allergens'] as List?) ?? const []) a.toString(),
+      ],
+    );
+  }
 }
 
 /// One served meal (breakfast / lunch / dinner / vegan) on a given day.

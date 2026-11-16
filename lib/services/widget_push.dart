@@ -91,9 +91,30 @@ abstract final class WidgetKeys {
   static const emptyMenu = 'emptyMenu';
 
   // Next-class display flag (Settings → Widgets): plain class names without
-  // the course-code prefix when true. Fingerprint-only (never saved to
-  // prefs): the pushed timeline strings already carry the result.
+  // the course-code prefix when true. Saved to prefs alongside (informational:
+  // the pushed timeline strings already carry the result) and included in the
+  // update fingerprint so toggling re-renders even when no class has a code.
   static const widgetFullName = 'widgetFullName';
+}
+
+/// Formats a timeline class name from the stored class [name] and university
+/// [code] ("MAT 103E"). When [hideCodes] (Settings → Widgets) is true the
+/// plain name is used; otherwise the code prefixes the name ("CODE · name").
+/// Empty codes and placeholder names fall back to the plain name.
+///
+/// Single source of truth for the hero, Then-line and lookahead rows of both
+/// the standalone Next-class widget and the hub class tab (both push the
+/// same pre-baked strings), so the two can never diverge. Agenda day rows
+/// always use plain names and never call this.
+String widgetClassDisplayName({
+  required String name,
+  required String code,
+  required bool hideCodes,
+}) {
+  if (hideCodes) return name;
+  final c = code.trim();
+  if (c.isEmpty || name == '—') return name;
+  return '$c · $name';
 }
 
 /// Receiver class names registered in AndroidManifest.xml, fully qualified.

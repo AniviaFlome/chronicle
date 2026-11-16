@@ -177,15 +177,12 @@ class HacettepeMenuProvider implements MenuProvider {
 
   MenuDish _parseCard(Element card, Map<String, String> legend) {
     final attrs = card.attributes;
-    var name = (attrs['data-title'] ?? '').trim();
+    final name = (attrs['data-title'] ?? '').trim();
     // Side/garnish line (e.g. "(Haşlama Sebze Garnitür · 35 kcal)") lives
-    // in a `.garnitur-inline` child, not in any data-* attribute, so cards
-    // read from attributes alone silently drop it. Append it so lunch and
-    // dinner mains show their full serving.
+    // in a `.garnitur-inline` child, not in any data-* attribute. It rides
+    // MenuDish.side so the page renders it as a subtitle instead of mashing
+    // it into the dish name.
     final garnish = card.querySelector('.garnitur-inline')?.text.trim() ?? '';
-    if (garnish.isNotEmpty) {
-      name = name.isEmpty ? garnish : '$name $garnish';
-    }
     final allergens = <String>[];
     final raw = attrs['data-alerjenler'];
     if (raw != null && raw.isNotEmpty) {
@@ -211,6 +208,7 @@ class HacettepeMenuProvider implements MenuProvider {
     }
     return MenuDish(
       name: name,
+      side: garnish,
       category: (attrs['data-category'] ?? '').trim(),
       kcal: int.tryParse((attrs['data-cal'] ?? '').trim()),
       allergens: allergens,

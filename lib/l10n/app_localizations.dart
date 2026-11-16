@@ -308,6 +308,12 @@ abstract class AppLocalizations {
   /// **'Vegan'**
   String get mealVegan;
 
+  /// No description provided for @mealOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get mealOther;
+
   /// No description provided for @menuKcal.
   ///
   /// In en, this message translates to:

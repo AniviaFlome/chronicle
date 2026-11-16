@@ -58,6 +58,7 @@
   "mealLunch": "Lunch",
   "mealDinner": "Dinner",
   "mealVegan": "Vegan",
+  "mealOther": "Other",
   "menuKcal": "{n} kcal",
   "@menuKcal": {
     "placeholders": {
@@ -934,8 +935,8 @@
   "widgetOpacitySolid": "Solid",
   "widgetOpacityTranslucent": "Translucent",
   "widgetOpacityTransparent": "Transparent",
-  "widgetFullNameTitle": "Show full class names",
-  "widgetFullNameHint": "Next-class widget shows plain names without course codes",
+  "widgetFullNameTitle": "Hide course codes",
+  "widgetFullNameHint": "Next-class widget and hub class tab show plain names without course codes",
   "widgetNoClasses": "No classes today",
   "@widgetNoClasses": {},
   "widgetAllCaughtUp": "All caught up",

@@ -77,6 +77,13 @@ object Keys {
     const val FMT_IN_MIN = "fmtInMin"
     const val FMT_IN_HOURS = "fmtInHours"
     const val FMT_CURRENTLY = "fmtCurrently"
+
+    // Next-class display flag (Settings → Widgets): true = plain class
+    // names without the course-code prefix. Informational only — the pushed
+    // timeline strings already carry the result; the Dart push saves it
+    // alongside so the contract stays explicit. Must match
+    // widget_push.dart's `WidgetKeys.widgetFullName`.
+    const val WIDGET_FULL_NAME = "widgetFullName"
 }
 
 /** One timeline entry of the Next-class hero (and the hub class tab). */

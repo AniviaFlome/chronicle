@@ -118,6 +118,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get mealVegan => 'Vegan';
 
   @override
+  String get mealOther => 'Diğer';
+
+  @override
   String menuKcal(Object n) {
     return '$n kcal';
   }
@@ -1522,11 +1525,11 @@ class AppLocalizationsTr extends AppLocalizations {
   String get widgetOpacityTransparent => 'Saydam';
 
   @override
-  String get widgetFullNameTitle => 'Tam ders adlarını göster';
+  String get widgetFullNameTitle => 'Ders kodlarını gizle';
 
   @override
   String get widgetFullNameHint =>
-      'Sonraki ders widget\'ı ders kodları olmadan düz adları gösterir';
+      'Sonraki ders widget\'ı ve hub ders sekmesi, ders kodları olmadan düz adları gösterir';
 
   @override
   String get widgetNoClasses => 'Bugün ders yok';

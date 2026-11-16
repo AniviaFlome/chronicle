@@ -40,9 +40,56 @@ void main() {
     });
 
     test('widget display flag key is stable', () {
-      // Fingerprint-only (never saved to prefs): the pushed timeline
-      // strings already carry the result; the flag just forces an update.
+      // Saved to prefs alongside both timeline pushes (informational: the
+      // pushed strings already carry the result) and part of the update
+      // fingerprint, so toggling re-renders even with codeless classes.
       expect(WidgetKeys.widgetFullName, 'widgetFullName');
+    });
+  });
+
+  group('widget class display names', () {
+    // Single source of truth for the hero, Then-line and lookahead rows of
+    // both the standalone Next-class widget and the hub class tab, so the
+    // two can never diverge.
+    test('hideCodes strips the code prefix', () {
+      expect(
+        widgetClassDisplayName(
+          name: 'Müzik Teorisi I',
+          code: 'MAT 103E',
+          hideCodes: true,
+        ),
+        'Müzik Teorisi I',
+      );
+    });
+
+    test('shows CODE · name when codes are on', () {
+      expect(
+        widgetClassDisplayName(
+          name: 'Müzik Teorisi I',
+          code: 'MAT 103E',
+          hideCodes: false,
+        ),
+        'MAT 103E · Müzik Teorisi I',
+      );
+    });
+
+    test('empty codes and placeholder names fall back to plain', () {
+      expect(
+        widgetClassDisplayName(
+          name: 'Müzik Teorisi I',
+          code: '  ',
+          hideCodes: false,
+        ),
+        'Müzik Teorisi I',
+      );
+      expect(
+        widgetClassDisplayName(
+          name: '—',
+          code: 'MAT 103E',
+          hideCodes: false,
+        ),
+        '—',
+      );
     });
   });
 }
