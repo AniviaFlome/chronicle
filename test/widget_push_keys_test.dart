@@ -39,11 +39,14 @@ void main() {
       expect(WidgetKeys.week, 'week');
     });
 
-    test('widget display flag key is stable', () {
+    test('widget display flag keys are stable', () {
       // Saved to prefs alongside both timeline pushes (informational: the
       // pushed strings already carry the result) and part of the update
       // fingerprint, so toggling re-renders even with codeless classes.
       expect(WidgetKeys.widgetFullName, 'widgetFullName');
+      // Read natively at render time: long hero/Then-line names wrap instead
+      // of truncating. Part of the update fingerprint like widgetFullName.
+      expect(WidgetKeys.widgetWrapName, 'widgetWrapName');
     });
   });
 

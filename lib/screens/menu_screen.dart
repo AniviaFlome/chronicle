@@ -251,11 +251,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       'ogle' => l10n.mealLunch,
       'aksam' => l10n.mealDinner,
       'vegan' => l10n.mealVegan,
-      // Provider-specific kinds the app does not know yet (the site added
-      // a section): a localized label instead of the raw site id. Values
-      // stay distinct, so two unknown kinds share the label but never the
-      // tab — acceptable until the kind earns its own string.
-      _ => l10n.mealOther,
+      _ => kind,
     };
   }
 
@@ -338,13 +334,32 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                   icon: const Icon(Icons.chevron_left),
                   onPressed: () => _shiftDay(-1),
                 ),
-                // Date only: the old "date · Today" label read as if every
-                // day were today. Tapping the date still jumps back to today.
+                // Weekday + date: the bare ISO date never said which day of
+                // the week was showing. Tapping still jumps back to today.
+                // Two lines (not "Weekday · date" on one): the row already
+                // fills a 360px phone, and 74 more pixels overflow it.
                 Tooltip(
                   message: context.l10n.navToday,
                   child: TextButton(
                     onPressed: isToday ? null : _goToday,
-                    child: Text(isoFromDateTime(_date)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          fullWeekdayName(
+                            _date.weekday,
+                            Localizations.localeOf(context).languageCode,
+                          ),
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        Text(
+                          isoFromDateTime(_date),
+                          style: theme.textTheme.titleSmall,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 IconButton(
@@ -513,77 +528,83 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              for (final group in groupDishesByCategory(meal.dishes)) ...[
-                // One header per category: ITU repeats its long
-                // "Tatlı-Salata-Meyve-İçecek Çeşitleri" category once per
-                // dish, so a chip on every card reads as noise. Dishes
-                // without a category (Hacettepe breakfast list) render
-                // without a header.
-                if (group.category.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
-                    child: Text(
-                      group.category,
-                      style: theme.textTheme.titleSmall,
-                    ),
-                  ),
-                for (final dish in group.dishes)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  dish.name,
-                                  style: theme.textTheme.titleSmall,
+              for (final dish in meal.dishes)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                dish.name,
+                                style: theme.textTheme.titleSmall,
+                              ),
+                            ),
+                            if (dish.kcal != null)
+                              Text(
+                                context.l10n.menuKcal(dish.kcal!),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.outline,
                                 ),
                               ),
-                              if (dish.kcal != null)
-                                Text(
-                                  context.l10n.menuKcal(dish.kcal!),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.outline,
+                          ],
+                        ),
+                        // Site-published side/garnish line ("(Parmak Patates
+                        // Garnitür · 314 kcal)"): its own subtitle row, not
+                        // mashed into the dish name.
+                        if (dish.side.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            dish.side,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                        if (dish.category.isNotEmpty ||
+                            dish.allergens.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (dish.category.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
                                   ),
+                                  decoration: BoxDecoration(
+                                    color: theme
+                                        .colorScheme
+                                        .secondaryContainer,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    dish.category,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme
+                                          .onSecondaryContainer,
+                                    ),
+                                  ),
+                                ),
+                              for (final code in dish.allergens)
+                                _AllergenChip(
+                                  code: code,
+                                  onTap: () => _showAllergen(code),
                                 ),
                             ],
                           ),
-                          // Site-published side/garnish line ("(Parmak Patates
-                          // Garnitür · 314 kcal)"): its own subtitle row, not
-                          // mashed into the dish name.
-                          if (dish.side.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              dish.side,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                          if (dish.allergens.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                for (final code in dish.allergens)
-                                  _AllergenChip(
-                                    code: code,
-                                    onTap: () => _showAllergen(code),
-                                  ),
-                              ],
-                            ),
-                          ],
                         ],
-                      ),
+                      ],
                     ),
                   ),
-              ],
+                ),
               Builder(
                 builder: (context) {
                   final legend = day?.allergenLegend ?? const {};
@@ -621,21 +642,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       ),
     );
   }
-}
-
-/// Groups dishes by category in first-appearance order for section headers.
-/// Visible for tests.
-List<({String category, List<MenuDish> dishes})> groupDishesByCategory(
-  List<MenuDish> dishes,
-) {
-  final groups = <String, List<MenuDish>>{};
-  for (final d in dishes) {
-    groups.putIfAbsent(d.category, () => []).add(d);
-  }
-  return [
-    for (final entry in groups.entries)
-      (category: entry.key, dishes: entry.value),
-  ];
 }
 
 /// Expandable allergen legend panel. The stock [ExpansionTile] header

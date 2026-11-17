@@ -668,11 +668,16 @@ private fun ShortHubColumn(
                             val thenRow = data.looks.firstOrNull {
                                 it.time == entry.thenWhen && it.name == entry.thenName
                             }
-                            val thenWhere = thenRow?.let {
-                                listOf(it.room, it.building)
-                                    .filter { w -> w.isNotEmpty() }
-                                    .joinToString(" · ")
-                            }.orEmpty()
+                            // Quiet entry fallback (same contract as
+                            // ThenLine): tomorrow's location rides the
+                            // entry's own fields; thenRow may be missing
+                            // or carry empty strings from old pushes.
+                            val thenWhere = listOf(
+                                thenRow?.room?.takeIf { !it.isNullOrEmpty() }
+                                    ?: entry.room.takeIf { it.isNotEmpty() }.orEmpty(),
+                                thenRow?.building?.takeIf { !it.isNullOrEmpty() }
+                                    ?: entry.building.takeIf { it.isNotEmpty() }.orEmpty(),
+                            ).filter { it.isNotEmpty() }.joinToString(" · ")
                             val thenBits = listOf(
                                 entry.thenName,
                                 entry.thenWhen,
@@ -686,7 +691,7 @@ private fun ShortHubColumn(
                                         color = palette.onSurfaceVariant,
                                         fontSize = 11.sp,
                                     ),
-                                    maxLines = 1,
+                                    maxLines = if (data.snap.wrapName) Int.MAX_VALUE else 1,
                                 )
                             }
                         } else {
@@ -704,7 +709,7 @@ private fun ShortHubColumn(
                             val thenRow = data.looks.firstOrNull {
                                 it.time == entry.thenWhen && it.name == entry.thenName
                             }
-                            ThenLine(palette, entry, thenRow)
+                            ThenLine(palette, entry, thenRow, wrapName = data.snap.wrapName)
                             if (roomy) {
                                 val extra = data.looks.filterNot {
                                     it.time == entry.thenWhen && it.name == entry.thenName
@@ -736,7 +741,7 @@ private fun ShortHubColumn(
                                     fontSize = if (isNarrowSlot()) 15.sp else 20.sp,
                                     fontWeight = FontWeight.Bold,
                                 ),
-                                maxLines = 1,
+                                maxLines = if (data.snap.wrapName) Int.MAX_VALUE else 1,
                             )
                             val meta = listOf(
                                 liveStatus(entry, data.snap, nowMs),
@@ -766,7 +771,7 @@ private fun ShortHubColumn(
                                     fontSize = if (isNarrowSlot()) 15.sp else 20.sp,
                                     fontWeight = FontWeight.Bold,
                                 ),
-                                maxLines = 2,
+                                maxLines = if (data.snap.wrapName) Int.MAX_VALUE else 2,
                             )
                             val meta = listOf(
                                 liveStatus(entry, data.snap, nowMs),

@@ -70,6 +70,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   String _widgetStyle = 'app';
   int _widgetOpacity = 0;
   bool _widgetFullName = false;
+  bool _widgetWrapName = false;
 
   @override
   void initState() {
@@ -88,6 +89,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     _loadWidgetStyle();
     _loadWidgetOpacity();
     _loadWidgetFullName();
+    _loadWidgetWrapName();
   }
 
   Future<void> _loadCalendarOrientation() => _loadValue(
@@ -220,6 +222,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       () => ref
           .read(settingsRepositoryProvider)
           .setWidgetFullName(value)
+          .then((_) => refreshHomeWidgets(container)),
+      (m) => context.l10n.couldNotSaveSetting(m),
+    );
+  }
+
+  Future<void> _loadWidgetWrapName() => _loadValue(
+    'Load widget wrap name',
+    () => ref.read(settingsRepositoryProvider).widgetWrapName(),
+    (value) => _widgetWrapName = value,
+  );
+
+  Future<void> _toggleWidgetWrapName(bool value) async {
+    setState(() => _widgetWrapName = value);
+    final container = ProviderScope.containerOf(context);
+    await _saveSetting(
+      () => ref
+          .read(settingsRepositoryProvider)
+          .setWidgetWrapName(value)
           .then((_) => refreshHomeWidgets(container)),
       (m) => context.l10n.couldNotSaveSetting(m),
     );
@@ -1372,6 +1392,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 subtitle: Text(context.l10n.widgetFullNameHint),
                 value: _widgetFullName,
                 onChanged: _toggleWidgetFullName,
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.wrap_text_outlined),
+                title: Text(context.l10n.widgetWrapNameTitle),
+                subtitle: Text(context.l10n.widgetWrapNameHint),
+                value: _widgetWrapName,
+                onChanged: _toggleWidgetWrapName,
               ),
               SwitchListTile(
                 secondary: const Icon(Icons.schedule_outlined),

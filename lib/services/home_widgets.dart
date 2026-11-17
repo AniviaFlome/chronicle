@@ -125,6 +125,11 @@ Future<void> _push(ProviderContainer container) async {
   final showFullName = await container
       .read(settingsRepositoryProvider)
       .widgetFullName();
+  // Long-name wrapping (Settings → Widgets): hero and Then-line names wrap
+  // onto multiple lines instead of truncating. Read natively at render.
+  final wrapName = await container
+      .read(settingsRepositoryProvider)
+      .widgetWrapName();
 
   final occurrenceEngine = await container.read(engineProvider.future);
   final byId = await container.read(classesByIdProvider.future);
@@ -625,10 +630,15 @@ Future<void> _push(ProviderContainer container) async {
     '${WidgetKeys.nextClass}.${WidgetKeys.widgetFullName}',
     showFullName,
   );
+  await widgetSave(
+    '${WidgetKeys.nextClass}.${WidgetKeys.widgetWrapName}',
+    wrapName,
+  );
   await updateIfChanged(WidgetKeys.nextClass, WidgetReceivers.nextClass, {
     ...nextCommon,
     WidgetKeys.timedData: timed,
     WidgetKeys.widgetFullName: showFullName,
+    WidgetKeys.widgetWrapName: wrapName,
   });
 
   // Today agenda (+ 7-day rail). selectedDay is pushed as 0 every refresh:
@@ -686,6 +696,10 @@ Future<void> _push(ProviderContainer container) async {
     '${WidgetKeys.hub}.${WidgetKeys.widgetFullName}',
     showFullName,
   );
+  await widgetSave(
+    '${WidgetKeys.hub}.${WidgetKeys.widgetWrapName}',
+    wrapName,
+  );
   await widgetSaveJson(
     '${WidgetKeys.hub}.${WidgetKeys.agendaRows}',
     agendaDays[0],
@@ -734,6 +748,7 @@ Future<void> _push(ProviderContainer container) async {
     WidgetKeys.emptyTasks: l10n.widgetAllCaughtUp,
     WidgetKeys.emptyMenu: l10n.widgetNoMenuToday,
     WidgetKeys.widgetFullName: showFullName,
+    WidgetKeys.widgetWrapName: wrapName,
   });
 
   // Standalone cafeteria-menu widget: every servable meal plus the

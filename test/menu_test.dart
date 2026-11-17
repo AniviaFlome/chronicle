@@ -11,6 +11,7 @@ import 'package:chronicle/services/menu/hacettepe_provider.dart';
 import 'package:chronicle/services/menu/itu_provider.dart';
 import 'package:chronicle/services/menu/menu_provider.dart';
 import 'package:chronicle/services/menu/menu_sources.dart';
+import 'package:chronicle/utils/time_format.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1341,42 +1342,10 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    test('groupDishesByCategory keeps first-appearance order', () {
-      final groups = groupDishesByCategory(const [
-        MenuDish(name: 'A', category: 'Çorba'),
-        MenuDish(name: 'B', category: 'Ana Yemek'),
-        MenuDish(name: 'C', category: 'Çorba'),
-        MenuDish(name: 'Çay', category: ''),
-      ]);
-      expect([for (final g in groups) g.category], [
-        'Çorba',
-        'Ana Yemek',
-        '',
-      ]);
-      expect([for (final d in groups[0].dishes) d.name], ['A', 'C']);
-    });
-
-    testWidgets('duplicate categories render under one header', (tester) async {
-      // ITU repeats its long dessert category once per dish: one section
-      // header, not a chip on every card.
+    testWidgets('date navigation shows the weekday', (tester) async {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(() => db.close());
-      final fake = _FakeMenuProvider()
-        ..day = MenuDay(
-          date: DateTime(2026, 9, 21),
-          locationId: '1',
-          locationName: 'Test',
-          meals: const [
-            ServedMeal(
-              kind: 'ogle',
-              serviceHours: '',
-              dishes: [
-                MenuDish(name: 'Fındıklı', category: 'Tatlı-Salata'),
-                MenuDish(name: 'Salata', category: 'Tatlı-Salata'),
-              ],
-            ),
-          ],
-        );
+      final fake = _FakeMenuProvider()..day = _fakeDay();
       await tester.pumpWidget(
         ProviderScope(
           overrides: [appDatabaseProvider.overrideWithValue(db)],
@@ -1388,46 +1357,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Tatlı-Salata'), findsOneWidget);
-      expect(find.text('Fındıklı'), findsOneWidget);
-      expect(find.text('Salata'), findsOneWidget);
-    });
-
-    testWidgets('unknown meal kinds use the localized Other label', (
-      tester,
-    ) async {
-      // A site-added section the app does not know yet must not leak its
-      // raw id into the tab bar and summary header.
-      final db = AppDatabase(NativeDatabase.memory());
-      addTearDown(() => db.close());
-      final fake = _FakeMenuProvider()
-        ..day = MenuDay(
-          date: DateTime(2026, 9, 21),
-          locationId: '1',
-          locationName: 'Test',
-          meals: const [
-            ServedMeal(
-              kind: 'brunch',
-              serviceHours: '10:00 - 12:00',
-              totalKcal: 500,
-              dishes: [MenuDish(name: 'Börek', category: '')],
-            ),
-          ],
-        );
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [appDatabaseProvider.overrideWithValue(db)],
-          child: MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: MenuScreen(provider: fake),
-          ),
-        ),
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      expect(
+        find.text(fullWeekdayName(today.weekday, 'en')),
+        findsOneWidget,
       );
-      await tester.pumpAndSettle();
-      expect(find.text('Other'), findsOneWidget);
-      expect(find.text('Börek'), findsOneWidget);
-      expect(find.text('brunch'), findsNothing);
+      expect(find.text(isoFromDateTime(today)), findsOneWidget);
     });
   });
 

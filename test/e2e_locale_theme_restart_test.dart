@@ -110,11 +110,15 @@ void main() {
 
       // Turkish locale, picked in the UI last (it re-labels the settings
       // screen itself, so later taps must use Turkish strings).
+      // ensureVisible: scrollUntilVisible stops at first overlap, which can
+      // leave the tile center off-screen after layout shifts above it.
       await tester.scrollUntilVisible(
         find.text('Türkçe'),
         400,
         scrollable: settingsScroll(),
       );
+      await tester.ensureVisible(find.text('Türkçe'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Türkçe'));
       await tester.pumpAndSettle();
       await pumpForAsync(tester);

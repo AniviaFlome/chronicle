@@ -95,6 +95,12 @@ abstract final class WidgetKeys {
   // the pushed timeline strings already carry the result) and included in the
   // update fingerprint so toggling re-renders even when no class has a code.
   static const widgetFullName = 'widgetFullName';
+
+  // Long-name wrapping (Settings → Widgets): when true, hero and Then-line
+  // class names wrap onto multiple lines instead of truncating. Saved to
+  // prefs (native reads it at render time) and included in the update
+  // fingerprint so toggling re-renders immediately.
+  static const widgetWrapName = 'widgetWrapName';
 }
 
 /// Formats a timeline class name from the stored class [name] and university

@@ -370,6 +370,7 @@ fun FilledLookaheadRow(
     name: String,
     where: String = "",
     chipWidth: Dp? = null,
+    wrapName: Boolean = false,
 ) {
     FilledBlock(palette, "", radius = 12.dp) {
         if (isNarrowSlot()) {
@@ -380,7 +381,8 @@ fun FilledLookaheadRow(
                     // 1 line: at 2 lines the card's meta line clips at the
                     // widget edge (seen-on-device) — a truncated name + full
                     // "time · room" meta beats a full name with no location.
-                    maxLines = 1,
+                    // The wrap-names option opts out of that trade-off.
+                    maxLines = if (wrapName) Int.MAX_VALUE else 1,
                     modifier = GlanceModifier.fillMaxWidth(),
                 )
                 val meta = listOf(time, where).filter { it.isNotEmpty() }
@@ -409,7 +411,7 @@ fun FilledLookaheadRow(
                     Text(
                         text = name,
                         style = TextStyle(color = palette.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold),
-                        maxLines = 2,
+                        maxLines = if (wrapName) Int.MAX_VALUE else 2,
                         modifier = GlanceModifier.fillMaxWidth(),
                     )
                     if (where.isNotEmpty()) {
@@ -440,18 +442,28 @@ fun ThenLine(
     palette: ChroniclePalette,
     entry: TimedEntry,
     thenRow: TimeRow? = null,
+    wrapName: Boolean = false,
 ) {
     if (entry.thenName.isNotEmpty()) {
         Spacer(modifier = GlanceModifier.height(4.dp))
-        val quietFallback = entry.startLabel.isEmpty() && entry.teacher.isNotEmpty()
-        val room = thenRow?.room ?: if (quietFallback) entry.room else ""
-        val building = thenRow?.building ?: if (quietFallback) entry.building else ""
+        // Tomorrow's room/building ride the quiet entry's own fields (the
+        // push side fills them with the class after "No classes today");
+        // thenRow carries them on fresh pushes. The fallback is gated on
+        // the quiet entry only — never the teacher — so a teacherless class
+        // keeps its location. Either source may be an empty string (old
+        // pushes), which ?: alone does not catch — hence takeIf.
+        val quiet = entry.startLabel.isEmpty()
+        val room = thenRow?.room?.takeIf { !it.isNullOrEmpty() }
+            ?: entry.room.takeIf { quiet && it.isNotEmpty() }.orEmpty()
+        val building = thenRow?.building?.takeIf { !it.isNullOrEmpty() }
+            ?: entry.building.takeIf { quiet && it.isNotEmpty() }.orEmpty()
         FilledLookaheadRow(
             palette = palette,
             time = entry.thenWhen,
             name = entry.thenName,
             where = listOf(room, building).filter { it.isNotEmpty() }
                 .joinToString(" · "),
+            wrapName = wrapName,
         )
     } else if (entry.thenLine.isNotEmpty()) {
         Spacer(modifier = GlanceModifier.height(4.dp))
@@ -482,7 +494,7 @@ fun ClassHero(
     Text(
         text = entry.className,
         style = TextStyle(color = palette.onSurface, fontSize = fittedTitleSp.sp, fontWeight = FontWeight.Bold),
-        maxLines = 2,
+        maxLines = if (snap.wrapName) Int.MAX_VALUE else 2,
     )
     val meta = listOf(liveStatus(entry, snap, nowMs), entry.detailLine)
         .filter { it.isNotEmpty() }
@@ -513,7 +525,7 @@ fun ClassHero(
             modifier = GlanceModifier.fillMaxWidth(),
         )
     }
-    ThenLine(palette, entry, thenRow)
+    ThenLine(palette, entry, thenRow, wrapName = snap.wrapName)
 }
 
 /**
@@ -585,7 +597,7 @@ fun SharedClassTab(
             ),
             maxLines = 1,
         )
-        ThenLine(palette, entry, thenRow)
+        ThenLine(palette, entry, thenRow, wrapName = snap.wrapName)
         val shown = next.take(budget)
         for ((i, row) in shown.withIndex()) {
             Spacer(modifier = GlanceModifier.height(6.dp))

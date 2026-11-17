@@ -118,9 +118,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mealVegan => 'Vegan';
 
   @override
-  String get mealOther => 'Other';
-
-  @override
   String menuKcal(Object n) {
     return '$n kcal';
   }
@@ -1570,6 +1567,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get widgetFullNameHint =>
       'Next-class widget and hub class tab show plain names without course codes';
+
+  @override
+  String get widgetWrapNameTitle => 'Wrap long class names';
+
+  @override
+  String get widgetWrapNameHint =>
+      'Next-class widget and hub class tab wrap long names onto multiple lines instead of cutting them off';
 
   @override
   String get widgetNoClasses => 'No classes today';

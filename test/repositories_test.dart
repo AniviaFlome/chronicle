@@ -638,15 +638,20 @@ void main() {
   test('widget display settings round-trip', () async {
     final settings = SettingsRepository(db);
     expect(await settings.widgetFullName(), isFalse);
+    expect(await settings.widgetWrapName(), isFalse);
     expect(await settings.widgetOpacity(), 0);
 
     await settings.setWidgetFullName(true);
+    await settings.setWidgetWrapName(true);
     await settings.setWidgetOpacity(2);
     expect(await settings.widgetFullName(), isTrue);
+    expect(await settings.widgetWrapName(), isTrue);
     expect(await settings.widgetOpacity(), 2);
 
     await settings.setWidgetFullName(false);
+    await settings.setWidgetWrapName(false);
     expect(await settings.widgetFullName(), isFalse);
+    expect(await settings.widgetWrapName(), isFalse);
   });
 
   test('monthly repeat clamps Jan 31 to Feb last day', () async {

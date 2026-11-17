@@ -58,7 +58,6 @@
   "mealLunch": "Lunch",
   "mealDinner": "Dinner",
   "mealVegan": "Vegan",
-  "mealOther": "Other",
   "menuKcal": "{n} kcal",
   "@menuKcal": {
     "placeholders": {
@@ -937,6 +936,8 @@
   "widgetOpacityTransparent": "Transparent",
   "widgetFullNameTitle": "Hide course codes",
   "widgetFullNameHint": "Next-class widget and hub class tab show plain names without course codes",
+  "widgetWrapNameTitle": "Wrap long class names",
+  "widgetWrapNameHint": "Next-class widget and hub class tab wrap long names onto multiple lines instead of cutting them off",
   "widgetNoClasses": "No classes today",
   "@widgetNoClasses": {},
   "widgetAllCaughtUp": "All caught up",

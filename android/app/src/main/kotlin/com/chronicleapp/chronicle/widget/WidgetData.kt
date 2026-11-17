@@ -78,6 +78,11 @@ object Keys {
     const val FMT_IN_HOURS = "fmtInHours"
     const val FMT_CURRENTLY = "fmtCurrently"
 
+    // Long-name wrapping (Settings → Widgets): when true, hero and Then-line
+    // class names wrap onto multiple lines instead of truncating. Read at
+    // render time. Must match widget_push.dart's `WidgetKeys.widgetWrapName`.
+    const val WIDGET_WRAP_NAME = "widgetWrapName"
+
     // Next-class display flag (Settings → Widgets): true = plain class
     // names without the course-code prefix. Informational only — the pushed
     // timeline strings already carry the result; the Dart push saves it
@@ -166,6 +171,8 @@ data class WidgetSnapshot(
     val fmtInMin: String,
     val fmtInHours: String,
     val fmtCurrently: String,
+    /** Long class names wrap instead of truncating (see Keys.WIDGET_WRAP_NAME). */
+    val wrapName: Boolean,
 )
 
 // ---------------------------------------------------------------------------
@@ -222,6 +229,7 @@ fun SharedPreferences.snapshot(prefix: String): WidgetSnapshot {
         fmtInMin = str("$prefix.${Keys.FMT_IN_MIN}"),
         fmtInHours = str("$prefix.${Keys.FMT_IN_HOURS}"),
         fmtCurrently = str("$prefix.${Keys.FMT_CURRENTLY}"),
+        wrapName = bool("$prefix.${Keys.WIDGET_WRAP_NAME}"),
     )
 }
 

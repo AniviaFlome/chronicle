@@ -1577,6 +1577,16 @@ class SettingsRepository {
   Future<void> setWidgetFullName(bool value) =>
       _setBool(widgetFullNameKey, value);
 
+  static const widgetWrapNameKey = 'widget_wrap_name';
+
+  /// Long class names in the Next-class widget and hub class tab: true
+  /// wraps them onto multiple lines instead of cutting them off.
+  /// Defaults to false (truncated).
+  Future<bool> widgetWrapName() => _getBool(widgetWrapNameKey);
+
+  Future<void> setWidgetWrapName(bool value) =>
+      _setBool(widgetWrapNameKey, value);
+
   static const widgetStyleKey = 'widget_style';
 
   /// Home widget visual style: 'you' (Material You system colors) or

@@ -308,12 +308,6 @@ abstract class AppLocalizations {
   /// **'Vegan'**
   String get mealVegan;
 
-  /// No description provided for @mealOther.
-  ///
-  /// In en, this message translates to:
-  /// **'Other'**
-  String get mealOther;
-
   /// No description provided for @menuKcal.
   ///
   /// In en, this message translates to:
@@ -2705,14 +2699,26 @@ abstract class AppLocalizations {
   /// No description provided for @widgetFullNameTitle.
   ///
   /// In en, this message translates to:
-  /// **'Show full class names'**
+  /// **'Hide course codes'**
   String get widgetFullNameTitle;
 
   /// No description provided for @widgetFullNameHint.
   ///
   /// In en, this message translates to:
-  /// **'Next-class widget shows plain names without course codes'**
+  /// **'Next-class widget and hub class tab show plain names without course codes'**
   String get widgetFullNameHint;
+
+  /// No description provided for @widgetWrapNameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrap long class names'**
+  String get widgetWrapNameTitle;
+
+  /// No description provided for @widgetWrapNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Next-class widget and hub class tab wrap long names onto multiple lines instead of cutting them off'**
+  String get widgetWrapNameHint;
 
   /// No description provided for @widgetNoClasses.
   ///

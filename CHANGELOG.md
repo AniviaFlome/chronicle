@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+- Widget option "Wrap long class names" (Settings → Widgets): the Next-class widget and hub class tab wrap long hero and Then-line names onto multiple lines instead of cutting them off (tiny strips stay single-line). Off by default.
+- Menu date navigation shows the weekday ("Monday · 2026-11-16", localized) next to the ISO date.
+
+### Fixed
+- Reverted the menu category section headers and the "Other" fallback label: dish cards show the category chip again and unknown meal kinds show the raw kind id, as before v1.15.0. The garnish/side line stays split out as its own subtitle row instead of being mashed into the dish name.
+- Tomorrow's class location no longer vanishes from the Next-class widget and hub class tab: the quiet-entry ("No classes today") fallback no longer requires a teacher to be saved, and empty-string rooms from old pushes fall through to the pushed values instead of blanking the Then-line.
+
 ## [1.15.0] - 2026-11-16
 
 ### Added
