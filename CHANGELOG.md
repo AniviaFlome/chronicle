@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-11-18
+
 ### Added
 - Widget option "Wrap long class names" (Settings → Widgets): the Next-class widget and hub class tab wrap long hero and Then-line names onto multiple lines instead of cutting them off (tiny strips stay single-line). Off by default.
 - Menu date navigation shows the weekday ("Monday · 2026-11-16", localized) next to the ISO date.
