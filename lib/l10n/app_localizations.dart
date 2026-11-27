@@ -2797,6 +2797,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Currently'**
   String get widgetCurrently;
+
+  /// No description provided for @syncBackendLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync method'**
+  String get syncBackendLabel;
+
+  /// No description provided for @syncBackendNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get syncBackendNone;
+
+  /// No description provided for @syncBackendFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Local folder'**
+  String get syncBackendFolder;
+
+  /// No description provided for @syncBackendGdrive.
+  ///
+  /// In en, this message translates to:
+  /// **'Google Drive'**
+  String get syncBackendGdrive;
+
+  /// No description provided for @gdriveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Google Drive'**
+  String get gdriveTitle;
+
+  /// No description provided for @gdriveSignedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Not signed in'**
+  String get gdriveSignedOut;
+
+  /// No description provided for @gdriveSignInAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with Google'**
+  String get gdriveSignInAction;
+
+  /// No description provided for @gdriveSignOutAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out'**
+  String get gdriveSignOutAction;
+
+  /// No description provided for @gdriveSignedInAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in as {email}'**
+  String gdriveSignedInAs(Object email);
+
+  /// No description provided for @gdriveSignedOutDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed out of Google Drive'**
+  String get gdriveSignedOutDone;
+
+  /// No description provided for @gdriveSignInFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Google sign-in failed: {error}'**
+  String gdriveSignInFailed(Object error);
+
+  /// No description provided for @gdriveNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth Client ID not configured. Tap the settings icon to add one.'**
+  String get gdriveNotConfigured;
+
+  /// No description provided for @gdriveNotSignedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to Google Drive first'**
+  String get gdriveNotSignedIn;
+
+  /// No description provided for @gdriveAuthExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Google Drive sign-in expired. Please sign in again.'**
+  String get gdriveAuthExpired;
+
+  /// No description provided for @gdriveOAuthTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Google Drive OAuth (Linux)'**
+  String get gdriveOAuthTitle;
+
+  /// No description provided for @gdriveOAuthHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to use built-in credentials (if included in this build).'**
+  String get gdriveOAuthHint;
+
+  /// No description provided for @gdriveClientIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth Client ID'**
+  String get gdriveClientIdLabel;
+
+  /// No description provided for @gdriveClientSecretLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth Client Secret (optional)'**
+  String get gdriveClientSecretLabel;
+
+  /// No description provided for @gdriveOAuthSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth credentials saved'**
+  String get gdriveOAuthSaved;
+
+  /// No description provided for @gdriveOAuthTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth credentials'**
+  String get gdriveOAuthTooltip;
 }
 
 class _AppLocalizationsDelegate

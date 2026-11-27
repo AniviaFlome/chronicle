@@ -78,13 +78,24 @@ class StartupRunnerState extends ConsumerState<StartupRunner>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Re-push widget data on resume: theme code follows the system
-    // brightness + in-memory theme mode, both of which can change while
-    // backgrounded with no Settings save to trigger a push.
+    // Re-push widget data and pull any remote sync updates on resume.
     if (state == AppLifecycleState.resumed) {
       () async {
+        final container = ProviderScope.containerOf(context);
         try {
-          await refreshHomeWidgets(ProviderScope.containerOf(context));
+          final imported = await ref
+              .read(folderSyncControllerProvider)
+              .importIfNewer();
+          if (imported && mounted) {
+            ref.invalidate(engineProvider);
+            ref.invalidate(classesByIdProvider);
+            ref.invalidate(dataFolderStatusProvider);
+          }
+        } catch (e) {
+          logLoadFailure('Resume sync import', e);
+        }
+        try {
+          await refreshHomeWidgets(container);
         } catch (e) {
           logLoadFailure('Resume home widgets', e);
         }

@@ -62,8 +62,13 @@ jobs:
           libgtk-3-dev liblzma-dev sqlite3
 
       - name: Build Linux bundle tarball
+        env:
+          GOOGLE_DRIVE_LINUX_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_LINUX_CLIENT_ID }}
+          GOOGLE_DRIVE_LINUX_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_LINUX_CLIENT_SECRET }}
         run: |
-          flutter build linux --release
+          flutter build linux --release \
+            --dart-define=GOOGLE_DRIVE_LINUX_CLIENT_ID="$GOOGLE_DRIVE_LINUX_CLIENT_ID" \
+            --dart-define=GOOGLE_DRIVE_LINUX_CLIENT_SECRET="$GOOGLE_DRIVE_LINUX_CLIENT_SECRET"
           # drift loads sqlite via dlopen("libsqlite3.so"): ship a copy in
           # bundle/lib. The chronicle binary carries $ORIGIN/lib in its
           # RUNPATH, so it finds the bundled copy with no launcher script.

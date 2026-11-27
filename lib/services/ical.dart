@@ -267,7 +267,14 @@ List<IcsEvent> _expandEvent(Map<String, String> props) {
       : _unescape(props['DESCRIPTION']!);
 
   IcsEvent at(DateTime s) {
-    if (end == null) return IcsEvent(title: title, start: s);
+    if (end == null) {
+      return IcsEvent(
+        title: title,
+        start: s,
+        location: location,
+        description: description,
+      );
+    }
     final base = shiftDays(DateTime(s.year, s.month, s.day), endDayOffset);
     return IcsEvent(
       title: title,

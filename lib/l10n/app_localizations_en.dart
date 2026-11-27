@@ -1625,4 +1625,71 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get widgetCurrently => 'Currently';
+
+  @override
+  String get syncBackendLabel => 'Sync method';
+
+  @override
+  String get syncBackendNone => 'Off';
+
+  @override
+  String get syncBackendFolder => 'Local folder';
+
+  @override
+  String get syncBackendGdrive => 'Google Drive';
+
+  @override
+  String get gdriveTitle => 'Google Drive';
+
+  @override
+  String get gdriveSignedOut => 'Not signed in';
+
+  @override
+  String get gdriveSignInAction => 'Sign in with Google';
+
+  @override
+  String get gdriveSignOutAction => 'Sign out';
+
+  @override
+  String gdriveSignedInAs(Object email) {
+    return 'Signed in as $email';
+  }
+
+  @override
+  String get gdriveSignedOutDone => 'Signed out of Google Drive';
+
+  @override
+  String gdriveSignInFailed(Object error) {
+    return 'Google sign-in failed: $error';
+  }
+
+  @override
+  String get gdriveNotConfigured =>
+      'OAuth Client ID not configured. Tap the settings icon to add one.';
+
+  @override
+  String get gdriveNotSignedIn => 'Sign in to Google Drive first';
+
+  @override
+  String get gdriveAuthExpired =>
+      'Google Drive sign-in expired. Please sign in again.';
+
+  @override
+  String get gdriveOAuthTitle => 'Google Drive OAuth (Linux)';
+
+  @override
+  String get gdriveOAuthHint =>
+      'Leave empty to use built-in credentials (if included in this build).';
+
+  @override
+  String get gdriveClientIdLabel => 'OAuth Client ID';
+
+  @override
+  String get gdriveClientSecretLabel => 'OAuth Client Secret (optional)';
+
+  @override
+  String get gdriveOAuthSaved => 'OAuth credentials saved';
+
+  @override
+  String get gdriveOAuthTooltip => 'OAuth credentials';
 }

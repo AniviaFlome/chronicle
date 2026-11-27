@@ -129,10 +129,15 @@ int? _dayOf(String line) {
 ({int start, int end})? _timeOf(String line) {
   final m = _timePattern.firstMatch(line);
   if (m == null) return null;
-  int minutes(String h, String min) =>
-      int.parse(h) * 60 + int.parse(min);
-  final start = minutes(m.group(1)!, m.group(2)!);
-  final end = minutes(m.group(3)!, m.group(4)!);
+  final sh = int.parse(m.group(1)!);
+  final sm = int.parse(m.group(2)!);
+  final eh = int.parse(m.group(3)!);
+  final em = int.parse(m.group(4)!);
+  if (sm >= 60 || em >= 60 || sh > 23 || eh > 24 || (eh == 24 && em > 0)) {
+    return null;
+  }
+  final start = sh * 60 + sm;
+  final end = eh * 60 + em;
   if (start < 0 || start >= 24 * 60 || end <= start || end > 24 * 60) {
     return null;
   }

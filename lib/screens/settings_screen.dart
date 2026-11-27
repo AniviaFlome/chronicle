@@ -21,6 +21,7 @@ import '../theme.dart';
 import '../services/bilsis.dart';
 import '../services/bilsis_pdf.dart';
 import '../services/course_catalog/course_catalog.dart';
+import '../services/gdrive_auth.dart';
 import '../services/home_widgets.dart';
 import '../services/ical.dart';
 import '../services/menu/menu_sources.dart';
@@ -342,30 +343,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Re-check the All-files-access grant after returning from system
     // Settings (the grant happens there, after our request returns).
-    // Also pick up folder updates that landed while backgrounded.
+    // Remote sync import on resume is already handled globally by
+    // StartupRunnerState (main.dart), so avoid triggering a duplicate pass.
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(dataFolderStatusProvider);
-      final container = ProviderScope.containerOf(context);
-      ref
-          .read(folderSyncControllerProvider)
-          .importIfNewer()
-          .then((ran) async {
-            if (ran && mounted) {
-              ref.invalidate(engineProvider);
-              ref.invalidate(classesByIdProvider);
-              ref.invalidate(dataFolderStatusProvider);
-              // Widgets snapshot at push time: push after the import lands,
-              // otherwise they keep the pre-import snapshot.
-              try {
-                await refreshHomeWidgets(container);
-              } catch (e) {
-                logLoadFailure('Post-import home widgets', e);
-              }
-            }
-          })
-          .catchError((e) {
-            logLoadFailure('Background import check', e);
-          });
     }
   }
 
@@ -454,35 +435,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Future<void> _pickDefaultDuration() async {
     final input = TextEditingController(text: _defaultDuration.toString());
-    final minutes = await showDialog<int>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.l10n.defaultDurationTitle),
-        content: TextFormField(
-          controller: input,
-          autofocus: true,
-          keyboardType: TextInputType.number,
+    final int? minutes;
+    try {
+      minutes = await showDialog<int>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(context.l10n.defaultDurationTitle),
+          content: TextFormField(
+            controller: input,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(context.l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(int.tryParse(input.text.trim())),
+              child: Text(context.l10n.save),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(context.l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(context).pop(int.tryParse(input.text.trim())),
-            child: Text(context.l10n.save),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      input.dispose();
+    }
     if (minutes == null || minutes <= 0 || !mounted) return;
+    final pickedMinutes = minutes;
     try {
       await ref
           .read(settingsRepositoryProvider)
-          .setDefaultDurationMinutes(minutes);
+          .setDefaultDurationMinutes(pickedMinutes);
       if (!mounted) return;
-      setState(() => _defaultDuration = minutes);
+      setState(() => _defaultDuration = pickedMinutes);
     } catch (e) {
       if (!mounted) return;
       showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
@@ -515,37 +502,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       setState(() => _slotPresets = value);
     }
 
-    final text = await showDialog<String?>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(context.l10n.slotPresetsTitle),
-        content: TextFormField(
-          controller: input,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: context.l10n.slotPresetsEditHint,
+    final String? text;
+    try {
+      text = await showDialog<String?>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(context.l10n.slotPresetsTitle),
+          content: TextFormField(
+            controller: input,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: context.l10n.slotPresetsEditHint,
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                reset = true;
+                await savePresets(SettingsRepository.defaultSlotTimePresets);
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+              },
+              child: Text(context.l10n.resetDefaults),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(context.l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(input.text.trim()),
+              child: Text(context.l10n.save),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              reset = true;
-              await savePresets(SettingsRepository.defaultSlotTimePresets);
-              if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-            },
-            child: Text(context.l10n.resetDefaults),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(context.l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(input.text.trim()),
-            child: Text(context.l10n.save),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      input.dispose();
+    }
     if (reset || text == null || !mounted) return;
     final parts = text
         .split(',')
@@ -571,40 +564,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final input = TextEditingController(
       text: _defaultReminder?.toString() ?? '',
     );
-    final result = await showDialog<String?>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(context.l10n.defaultReminderTitle),
-        content: TextFormField(
-          controller: input,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: context.l10n.minutesBeforeClass,
-            helperText: context.l10n.emptyMeansOff,
+    final String? result;
+    try {
+      result = await showDialog<String?>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(context.l10n.defaultReminderTitle),
+          content: TextFormField(
+            controller: input,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: context.l10n.minutesBeforeClass,
+              helperText: context.l10n.emptyMeansOff,
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(context.l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () {
+                final text = input.text.trim();
+                if (text.isNotEmpty && int.tryParse(text) == null) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text(context.l10n.enterNonNegative)),
+                  );
+                  return;
+                }
+                Navigator.of(dialogContext).pop(text);
+              },
+              child: Text(context.l10n.save),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(context.l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () {
-              final text = input.text.trim();
-              if (text.isNotEmpty && int.tryParse(text) == null) {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  SnackBar(content: Text(context.l10n.enterNonNegative)),
-                );
-                return;
-              }
-              Navigator.of(dialogContext).pop(text);
-            },
-            child: Text(context.l10n.save),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      input.dispose();
+    }
     if (result == null || !mounted) return; // Cancelled.
     final minutes = result.isEmpty ? null : int.parse(result);
     if (minutes != null && minutes < 0) {
@@ -624,16 +622,156 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
   }
 
+  Future<void> _setSyncBackend(String backend) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final repo = ref.read(settingsRepositoryProvider);
+      await repo.setSyncBackend(backend);
+      await repo.setDataLastSeenExportedAt(null);
+      await repo.setDataSyncError(null);
+      await ref.read(folderSyncControllerProvider).reconfigure();
+      ref.invalidate(dataFolderStatusProvider);
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _signInGoogleDrive() async {
+    final l10n = context.l10n;
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final account = await ref.read(googleDriveAuthProvider).signIn();
+      if (account == null || !mounted) return;
+      final repo = ref.read(settingsRepositoryProvider);
+      await repo.setSyncBackend('gdrive');
+      await repo.setDataLastSeenExportedAt(null);
+      await repo.setDataSyncError(null);
+      await ref.read(folderSyncControllerProvider).reconfigure();
+      ref.invalidate(dataFolderStatusProvider);
+      _snack(l10n.gdriveSignedInAs(account.email));
+    } on GoogleDriveAuthException catch (e) {
+      if (!mounted) return;
+      if (e.code == 'gdrive-not-configured') {
+        _snack(l10n.gdriveNotConfigured);
+      } else {
+        _snack(l10n.gdriveSignInFailed(e.message));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _snack(l10n.gdriveSignInFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _signOutGoogleDrive() async {
+    final l10n = context.l10n;
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(googleDriveAuthProvider).signOut();
+      final repo = ref.read(settingsRepositoryProvider);
+      await repo.setDataLastSeenExportedAt(null);
+      await repo.setDataSyncError(null);
+      await ref.read(folderSyncControllerProvider).reconfigure();
+      ref.invalidate(dataFolderStatusProvider);
+      if (mounted) _snack(l10n.gdriveSignedOutDone);
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _editGdriveOAuthCredentials() async {
+    final repo = ref.read(settingsRepositoryProvider);
+    final currentId = (await repo.gdriveCustomClientId()) ?? '';
+    final currentSecret = (await repo.gdriveCustomClientSecret()) ?? '';
+    if (!mounted) return;
+    final idCtrl = TextEditingController(text: currentId);
+    final secretCtrl = TextEditingController(text: currentSecret);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.l10n.gdriveOAuthTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.l10n.gdriveOAuthHint,
+              style: Theme.of(dialogContext).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: idCtrl,
+              decoration: InputDecoration(
+                labelText: context.l10n.gdriveClientIdLabel,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: secretCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: context.l10n.gdriveClientSecretLabel,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(context.l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(context.l10n.save),
+          ),
+        ],
+      ),
+    );
+    if (saved != true || !mounted) {
+      idCtrl.dispose();
+      secretCtrl.dispose();
+      return;
+    }
+    try {
+      await repo.setGdriveCustomClientId(idCtrl.text.trim());
+      await repo.setGdriveCustomClientSecret(secretCtrl.text.trim());
+      ref.invalidate(dataFolderStatusProvider);
+      if (mounted) _snack(context.l10n.gdriveOAuthSaved);
+    } catch (e) {
+      if (mounted) {
+        showErrorSnack(context, context.l10n.couldNotSaveSetting('$e'));
+      }
+    } finally {
+      idCtrl.dispose();
+      secretCtrl.dispose();
+    }
+  }
+
   Future<void> _pickDataFolder() async {
     final l10n = context.l10n;
     try {
       final path = await FilePicker.getDirectoryPath();
       if (path == null || !mounted) return;
-      await ref.read(settingsRepositoryProvider).setDataFolder(path);
+      final repo = ref.read(settingsRepositoryProvider);
+      await repo.setDataFolder(path);
+      await repo.setSyncBackend('folder');
+      await repo.setDataLastSeenExportedAt(null);
+      await repo.setDataSyncError(null);
+      await ref.read(folderSyncControllerProvider).reconfigure();
       ref.invalidate(dataFolderStatusProvider);
-      _snack(l10n.savedTo(path));
+      if (mounted) _snack(l10n.savedTo(path));
     } catch (e) {
-      _snack(l10n.couldNotExportData('$e'));
+      if (mounted) _snack(l10n.couldNotExportData('$e'));
     }
   }
 
@@ -642,6 +780,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     setState(() => _busy = true);
     try {
       await ref.read(settingsRepositoryProvider).setDataFolder(null);
+      await ref.read(folderSyncControllerProvider).reconfigure();
       ref.invalidate(dataFolderStatusProvider);
     } catch (e) {
       if (!mounted) return;
@@ -674,13 +813,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     setState(() => _busy = true);
     try {
       final service = ref.read(dataFolderServiceProvider);
-      if (await service.dataDir() == null) {
+      final storage = await service.activeStorage();
+      if (storage == null) {
         _snack(l10n.dataFolderNeedsFolder);
         return;
       }
       final result = await service.exportData();
       if (result.error != null) {
-        _snack(l10n.couldNotExportData(result.error!));
+        final err = result.error!;
+        _snack(
+          err == 'gdrive-not-signed-in'
+              ? l10n.gdriveNotSignedIn
+              : err == 'gdrive-auth-expired'
+              ? l10n.gdriveAuthExpired
+              : l10n.couldNotExportData(err),
+        );
         return;
       }
       ref.invalidate(dataFolderStatusProvider);
@@ -699,7 +846,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     setState(() => _busy = true);
     try {
       final service = ref.read(dataFolderServiceProvider);
-      if (await service.dataDir() == null) {
+      final storage = await service.activeStorage();
+      if (storage == null) {
         _snack(l10n.dataFolderNeedsFolder);
         return;
       }
@@ -713,7 +861,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           if (detail.startsWith(':')) detail = detail.substring(1).trim();
         }
         _snack(
-          err == 'folder-missing'
+          err == 'gdrive-not-signed-in'
+              ? l10n.gdriveNotSignedIn
+              : err == 'gdrive-auth-expired'
+              ? l10n.gdriveAuthExpired
+              : err == 'folder-missing'
               ? l10n.importErrorFolderMissing
               : err == 'manifest-missing'
               ? l10n.importErrorManifestMissing
@@ -1166,8 +1318,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               const Divider(height: 16),
               _DataFolderTiles(
                 busy: _busy,
+                onSelectBackend: _setSyncBackend,
                 onPickFolder: _pickDataFolder,
                 onClearFolder: _clearDataFolder,
+                onSignInGdrive: _signInGoogleDrive,
+                onSignOutGdrive: _signOutGoogleDrive,
+                onEditGdriveOAuth: _editGdriveOAuthCredentials,
                 onExport: _exportData,
                 onImport: _importData,
               ),
@@ -1506,23 +1662,73 @@ class _VersionFooterState extends State<_VersionFooter> {
 
 class _DataFolderTiles extends ConsumerWidget {
   final bool busy;
+  final ValueChanged<String> onSelectBackend;
   final VoidCallback onPickFolder;
   final VoidCallback onClearFolder;
+  final VoidCallback onSignInGdrive;
+  final VoidCallback onSignOutGdrive;
+  final VoidCallback onEditGdriveOAuth;
   final VoidCallback onExport;
   final VoidCallback onImport;
 
   const _DataFolderTiles({
     required this.busy,
+    required this.onSelectBackend,
     required this.onPickFolder,
     required this.onClearFolder,
+    required this.onSignInGdrive,
+    required this.onSignOutGdrive,
+    required this.onEditGdriveOAuth,
     required this.onExport,
     required this.onImport,
   });
 
+  List<String> _statusLines(
+    BuildContext context, {
+    required String header,
+    required int? exported,
+    required int? imported,
+    required int conflicts,
+    required String? syncError,
+  }) {
+    final lines = <String>[header];
+    if (exported != null) {
+      lines.add(
+        context.l10n.dataLastExport(
+          DateTime.fromMillisecondsSinceEpoch(
+            exported,
+          ).toString().substring(0, 16),
+        ),
+      );
+    }
+    if (imported != null) {
+      lines.add(
+        context.l10n.dataLastImport(
+          DateTime.fromMillisecondsSinceEpoch(
+            imported,
+          ).toString().substring(0, 16),
+        ),
+      );
+    }
+    if (conflicts > 0) {
+      lines.add(context.l10n.syncConflicts(conflicts));
+    }
+    if (syncError != null && syncError.isNotEmpty) {
+      final display = syncError == 'gdrive-auth-expired'
+          ? context.l10n.gdriveAuthExpired
+          : syncError;
+      lines.add(context.l10n.syncError(display));
+    }
+    return lines;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(dataFolderStatusProvider);
+    final backend = status.value?.syncBackend ?? 'none';
     final folder = status.value?.folder;
+    final gdriveEmail = status.value?.gdriveEmail;
+    final gdriveConfigured = status.value?.gdriveConfigured ?? true;
     final exported = status.value?.lastExportAt;
     final imported = status.value?.lastImportAt;
     final autoSync = status.value?.autoSync ?? true;
@@ -1530,115 +1736,178 @@ class _DataFolderTiles extends ConsumerWidget {
     final syncError = status.value?.syncError;
     final conflicts = status.value?.conflicts ?? 0;
     final storageGranted = status.value?.storageGranted;
-    String subtitle;
-    if (folder == null || folder.isEmpty) {
-      subtitle = context.l10n.dataFolderUnset;
-    } else {
-      final lines = <String>[folder];
-      if (exported != null) {
-        lines.add(
-          context.l10n.dataLastExport(
-            DateTime.fromMillisecondsSinceEpoch(exported)
-                .toString()
-                .substring(0, 16),
-          ),
-        );
-      }
-      if (imported != null) {
-        lines.add(
-          context.l10n.dataLastImport(
-            DateTime.fromMillisecondsSinceEpoch(imported)
-                .toString()
-                .substring(0, 16),
-          ),
-        );
-      }
-      if (conflicts > 0) {
-        lines.add(context.l10n.syncConflicts(conflicts));
-      }
-      if (syncError != null && syncError.isNotEmpty) {
-        lines.add(context.l10n.syncError(syncError));
-      }
-      subtitle = lines.join('\n');
-    }
+
+    final signedIn = gdriveEmail != null && gdriveEmail.isNotEmpty;
+    final folderSet = folder != null && folder.isNotEmpty;
+
+    final folderSubtitle = folderSet
+        ? _statusLines(
+            context,
+            header: folder,
+            exported: exported,
+            imported: imported,
+            conflicts: conflicts,
+            syncError: syncError,
+          ).join('\n')
+        : context.l10n.dataFolderUnset;
+
+    final gdriveSubtitle = signedIn
+        ? _statusLines(
+            context,
+            header: gdriveEmail,
+            exported: exported,
+            imported: imported,
+            conflicts: conflicts,
+            syncError: syncError,
+          ).join('\n')
+        : (!gdriveConfigured
+              ? context.l10n.gdriveNotConfigured
+              : context.l10n.gdriveSignedOut);
+
     return Column(
       children: [
-        ListTile(
-          leading: const Icon(Icons.folder_outlined),
-          title: Text(context.l10n.dataFolderTitle),
-          subtitle: Text(subtitle),
-          isThreeLine: folder != null && folder.isNotEmpty,
-          onTap: busy ? null : onPickFolder,
-          trailing: folder != null && folder.isNotEmpty
-              ? IconButton(
-                  tooltip: context.l10n.delete,
-                  icon: const Icon(Icons.clear_outlined),
-                  onPressed: busy ? null : onClearFolder,
-                )
-              : null,
-        ),
-        // Raw file access only matters on Android (scoped storage): the
-        // folder picker grant alone does not make dart:io reads work.
-        // Kept directly under the folder row so Export/Import stay adjacent.
-        if (Platform.isAndroid)
-          ListTile(
-            leading: const Icon(Icons.sd_storage_outlined),
-            title: Text(context.l10n.storageAccessTitle),
-            subtitle: Text(
-              storageGranted == true
-                  ? context.l10n.storageAccessGranted
-                  : context.l10n.storageAccessNeeded,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: DropdownButtonFormField<String>(
+            initialValue: backend,
+            decoration: InputDecoration(
+              labelText: context.l10n.syncBackendLabel,
             ),
-            trailing: storageGranted == true
-                ? const Icon(Icons.check_circle_outline)
-                : const Icon(Icons.warning_amber_outlined),
-            onTap: busy
+            items: [
+              DropdownMenuItem(
+                value: 'none',
+                child: Text(context.l10n.syncBackendNone),
+              ),
+              DropdownMenuItem(
+                value: 'folder',
+                child: Text(context.l10n.syncBackendFolder),
+              ),
+              DropdownMenuItem(
+                value: 'gdrive',
+                child: Text(context.l10n.syncBackendGdrive),
+              ),
+            ],
+            onChanged: busy
                 ? null
-                : () async {
-                    final granted = await StorageAccessService()
-                        .requestFilesAccess();
-                    ref.invalidate(dataFolderStatusProvider);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            granted
-                                ? context.l10n.storageAccessGranted
-                                : context.l10n.storageAccessNeeded,
-                          ),
-                        ),
-                      );
-                    }
+                : (v) {
+                    if (v != null && v != backend) onSelectBackend(v);
                   },
           ),
-        ListTile(
-          leading: const Icon(Icons.upload_outlined),
-          title: Text(context.l10n.exportDataAction),
-          onTap: busy ? null : onExport,
         ),
-        ListTile(
-          leading: const Icon(Icons.download_outlined),
-          title: Text(context.l10n.importDataAction),
-          onTap: busy ? null : onImport,
-        ),
-        _syncTile(
-          icon: Icons.sync_outlined,
-          title: context.l10n.autoSyncTitle,
-          subtitle: context.l10n.autoSyncHint,
-          value: autoSync,
-          set: (v) => ref.read(settingsRepositoryProvider).setAutoSync(v),
-          ref: ref,
-          context: context,
-        ),
-        _syncTile(
-          icon: Icons.settings_outlined,
-          title: context.l10n.syncSettingsTitle,
-          subtitle: context.l10n.syncSettingsHint,
-          value: syncSettings,
-          set: (v) => ref.read(settingsRepositoryProvider).setSyncSettings(v),
-          ref: ref,
-          context: context,
-        ),
+        if (backend == 'folder') ...[
+          ListTile(
+            leading: const Icon(Icons.folder_outlined),
+            title: Text(context.l10n.dataFolderTitle),
+            subtitle: Text(folderSubtitle),
+            isThreeLine: folderSet,
+            onTap: busy ? null : onPickFolder,
+            trailing: folderSet
+                ? IconButton(
+                    tooltip: context.l10n.delete,
+                    icon: const Icon(Icons.clear_outlined),
+                    onPressed: busy ? null : onClearFolder,
+                  )
+                : null,
+          ),
+          // Raw file access only matters on Android (scoped storage): the
+          // folder picker grant alone does not make dart:io reads work.
+          if (Platform.isAndroid)
+            ListTile(
+              leading: const Icon(Icons.sd_storage_outlined),
+              title: Text(context.l10n.storageAccessTitle),
+              subtitle: Text(
+                storageGranted == true
+                    ? context.l10n.storageAccessGranted
+                    : context.l10n.storageAccessNeeded,
+              ),
+              trailing: storageGranted == true
+                  ? const Icon(Icons.check_circle_outline)
+                  : const Icon(Icons.warning_amber_outlined),
+              onTap: busy
+                  ? null
+                  : () async {
+                      final granted = await StorageAccessService()
+                          .requestFilesAccess();
+                      ref.invalidate(dataFolderStatusProvider);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              granted
+                                  ? context.l10n.storageAccessGranted
+                                  : context.l10n.storageAccessNeeded,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+            ),
+        ],
+        if (backend == 'gdrive') ...[
+          ListTile(
+            leading: Icon(
+              signedIn ? Icons.cloud_done_outlined : Icons.cloud_outlined,
+            ),
+            title: Text(context.l10n.gdriveTitle),
+            subtitle: Text(gdriveSubtitle),
+            isThreeLine: signedIn,
+            onTap: busy || signedIn ? null : onSignInGdrive,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (Platform.isLinux)
+                  IconButton(
+                    tooltip: context.l10n.gdriveOAuthTooltip,
+                    icon: const Icon(Icons.tune_outlined),
+                    onPressed: busy ? null : onEditGdriveOAuth,
+                  ),
+                if (signedIn)
+                  IconButton(
+                    tooltip: context.l10n.gdriveSignOutAction,
+                    icon: const Icon(Icons.logout_outlined),
+                    onPressed: busy ? null : onSignOutGdrive,
+                  ),
+              ],
+            ),
+          ),
+          if (!signedIn)
+            ListTile(
+              leading: const Icon(Icons.login_outlined),
+              title: Text(context.l10n.gdriveSignInAction),
+              onTap: busy ? null : onSignInGdrive,
+            ),
+        ],
+        if (backend == 'folder' || (backend == 'gdrive' && signedIn)) ...[
+          ListTile(
+            leading: const Icon(Icons.upload_outlined),
+            title: Text(context.l10n.exportDataAction),
+            onTap: busy ? null : onExport,
+          ),
+          ListTile(
+            leading: const Icon(Icons.download_outlined),
+            title: Text(context.l10n.importDataAction),
+            onTap: busy ? null : onImport,
+          ),
+          _syncTile(
+            icon: Icons.sync_outlined,
+            title: context.l10n.autoSyncTitle,
+            subtitle: context.l10n.autoSyncHint,
+            value: autoSync,
+            set: (v) => ref.read(settingsRepositoryProvider).setAutoSync(v),
+            ref: ref,
+            context: context,
+          ),
+          _syncTile(
+            icon: Icons.settings_outlined,
+            title: context.l10n.syncSettingsTitle,
+            subtitle: context.l10n.syncSettingsHint,
+            value: syncSettings,
+            set: (v) =>
+                ref.read(settingsRepositoryProvider).setSyncSettings(v),
+            ref: ref,
+            context: context,
+          ),
+        ],
       ],
     );
   }

@@ -92,8 +92,7 @@
         <receiver
             android:name="com.chronicleapp.chronicle.ChronicleHubHomeWidgetReceiver"
             android:label="@string/home_widget_chronicle_hub_label"
-            android:exported="true"
-            android:configure="com.chronicleapp.chronicle.HubConfigureActivity">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="android.intent.action.LOCALE_CHANGED" />
@@ -128,8 +127,12 @@
         </receiver>
         <activity
             android:name="com.chronicleapp.chronicle.HubConfigureActivity"
-            android:exported="false"
-            android:label="Hub tabs" />
+            android:exported="true"
+            android:label="Hub tabs">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

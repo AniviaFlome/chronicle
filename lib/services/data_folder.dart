@@ -8,10 +8,14 @@ import 'package:path_provider/path_provider.dart';
 import '../data/database.dart';
 import '../data/repositories.dart';
 import 'class_files.dart';
+import 'gdrive_auth.dart';
+import 'gdrive_storage.dart';
+import 'local_folder_storage.dart';
+import 'sync_storage.dart';
 
-/// Local data-folder export/import as plain JSON in a user-chosen folder.
-/// No network code: external sync is outside the app. One device at a time:
-/// export, let the folder sync elsewhere, import on the other side.
+/// Cross-device data export/import as plain JSON + attachment blobs.
+/// Works identically over [LocalFolderStorage] (e.g. Syncthing) and
+/// [GoogleDriveStorage] (`drive.appdata`).
 class DataFolderService {
   final AppDatabase db;
   final SettingsRepository settings;
@@ -20,10 +24,19 @@ class DataFolderService {
   /// sync tests).
   final Directory? storageRoot;
 
+  /// Platform Google Drive auth provider (optional; required only when
+  /// `sync_backend == 'gdrive'`).
+  final GoogleDriveAuth? gdriveAuth;
+
+  /// Optional explicit storage override (used by hermetic sync tests).
+  final SyncStorage? storageOverride;
+
   DataFolderService(
     this.db, [
     SettingsRepository? settingsParam,
     this.storageRoot,
+    this.gdriveAuth,
+    this.storageOverride,
   ]) : settings = settingsParam ?? SettingsRepository(db);
 
   static const formatVersion = 1;
@@ -108,11 +121,30 @@ class DataFolderService {
     'yearFiles': 'year_files.json',
   };
 
-  /// User-chosen data folder. Null when not configured.
+  /// User-chosen local data folder. Null when not configured.
   Future<Directory?> dataDir() async {
     final path = await settings.dataFolder();
     if (path == null || path.trim().isEmpty) return null;
     return Directory(path);
+  }
+
+  /// Resolves the active [SyncStorage] backend based on `sync_backend`
+  /// (`'folder'`, `'gdrive'`, or `'none'`). Returns null when sync is off
+  /// or the selected backend is not configured.
+  Future<SyncStorage?> activeStorage() async {
+    if (storageOverride != null) return storageOverride;
+    final backend = await settings.syncBackend();
+    if (backend == 'gdrive') {
+      final auth = gdriveAuth;
+      if (auth == null) return null;
+      return GoogleDriveStorage(auth: auth);
+    }
+    if (backend == 'folder') {
+      final dir = await dataDir();
+      if (dir == null) return null;
+      return LocalFolderStorage(dir);
+    }
+    return null;
   }
 
   /// Assigns fresh uuids/timestamps to rows missed by normal stamping
@@ -179,36 +211,40 @@ class DataFolderService {
   /// Manual Export prunes to reclaim space, after a best-effort merge so
   /// unseen peer blobs are adopted before the prune scan.
   Future<DataFolderResult> exportData({bool pruneBlobs = true}) async {
-    final dir = await dataDir();
-    if (dir == null) {
+    final storage = await activeStorage();
+    if (storage == null) {
       return const DataFolderResult(error: 'no-folder');
+    }
+    if (!await storage.isReady()) {
+      return DataFolderResult(
+        error: storage.backendId == 'gdrive'
+            ? 'gdrive-not-signed-in'
+            : 'no-folder',
+      );
     }
     String? lockOwner;
     try {
       await ensureSyncIdentity();
-      if (!await dir.exists()) await dir.create(recursive: true);
+      // When pruning, merge remote state first (before building our storage
+      // index) so unseen peer blobs are adopted and our index reflects any
+      // conflict files or remote changes written during import.
       if (pruneBlobs) {
         try {
           await importData();
         } catch (_) {}
       }
+      await storage.ensureReady();
       // Best-effort export lock so concurrent auto-imports skip this
-      // generation instead of merging half-written tables (per-file
-      // writes below are atomic tmp+renames; this covers the
-      // between-files window). Never fails the export. The lock carries
-      // a random owner so concurrent exporters don't delete each other.
+      // generation instead of merging half-written tables.
       try {
         lockOwner =
             '${DateTime.now().millisecondsSinceEpoch}_${newUuid()}';
-        final lockTarget = File('${dir.path}/$exportLockFile');
-        final lockTmp = File('${lockTarget.path}.tmp');
-        await lockTmp.writeAsString(
-          jsonEncode({
-            'startedAt': DateTime.now().millisecondsSinceEpoch,
-            'owner': lockOwner,
-          }),
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        await storage.writeString(
+          exportLockFile,
+          jsonEncode({'startedAt': nowMs, 'owner': lockOwner}),
+          properties: {'startedAt': '$nowMs'},
         );
-        await lockTmp.rename(lockTarget.path);
       } catch (_) {
         lockOwner = null;
       }
@@ -249,20 +285,13 @@ class DataFolderService {
         'classFiles': scans[12],
         'yearFiles': scans[13],
       };
-      // Exported metadata must not leak absolute device paths: store the
-      // path relative to app storage (import ignores it anyway and copies
-      // bytes locally). Legacy absolute rows keep working via the resolver.
-      // The support dir is only resolved when file rows exist, so plain
-      // unit tests without platform bindings still pass.
       String supportPrefix = '';
       if (tables['classFiles']!.isNotEmpty || tables['yearFiles']!.isNotEmpty) {
         try {
           final supportBase =
               storageRoot ?? await getApplicationSupportDirectory();
           supportPrefix = '${supportBase.path}/';
-        } catch (_) {
-          // No platform bindings: export paths as-is (or basenames).
-        }
+        } catch (_) {}
       }
 
       String exportStoredPath(String stored) {
@@ -283,8 +312,6 @@ class DataFolderService {
         ];
       }
 
-      // Capture blob sources before relativization rewrites storedPath:
-      // the exporter needs local absolute paths to copy bytes from.
       final classBlobRows = _blobRefs(tables['classFiles']!);
       final yearBlobRows = _blobRefs(tables['yearFiles']!);
       tables['classFiles'] = relativized(tables['classFiles']!);
@@ -294,37 +321,37 @@ class DataFolderService {
       for (final entry in tables.entries) {
         rows += entry.value.length;
       }
-      Future<void> writeJson(String name, Object value) async {
-        final target = File('${dir.path}/$name');
-        final tmp = File('${target.path}.tmp');
-        await tmp.writeAsString(jsonEncode(value));
-        await tmp.rename(target.path);
+      Future<void> writeJson(
+        String name,
+        Object value, {
+        Map<String, String>? properties,
+      }) async {
+        await storage.writeString(
+          name,
+          jsonEncode(value),
+          properties: properties,
+        );
         files++;
       }
 
-      // Table files write concurrently (blob sources were captured above,
-      // before path relativization, instead of re-selecting file tables).
       await Future.wait([
         for (final entry in tables.entries)
           writeJson(tableFiles[entry.key]!, entry.value),
       ]);
       final referencedBlobs = <String>{};
       for (final exported in await Future.wait([
-        _exportBlobs(dir, classBlobRows),
-        _exportBlobs(dir, yearBlobRows),
+        _exportBlobs(storage, classBlobRows),
+        _exportBlobs(storage, yearBlobRows),
       ])) {
         referencedBlobs.addAll(exported);
       }
       if (pruneBlobs) {
-        await _pruneBlobs(dir, referencedBlobs);
+        await _pruneBlobs(storage, referencedBlobs);
       }
       await writeJson(tombstonesFile, [
         for (final t in tombstones)
           {'tableKey': t.tableKey, 'uuid': t.uuid, 'deletedAt': t.deletedAt},
       ]);
-      // Opt-in settings snapshot: portable keys only, skipped entirely
-      // when the toggle is off (a stale file from an earlier opt-in is
-      // left for peers that still have it on).
       if (await settings.syncSettings()) {
         final snap = <String, String>{};
         for (final key in syncedSettingKeys) {
@@ -334,16 +361,25 @@ class DataFolderService {
         await writeJson(settingsFile, {'settings': snap});
       }
       final exportedAt = DateTime.now().millisecondsSinceEpoch;
-      await writeJson(manifestFile, {
-        'app': appTag,
-        'formatVersion': formatVersion,
-        'exportedAt': exportedAt,
-      });
+      await writeJson(
+        manifestFile,
+        {
+          'app': appTag,
+          'formatVersion': formatVersion,
+          'exportedAt': exportedAt,
+        },
+        properties: {'exportedAt': '$exportedAt'},
+      );
       await settings.setDataLastExportAt(exportedAt);
-      // Mark our own manifest seen so auto-import never re-imports it.
       await settings.setDataLastSeenExportedAt(exportedAt);
       await settings.setDataSyncError(null);
       return DataFolderResult(filesWritten: files, rowsExported: rows);
+    } on GoogleDriveAuthException catch (e) {
+      debugPrint('Sync export auth failed: $e');
+      try {
+        await settings.setDataSyncError(e.code);
+      } catch (_) {}
+      return DataFolderResult(error: e.code);
     } catch (e) {
       debugPrint('Data folder export failed: $e');
       final result = DataFolderResult(error: '$e');
@@ -352,14 +388,11 @@ class DataFolderService {
       } catch (_) {}
       return result;
     } finally {
-      // Best-effort: only delete our own lock so a concurrent exporter
-      // isn't unprotected mid-generation. A leftover lock only delays
-      // imports until stale.
       try {
-        final current = await _readDecoded(dir, exportLockFile);
+        final current = await _readDecodedStorage(storage, exportLockFile);
         final owner = current is Map ? current['owner'] : null;
         if (lockOwner != null && owner == lockOwner) {
-          await File('${dir.path}/$exportLockFile').delete();
+          await storage.delete(exportLockFile);
         }
       } catch (_) {}
     }
@@ -378,17 +411,12 @@ class DataFolderService {
       ),
   ];
 
-  /// Copies attachment blobs into `<dir>/files/`, named by stable uuid,
-  /// and returns the referenced blob names. Missing local blobs are
-  /// skipped (metadata still syncs). A blob whose target already has the
-  /// same size is left alone: attachment bytes are immutable per uuid
-  /// (edits create a new row), so this skips recopying every export.
+  /// Copies attachment blobs into `<storage>/files/`, named by stable uuid,
+  /// and returns the referenced blob names. Missing local blobs are skipped.
   Future<Set<String>> _exportBlobs(
-    Directory dir,
+    SyncStorage storage,
     List<({String uuid, String fileName, String storedPath})> rows,
   ) async {
-    final blobsDir = Directory('${dir.path}/$filesDir');
-    if (!await blobsDir.exists()) await blobsDir.create(recursive: true);
     final referenced = <String>{};
     for (final r in rows) {
       if (r.uuid.isEmpty) continue;
@@ -400,30 +428,23 @@ class DataFolderService {
       if (!await src.exists()) continue;
       final name = blobNameFor(r.uuid, r.fileName);
       referenced.add(name);
-      final target = File('${blobsDir.path}/$name');
-      if (await target.exists()) {
-        final sizes = await Future.wait([src.length(), target.length()]);
-        if (sizes[0] == sizes[1]) continue;
-      }
-      final tmp = File('${target.path}.tmp');
-      await src.copy(tmp.path);
-      await tmp.rename(target.path);
+      final relPath = '$filesDir/$name';
+      final remoteSize = await storage.fileSize(relPath);
+      if (remoteSize != null && remoteSize == await src.length()) continue;
+      await storage.writeBytes(relPath, await src.readAsBytes());
     }
     return referenced;
   }
 
-  /// Deletes blobs in `<dir>/files/` that no attachment references anymore.
-  Future<void> _pruneBlobs(Directory dir, Set<String> referenced) async {
-    final blobsDir = Directory('${dir.path}/$filesDir');
-    if (!await blobsDir.exists()) return;
-    await for (final e in blobsDir.list()) {
-      if (e is File) {
-        final name = e.path.split('/').last;
-        if (!referenced.contains(name) && !name.endsWith('.tmp')) {
-          try {
-            await e.delete();
-          } catch (_) {}
-        }
+  /// Deletes blobs in `<storage>/files/` that no attachment references anymore.
+  Future<void> _pruneBlobs(SyncStorage storage, Set<String> referenced) async {
+    final entries = await storage.listPrefix(filesDir);
+    for (final e in entries) {
+      final name = e.path.split('/').last;
+      if (!referenced.contains(name) && !name.endsWith('.tmp')) {
+        try {
+          await storage.delete(e.path);
+        } catch (_) {}
       }
     }
   }
@@ -432,8 +453,8 @@ class DataFolderService {
   /// the local database. Missing table files are skipped (that table is
   /// left untouched). A missing manifest is an error, not an empty import.
   Future<DataFolderResult> importData() async {
-    final dir = await dataDir();
-    if (dir == null) {
+    final storage = await activeStorage();
+    if (storage == null) {
       return const DataFolderResult(error: 'no-folder');
     }
     Future<DataFolderResult> fail(String error, {bool surface = true}) async {
@@ -445,18 +466,33 @@ class DataFolderService {
       return DataFolderResult(error: error);
     }
 
+    if (!await storage.isReady()) {
+      return await fail(
+        storage.backendId == 'gdrive' ? 'gdrive-not-signed-in' : 'no-folder',
+        surface: false,
+      );
+    }
+
     try {
-      if (!await dir.exists()) {
+      if (!await storage.exists()) {
         return await fail('folder-missing', surface: false);
       }
-      final manifestHandle = File('${dir.path}/$manifestFile');
-      if (!await manifestHandle.exists()) {
-        // Folder exists but no export landed here yet.
+      await storage.ensureReady();
+      final String? manifestText;
+      try {
+        manifestText = await storage.readString(manifestFile);
+      } on GoogleDriveAuthException catch (e) {
+        return await fail(e.code);
+      } catch (e) {
+        debugPrint('Data folder: unreadable $manifestFile: $e');
+        return await fail('manifest-unreadable: $e');
+      }
+      if (manifestText == null) {
         return await fail('manifest-missing', surface: false);
       }
       final Map<String, dynamic>? manifestRaw;
       try {
-        final decoded = jsonDecode(await manifestHandle.readAsString());
+        final decoded = jsonDecode(manifestText);
         manifestRaw = decoded is Map
             ? Map<String, dynamic>.from(decoded)
             : null;
@@ -465,7 +501,6 @@ class DataFolderService {
         return await fail('manifest-unreadable: $e');
       }
       if (manifestRaw == null) {
-        // File exists but isn't a manifest object (e.g. truncated sync).
         return await fail('manifest-unreadable: not-a-json-object');
       }
       final manifest = manifestRaw;
@@ -473,18 +508,21 @@ class DataFolderService {
         return await fail('not-a-data-folder');
       }
       final tables = <String, List<Map<String, dynamic>>>{};
-      for (final entry in tableFiles.entries) {
-        final list = await _readJsonList(dir, entry.value);
-        if (list != null) tables[entry.key] = list;
+      final tableEntries = tableFiles.entries.toList();
+      final tableResults = await Future.wait([
+        for (final entry in tableEntries)
+          _readJsonListStorage(storage, entry.value),
+      ]);
+      for (var i = 0; i < tableEntries.length; i++) {
+        final list = tableResults[i];
+        if (list != null) tables[tableEntries[i].key] = list;
       }
-      final tombs = await _readJsonList(dir, tombstonesFile) ?? const [];
+      final tombs =
+          await _readJsonListStorage(storage, tombstonesFile) ?? const [];
       final lastImportBefore = await settings.dataLastImportAt() ?? 0;
-      final merged = await _mergeData(dir, tables, tombs, lastImportBefore);
-      // Opt-in settings snapshot: applied only when this device also
-      // opted in. Unknown keys and non-string values are ignored so
-      // newer peers can't smuggle bookkeeping keys in.
+      final merged = await _mergeData(storage, tables, tombs, lastImportBefore);
       if (await settings.syncSettings()) {
-        final snap = await _readJson(dir, settingsFile);
+        final snap = await _readJsonStorage(storage, settingsFile);
         final incoming = snap?['settings'];
         if (incoming is Map) {
           for (final entry in incoming.entries) {
@@ -513,6 +551,9 @@ class DataFolderService {
         conflictsPreserved: merged.conflictsPreserved,
         rowsSkipped: merged.rowsSkipped,
       );
+    } on GoogleDriveAuthException catch (e) {
+      debugPrint('Sync import auth failed: $e');
+      return await fail(e.code);
     } catch (e) {
       debugPrint('Data folder import failed: $e');
       final result = DataFolderResult(error: '$e');
@@ -527,13 +568,10 @@ class DataFolderService {
   /// (`conflict_<table>_<uuid>_<at>.json` with `{local, incoming}`).
   static const conflictsDir = 'conflicts';
 
-  /// True when a fresh export lock is present: an exporter (here or a
-  /// peer mid-upload) is mid-generation. Callers should skip this round
-  /// and retry later; stale locks are ignored (see [exportLockStaleMs]).
-  /// Never throws.
-  Future<bool> exportInProgress(Directory dir) async {
+  /// True when a fresh export lock is present on [storage].
+  Future<bool> exportInProgressFor(SyncStorage storage) async {
     try {
-      final lock = await _readDecoded(dir, exportLockFile);
+      final lock = await _readDecodedStorage(storage, exportLockFile);
       final startedAt = lock is Map ? lock['startedAt'] : null;
       if (startedAt is! int) return false;
       return DateTime.now().millisecondsSinceEpoch - startedAt <
@@ -543,63 +581,28 @@ class DataFolderService {
     }
   }
 
-  /// True when any synced file (manifest, tables, tombstones, blobs) was
-  /// modified at or after [sinceMs]. Compares local filesystem mtimes, so
-  /// peer wall-clock skew can't hide late-arriving Syncthing files. Note:
-  /// Syncthing preserves source mtimes, so a late-arriving old-mtime file
-  /// can still compare older than [sinceMs]; callers must not rely on
-  /// mtime alone when the manifest generation is unseen (see import gate).
-  Future<bool> folderHasNewerFiles(Directory dir, int sinceMs) async {
-    Future<bool> newer(String path) async {
-      try {
-        final stat = await FileStat.stat(path);
-        if (stat.type == FileSystemEntityType.notFound) return false;
-        return stat.modified.millisecondsSinceEpoch >= sinceMs;
-      } catch (_) {
-        return false;
-      }
-    }
+  /// Backward-compatible [Directory] wrapper for [exportInProgressFor].
+  Future<bool> exportInProgress(Directory dir) =>
+      exportInProgressFor(LocalFolderStorage(dir));
 
-    if (await newer('${dir.path}/$manifestFile')) return true;
-    for (final name in tableFiles.values) {
-      if (await newer('${dir.path}/$name')) return true;
-    }
-    if (await newer('${dir.path}/$tombstonesFile')) return true;
-    if (await newer('${dir.path}/$settingsFile')) return true;
-    final blobsDir = Directory('${dir.path}/$filesDir');
-    try {
-      if (await blobsDir.exists()) {
-        await for (final e in blobsDir.list()) {
-          if (e is File) {
-            try {
-              final stat = await e.stat();
-              if (stat.modified.millisecondsSinceEpoch >= sinceMs) return true;
-            } catch (_) {}
-          }
-        }
-      }
-    } catch (_) {}
-    return false;
-  }
+  /// Backward-compatible [Directory] wrapper for [LocalFolderStorage.hasNewerFiles].
+  Future<bool> folderHasNewerFiles(Directory dir, int sinceMs) =>
+      LocalFolderStorage(dir).hasNewerFiles(sinceMs);
 
   /// Preserves the losing local row when both sides edited the same uuid
-  /// since the last import. Writes both versions to `conflicts/` so no
-  /// side is silently lost (Obsidian-style conflict files). Returns 1 when
-  /// a file was written, else 0. Never throws.
+  /// since the last import. Writes both versions to `conflicts/`.
   Future<int> _preserveConflict(
-    Directory dir,
+    SyncStorage storage,
     String table,
     String uuid,
     Map<String, dynamic> local,
     Map<String, dynamic> incoming,
   ) async {
     try {
-      final out = Directory('${dir.path}/$conflictsDir');
-      if (!await out.exists()) await out.create(recursive: true);
       final at = DateTime.now().millisecondsSinceEpoch;
       final safeUuid = uuid.replaceAll(RegExp('[^a-zA-Z0-9-]'), '_');
-      final file = File('${out.path}/conflict_${table}_${safeUuid}_$at.json');
-      await file.writeAsString(
+      await storage.writeString(
+        '$conflictsDir/conflict_${table}_${safeUuid}_$at.json',
         jsonEncode({
           'table': table,
           'uuid': uuid,
@@ -607,16 +610,17 @@ class DataFolderService {
           'incoming': incoming,
         }),
       );
-      // Bound growth: conflicts are rare, but drop files older than 30 days
-      // so the folder can't accumulate them forever.
       try {
-        final cutoff = DateTime.now().subtract(const Duration(days: 30));
-        await for (final e in out.list()) {
-          if (e is File && e.path.endsWith('.json')) {
+        final cutoffMs = DateTime.now()
+            .subtract(const Duration(days: 30))
+            .millisecondsSinceEpoch;
+        final existing = await storage.listPrefix(conflictsDir);
+        for (final e in existing) {
+          if (e.path.endsWith('.json') &&
+              e.modifiedAtMs > 0 &&
+              e.modifiedAtMs < cutoffMs) {
             try {
-              if ((await e.stat()).modified.isBefore(cutoff)) {
-                await e.delete();
-              }
+              await storage.delete(e.path);
             } catch (_) {}
           }
         }
@@ -627,11 +631,12 @@ class DataFolderService {
     }
   }
 
-  /// Reads and validates the folder manifest, or null when missing or
-  /// foreign. Used by the auto-sync poll to decide whether an import is
-  /// worthwhile without parsing every table file.
+  /// Reads and validates the folder manifest, or null when missing or foreign.
   Future<Map<String, dynamic>?> readManifest(Directory dir) async {
-    final manifest = await _readJson(dir, manifestFile);
+    final manifest = await _readJsonStorage(
+      LocalFolderStorage(dir),
+      manifestFile,
+    );
     if (manifest == null || !_isOurManifest(manifest)) return null;
     return manifest;
   }
@@ -642,42 +647,43 @@ class DataFolderService {
       manifest['app'] == appTag &&
       manifest['formatVersion'] == formatVersion;
 
-  /// Reads + JSON-decodes [name], or null when the file is missing or
-  /// unreadable. Callers cast the dynamic payload to map or list.
-  Future<dynamic> _readDecoded(Directory dir, String name) async {
-    final file = File('${dir.path}/$name');
-    if (!await file.exists()) return null;
+  Future<dynamic> _readDecodedStorage(SyncStorage storage, String name) async {
     try {
-      return jsonDecode(await file.readAsString());
+      final text = await storage.readString(name);
+      if (text == null) return null;
+      return jsonDecode(text);
     } catch (e) {
-      debugPrint('Data folder: skipping unreadable $name: $e');
+      debugPrint('Sync: skipping unreadable $name: $e');
       return null;
     }
   }
 
-  Future<Map<String, dynamic>?> _readJson(Directory dir, String name) async {
-    final decoded = await _readDecoded(dir, name);
+  Future<Map<String, dynamic>?> _readJsonStorage(
+    SyncStorage storage,
+    String name,
+  ) async {
+    final decoded = await _readDecodedStorage(storage, name);
     return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
   }
 
-  Future<List<Map<String, dynamic>>?> _readJsonList(
-    Directory dir,
+  Future<List<Map<String, dynamic>>?> _readJsonListStorage(
+    SyncStorage storage,
     String name,
   ) async {
-    final decoded = await _readDecoded(dir, name);
+    final decoded = await _readDecodedStorage(storage, name);
     if (decoded == null) return null;
     try {
       if (decoded is! List) throw FormatException('Bad table file: $name');
       return [for (final m in decoded) Map<String, dynamic>.from(m as Map)];
     } catch (e) {
-      debugPrint('Data folder: skipping unreadable $name: $e');
+      debugPrint('Sync: skipping unreadable $name: $e');
       return null;
     }
   }
 
   /// Merges table lists plus tombstones. Returns counts.
   Future<DataFolderResult> _mergeData(
-    Directory dir,
+    SyncStorage storage,
     Map<String, List<Map<String, dynamic>>> tables,
     List<Map<String, dynamic>> rawTombs,
     int lastImportBefore,
@@ -691,8 +697,6 @@ class DataFolderService {
     var skipped = 0;
 
     await db.transaction(() async {
-      // 1. Adopt tombstones (union, keep newest), so deletes propagate the
-      // next time this device exports.
       final incomingTombs = <({String table, String uuid, int at})>[];
       for (final m in rawTombs) {
         final t = m['tableKey'];
@@ -717,21 +721,14 @@ class DataFolderService {
         }
       }
 
-      // 2. Delete local rows covered by newly-adopted tombstones:
-      // only when the row wasn't modified after the delete. Tombstones
-      // adopted by an earlier import already swept their rows then; rows
-      // kept for being newer can only be removed by a newer tombstone,
-      // which arrives as fresh again. This keeps steady-state imports
-      // (no new deletes) at zero sweep selects.
       for (final tomb in freshTombs) {
         if (await _deleteIfStale(tomb.$1, tomb.$2, tomb.$3)) {
           deleted++;
         }
       }
 
-      // 3. Upsert rows parents-first, skipping tombstoned or stale rows.
       final merged = await _mergeRows(
-        dir,
+        storage,
         listOf,
         localTombs,
         lastImportBefore,
@@ -988,7 +985,7 @@ class DataFolderService {
   /// Attachment bytes come from `<dir>/files/` and are copied into local
   /// app storage; incoming absolute paths are never trusted.
   Future<({int count, int conflicts, int skipped})> _mergeRows(
-    Directory dir,
+    SyncStorage storage,
     List<Map<String, dynamic>> Function(String key) listOf,
     Map<(String, String), int> tombstones,
     int lastImportBefore,
@@ -1031,7 +1028,13 @@ class DataFolderService {
       if (localUpdatedAt <= lastImportBefore) return;
       final local = await loadLocal();
       if (local == null) return;
-      conflicts += await _preserveConflict(dir, table, uuid, local, incoming);
+      conflicts += await _preserveConflict(
+        storage,
+        table,
+        uuid,
+        local,
+        incoming,
+      );
     }
 
     // Local uuid → (id, updatedAt) per table.
@@ -1637,7 +1640,7 @@ class DataFolderService {
 
     // Class files (class FK remapped by uuid; bytes copied locally).
     final classFilesMerged = await _mergeFileRows(
-      dir: dir,
+      storage: storage,
       fileMaps: listOf('classFiles'),
       parentUuids: classUuids,
       parentMap: classMap,
@@ -1673,7 +1676,7 @@ class DataFolderService {
 
     // Year files (year FK remapped by uuid; bytes copied locally).
     final yearFilesMerged = await _mergeFileRows(
-      dir: dir,
+      storage: storage,
       fileMaps: listOf('yearFiles'),
       parentUuids: yearUuids,
       parentMap: yearMap,
@@ -1714,11 +1717,11 @@ class DataFolderService {
   }
 
   /// Merges one attachment table. Parents are remapped file-id → local-id
-  /// via uuid; bytes are copied from the folder's `files/` dir into local
+  /// via uuid; bytes are copied from the storage's `files/` into local
   /// app storage (the incoming absolute path is never trusted). Rows whose
-  /// blob is missing from the folder are skipped.
+  /// blob is missing are skipped.
   Future<({int count, int conflicts, int skipped})> _mergeFileRows({
-    required Directory dir,
+    required SyncStorage storage,
     required List<Map<String, dynamic>> fileMaps,
     required Map<int, String> parentUuids,
     required Map<String, ({int id, int updatedAt})> parentMap,
@@ -1764,13 +1767,17 @@ class DataFolderService {
       if (existing != null && updatedAt <= (existing.updatedAt as int)) {
         continue;
       }
-      final blob = await _findBlob(dir, uuid, row.fileName as String);
-      if (blob == null) continue;
-      final localPath = await _storeBlob(
+      final blobBytes = await _findBlobBytes(
+        storage,
+        uuid,
+        row.fileName as String,
+      );
+      if (blobBytes == null) continue;
+      final localPath = await _storeBlobBytes(
         scope,
         parentId,
         row.fileName as String,
-        blob,
+        blobBytes,
       );
       if (existing == null) {
         await insert(row, parentId, localPath);
@@ -1783,7 +1790,7 @@ class DataFolderService {
               (existing.toJson() as Map),
             );
             conflicts += await _preserveConflict(
-              dir,
+              storage,
               tombTable,
               uuid,
               localJson,
@@ -1799,17 +1806,14 @@ class DataFolderService {
                   );
               final oldFile = File(oldResolved);
               if (await oldFile.exists()) {
-                final outDir = Directory('${dir.path}/$conflictsDir');
-                if (!await outDir.exists()) {
-                  await outDir.create(recursive: true);
-                }
                 final at = DateTime.now().millisecondsSinceEpoch;
                 final safeUuid = uuid.replaceAll(
                   RegExp('[^a-zA-Z0-9-]'),
                   '_',
                 );
-                await oldFile.copy(
-                  '${outDir.path}/conflict_${tombTable}_${safeUuid}_$at.bin',
+                await storage.writeBytes(
+                  '$conflictsDir/conflict_${tombTable}_${safeUuid}_$at.bin',
+                  await oldFile.readAsBytes(),
                 );
               }
             } catch (_) {}
@@ -1850,35 +1854,35 @@ class DataFolderService {
 
   /// Locates an attachment blob: current human-readable name first, then
   /// the legacy `<uuid>[.ext]` name from older exports. Null when absent.
-  Future<File?> _findBlob(Directory dir, String uuid, String fileName) async {
-    final primary = File(
-      '${dir.path}/$filesDir/${blobNameFor(uuid, fileName)}',
+  Future<Uint8List?> _findBlobBytes(
+    SyncStorage storage,
+    String uuid,
+    String fileName,
+  ) async {
+    final primary = await storage.readBytes(
+      '$filesDir/${blobNameFor(uuid, fileName)}',
     );
-    if (await primary.exists()) return primary;
-    final legacy = File(
-      '${dir.path}/$filesDir/${legacyBlobNameFor(uuid, fileName)}',
-    );
-    if (await legacy.exists()) return legacy;
-    return null;
+    if (primary != null) return primary;
+    return storage.readBytes('$filesDir/${legacyBlobNameFor(uuid, fileName)}');
   }
 
-  /// Copies a folder blob into local app storage
-  /// (`<scope>/<parentId>/`), returning the *relative* stored path.
+  /// Writes blob bytes into local app storage (`<scope>/<parentId>/`),
+  /// returning the *relative* stored path.
   /// Peer-supplied [fileName] is sanitized: path separators are stripped so
   /// a hand-edited export can't escape the scope dir ("../../evil").
-  Future<String> _storeBlob(
+  Future<String> _storeBlobBytes(
     String scope,
     int parentId,
     String fileName,
-    File blob,
+    Uint8List bytes,
   ) async {
     final base = storageRoot ?? await getApplicationSupportDirectory();
     final dir = Directory('${base.path}/$scope/$parentId');
     if (!await dir.exists()) await dir.create(recursive: true);
     final safe = fileName.trim().split('/').last.split('\\').last;
-    final name = safe.isEmpty ? 'file' : safe;
+    final name = (safe.isEmpty || safe == '.' || safe == '..') ? 'file' : safe;
     final target = await ClassFilesService.uniqueTarget(dir, name);
-    await blob.copy(target.path);
+    await target.writeAsBytes(bytes);
     return '$scope/$parentId/${target.path.split('/').last}';
   }
 }

@@ -1585,4 +1585,72 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get widgetCurrently => 'Şu an';
+
+  @override
+  String get syncBackendLabel => 'Eşitleme yöntemi';
+
+  @override
+  String get syncBackendNone => 'Kapalı';
+
+  @override
+  String get syncBackendFolder => 'Yerel klasör';
+
+  @override
+  String get syncBackendGdrive => 'Google Drive';
+
+  @override
+  String get gdriveTitle => 'Google Drive';
+
+  @override
+  String get gdriveSignedOut => 'Oturum açılmadı';
+
+  @override
+  String get gdriveSignInAction => 'Google ile oturum aç';
+
+  @override
+  String get gdriveSignOutAction => 'Çıkış yap';
+
+  @override
+  String gdriveSignedInAs(Object email) {
+    return '$email olarak oturum açıldı';
+  }
+
+  @override
+  String get gdriveSignedOutDone => 'Google Drive oturumu kapatıldı';
+
+  @override
+  String gdriveSignInFailed(Object error) {
+    return 'Google ile oturum açılamadı: $error';
+  }
+
+  @override
+  String get gdriveNotConfigured =>
+      'OAuth İstemci Kimliği yapılandırılmamış. Eklemek için ayarlar simgesine dokunun.';
+
+  @override
+  String get gdriveNotSignedIn => 'Önce Google Drive ile oturum açın';
+
+  @override
+  String get gdriveAuthExpired =>
+      'Google Drive oturumu sona erdi. Lütfen tekrar oturum açın.';
+
+  @override
+  String get gdriveOAuthTitle => 'Google Drive OAuth (Linux)';
+
+  @override
+  String get gdriveOAuthHint =>
+      'Yerleşik kimlik bilgilerini (bu derlemede varsa) kullanmak için boş bırakın.';
+
+  @override
+  String get gdriveClientIdLabel => 'OAuth İstemci Kimliği';
+
+  @override
+  String get gdriveClientSecretLabel =>
+      'OAuth İstemci Gizli Anahtarı (isteğe bağlı)';
+
+  @override
+  String get gdriveOAuthSaved => 'OAuth kimlik bilgileri kaydedildi';
+
+  @override
+  String get gdriveOAuthTooltip => 'OAuth kimlik bilgileri';
 }

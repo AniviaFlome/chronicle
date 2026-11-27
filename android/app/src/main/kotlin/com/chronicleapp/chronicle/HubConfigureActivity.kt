@@ -21,6 +21,7 @@ import android.widget.TextView
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import com.chronicleapp.chronicle.widget.Keys
 import com.chronicleapp.chronicle.widget.bool
+import com.chronicleapp.chronicle.widget.hubNavBump
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -91,13 +92,15 @@ class HubConfigureActivity : Activity() {
                                     editor.putBoolean("$prefix.${Keys.TAB_CLASS}", true)
                                 }
                                 editor.putInt("$prefix.${Keys.SELECTED_TAB}", 0)
-                                editor.apply()
+                                editor.commit()
+                                hubNavBump.intValue++
+                                val appCtx = applicationContext
                                 CoroutineScope(Dispatchers.IO).launch {
                                     runCatching {
-                                        val manager = GlanceAppWidgetManager(this@HubConfigureActivity)
+                                        val manager = GlanceAppWidgetManager(appCtx)
                                         val ids = manager.getGlanceIds(ChronicleHubHomeWidget::class.java)
                                         for (id in ids) {
-                                            ChronicleHubHomeWidget().update(this@HubConfigureActivity, id)
+                                            ChronicleHubHomeWidget().update(appCtx, id)
                                         }
                                     }
                                 }

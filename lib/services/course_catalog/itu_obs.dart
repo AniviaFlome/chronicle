@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
@@ -266,13 +268,21 @@ class ItuObsCatalog {
         'Branch list failed: HTTP ${response.statusCode}',
       );
     }
-    // Minimal JSON decode without dart:convert ceremony: the payload is
-    // [{"bransKoduId":26,"dersBransKodu":"MAT"}, ...].
     final ids = <String, int>{};
-    for (final match in RegExp(
-      r'"bransKoduId"\s*:\s*(\d+)\s*,\s*"dersBransKodu"\s*:\s*"([A-Z]+)"',
-    ).allMatches(decodeMenuBody(response))) {
-      ids[match.group(2)!] = int.parse(match.group(1)!);
+    try {
+      final decoded = jsonDecode(decodeMenuBody(response));
+      if (decoded is List) {
+        for (final item in decoded) {
+          if (item is! Map) continue;
+          final rawId = item['bransKoduId'];
+          final rawCode = item['dersBransKodu'];
+          final id = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
+          final code = rawCode is String ? rawCode.trim() : '';
+          if (id != null && code.isNotEmpty) ids[code] = id;
+        }
+      }
+    } catch (_) {
+      // Malformed payload: treat as empty branch list.
     }
     return ids;
   }
@@ -437,9 +447,19 @@ class ItuObsCatalog {
       r'(\d{1,2}):(\d{2})\s*/\s*(\d{1,2}):(\d{2})',
     ).firstMatch(raw.trim());
     if (match == null) return null;
-    final start = int.parse(match.group(1)!) * 60 + int.parse(match.group(2)!);
-    var end = int.parse(match.group(3)!) * 60 + int.parse(match.group(4)!);
+    final startHour = int.parse(match.group(1)!);
+    final startMinute = int.parse(match.group(2)!);
+    final endHour = int.parse(match.group(3)!);
     final endMinute = int.parse(match.group(4)!);
+    if (startMinute >= 60 ||
+        endMinute >= 60 ||
+        startHour > 23 ||
+        endHour > 24 ||
+        (endHour == 24 && endMinute > 0)) {
+      return null;
+    }
+    final start = startHour * 60 + startMinute;
+    var end = endHour * 60 + endMinute;
     if (endMinute == 29 || endMinute == 59) end += 1;
     if (end <= start || end > 24 * 60) return null;
     return (start, end);

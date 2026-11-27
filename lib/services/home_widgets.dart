@@ -405,7 +405,10 @@ Future<void> _push(ProviderContainer container) async {
   // is a friendly label; overdue flips the `urgent` flag (error-colored
   // chip + bold title on the native side).
   final repo = container.read(taskRepositoryProvider);
-  final open = await repo.watchAll(onlyOpen: true).first;
+  final activeYearId = await container
+      .read(settingsRepositoryProvider)
+      .activeYearId();
+  final open = await repo.watchAll(onlyOpen: true, yearId: activeYearId).first;
   final dated =
       [
         for (final t in open)

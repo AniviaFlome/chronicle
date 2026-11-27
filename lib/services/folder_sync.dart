@@ -1,26 +1,28 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:drift/drift.dart' show TableUpdateQuery;
 import 'package:flutter/foundation.dart';
 
 import 'data_folder.dart';
 
-/// Automatic data-folder sync: debounced export on changes plus periodic
-/// import. Merge semantics stay in [DataFolderService]; this only decides
-/// *when* to run. Exports are debounced and never prune blobs on auto path.
+/// Automatic sync controller: debounced export on changes plus periodic
+/// import (and FS watch for local-folder backends). Merge semantics stay in
+/// [DataFolderService]; this only decides *when* to run. Exports are debounced
+/// and never prune blobs on the auto path.
 class FolderSyncController {
   final DataFolderService service;
   final Duration exportDebounce;
   final Duration pollInterval;
+  final Duration drivePollInterval;
   final Duration watchDebounce;
 
   Timer? _pollTimer;
   Timer? _debounceTimer;
   Timer? _watchDebounceTimer;
   StreamSubscription<void>? _updatesSub;
-  StreamSubscription<FileSystemEvent>? _folderWatchSub;
-  String? _watchedPath;
+  StreamSubscription<String>? _storageWatchSub;
+  String? _watchedLocation;
+  DateTime? _lastDrivePoll;
   bool _busy = false;
   bool _exportQueued = false;
   bool _importQueued = false;
@@ -32,13 +34,16 @@ class FolderSyncController {
     required this.service,
     this.exportDebounce = const Duration(seconds: 5),
     this.pollInterval = const Duration(seconds: 30),
+    this.drivePollInterval = const Duration(seconds: 60),
     this.watchDebounce = const Duration(seconds: 2),
   });
 
-  /// Whether auto-sync is currently allowed (folder set + toggle on).
+  /// Whether auto-sync is currently allowed (active backend ready + toggle on).
   Future<bool> enabled() async {
     if (!await service.settings.autoSync()) return false;
-    return await service.dataDir() != null;
+    final storage = await service.activeStorage();
+    if (storage == null) return false;
+    return storage.isReady();
   }
 
   /// Starts periodic import and change-triggered export (once).
@@ -61,9 +66,23 @@ class FolderSyncController {
         );
     _pollTimer = Timer.periodic(pollInterval, (_) async {
       await _ensureWatching();
-      await importIfNewer();
+      await _periodicPoll();
     });
     await _ensureWatching();
+  }
+
+  Future<void> _periodicPoll() async {
+    final storage = await service.activeStorage();
+    if (storage == null) return;
+    if (storage.backendId == 'gdrive') {
+      final now = DateTime.now();
+      if (_lastDrivePoll != null &&
+          now.difference(_lastDrivePoll!) < drivePollInterval) {
+        return;
+      }
+      _lastDrivePoll = now;
+    }
+    await importIfNewer();
   }
 
   /// Stops timers and subscriptions, then waits for in-flight runs so
@@ -75,7 +94,7 @@ class FolderSyncController {
     _debounceTimer?.cancel();
     _watchDebounceTimer?.cancel();
     await _updatesSub?.cancel();
-    await _folderWatchSub?.cancel();
+    await _storageWatchSub?.cancel();
     for (var i = 0; i < 500 && _inflight > 0; i++) {
       await Future.delayed(const Duration(milliseconds: 10));
     }
@@ -104,35 +123,38 @@ class FolderSyncController {
   /// Call after changing a key in [DataFolderService.syncedSettingKeys].
   void scheduleExport() => _markDirty();
 
-  /// Watches the data folder for external (Syncthing) changes. Debounced
-  /// into [importIfNewer]; re-arms when the user picks a new folder.
+  /// Re-arms storage watchers after the user changes sync target or folder.
+  Future<void> reconfigure() async {
+    _lastDrivePoll = null;
+    await _ensureWatching();
+  }
+
+  /// Watches the active storage for external changes when supported (Local
+  /// folder). Cancels any old watcher when switching targets.
   Future<void> _ensureWatching() async {
     if (_disposed) return;
-    final dir = await service.dataDir();
-    if (dir == null) return;
-    if (_watchedPath == dir.path && _folderWatchSub != null) return;
-    await _folderWatchSub?.cancel();
-    _folderWatchSub = null;
-    _watchedPath = dir.path;
+    final storage = await service.activeStorage();
+    final loc = storage == null ? null : '${storage.backendId}:${storage.locationId}';
+    if (loc == _watchedLocation && (loc == null || _storageWatchSub != null)) {
+      return;
+    }
+    await _storageWatchSub?.cancel();
+    _storageWatchSub = null;
+    _watchedLocation = loc;
+    if (storage == null) return;
     try {
-      if (!await Directory(dir.path).exists()) return;
-      _folderWatchSub = Directory(
-        dir.path,
-      ).watch(recursive: true).listen((event) {
-        if (_disposed) return;
-        final path = event.path;
-        final isJson = path.endsWith('.json');
-        final isBlob =
-            path.contains('/${DataFolderService.filesDir}/') ||
-            path.contains('\\${DataFolderService.filesDir}\\');
-        final isConflict = path.contains('/${DataFolderService.conflictsDir}/');
-        if (!isJson && !isBlob) return;
-        if (isConflict) return;
-        _watchDebounceTimer?.cancel();
-        _watchDebounceTimer = Timer(watchDebounce, () => importIfNewer());
-      }, onError: (Object e) => debugPrint('Folder watch failed: $e'));
+      final stream = storage.watchChanges();
+      if (stream == null) return;
+      _storageWatchSub = stream.listen(
+        (_) {
+          if (_disposed) return;
+          _watchDebounceTimer?.cancel();
+          _watchDebounceTimer = Timer(watchDebounce, () => importIfNewer());
+        },
+        onError: (Object e) => debugPrint('Storage watch failed: $e'),
+      );
     } catch (e) {
-      debugPrint('Folder watch failed: $e');
+      debugPrint('Storage watch failed: $e');
     }
   }
 
@@ -144,9 +166,11 @@ class FolderSyncController {
       _exportQueued = true;
       return;
     }
-    if (!await enabled()) return;
+    // Claim _busy synchronously BEFORE awaiting enabled() so concurrent
+    // triggers (resume + timer + DB write) cannot interleave.
     _busy = true;
     try {
+      if (!await enabled()) return;
       await _guarded(() async {
         // Merge-before-export: pull peer changes so we never overwrite
         // them with a stale full snapshot.
@@ -154,7 +178,7 @@ class FolderSyncController {
         await service.exportData(pruneBlobs: false);
       });
     } catch (e) {
-      debugPrint('Folder auto-export failed: $e');
+      debugPrint('Auto-export failed: $e');
       try {
         await service.settings.setDataSyncError('auto-export: $e');
       } catch (_) {}
@@ -172,21 +196,21 @@ class FolderSyncController {
     }
   }
 
-  /// Imports when the folder holds state newer than ours. Returns true
-  /// when an import ran.
+  /// Imports when the active backend holds state newer than ours. Returns
+  /// true when an import ran.
   Future<bool> importIfNewer() async {
     if (_disposed) return false;
     if (_busy) {
       _importQueued = true;
       return false;
     }
-    if (!await enabled()) return false;
     _busy = true;
     try {
+      if (!await enabled()) return false;
       final ran = await _guarded(() => _importNewerInternal());
       return ran ?? false;
     } catch (e) {
-      debugPrint('Folder auto-import failed: $e');
+      debugPrint('Auto-import failed: $e');
       try {
         await service.settings.setDataSyncError('auto-import: $e');
       } catch (_) {}
@@ -208,28 +232,38 @@ class FolderSyncController {
   }
 
   /// Gate: import when the manifest differs from the last seen one, or
-  /// when any synced file is newer than our last export/import (catches
-  /// Syncthing files arriving after the manifest). Equality-based, so
-  /// cross-device clock skew can't hide peer data. Skips the round while
-  /// a fresh export lock is present (an exporter is mid-generation);
-  /// manual imports bypass the gate on purpose (explicit user intent,
-  /// and any mixed read self-heals on the next auto pass).
+  /// (for local folders) when any synced file is newer than our last
+  /// export/import (catches Syncthing files arriving after the manifest).
+  /// Equality-based, so cross-device clock skew can't hide peer data.
+  /// Skips the round while a fresh export lock is present.
   Future<bool> _importNewerInternal() async {
-    final dir = await service.dataDir();
-    if (dir == null || _disposed) return false;
-    if (await service.exportInProgress(dir)) return false;
-    final manifest = await service.readManifest(dir);
-    if (manifest == null) return false;
-    final exportedAt = manifest['exportedAt'];
-    if (exportedAt is! int) return false;
+    final storage = await service.activeStorage();
+    if (storage == null || _disposed) return false;
+    if (!await storage.isReady()) return false;
+    if (storage.backendId == 'folder' &&
+        await service.exportInProgressFor(storage)) {
+      return false;
+    }
+    final exportedAt = await storage.fastManifestExportedAt();
+    if (exportedAt == null) return false;
     final seen = await service.settings.dataLastSeenExportedAt();
     if (seen != null && exportedAt == seen) {
+      // For local folders (Syncthing), files can arrive after manifest.json.
+      // For Google Drive, manifest.json is uploaded last after all tables +
+      // blobs, so an identical exportedAt means zero changes (saves API calls).
+      if (storage.backendId == 'gdrive') {
+        return false;
+      }
       final lastExport = await service.settings.dataLastExportAt() ?? 0;
       final lastImport = await service.settings.dataLastImportAt() ?? 0;
       final baseline = lastExport > lastImport ? lastExport : lastImport;
-      if (!await service.folderHasNewerFiles(dir, baseline)) {
+      if (!await storage.hasNewerFiles(baseline)) {
         return false;
       }
+    }
+    if (storage.backendId == 'gdrive' &&
+        await service.exportInProgressFor(storage)) {
+      return false;
     }
     final result = await service.importData();
     return result.error == null;

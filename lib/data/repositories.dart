@@ -973,37 +973,32 @@ class XtraRepository {
         }
         continue;
       }
-      var d = DateTime(anchor.year, anchor.month, anchor.day);
+      final anchorDate = DateTime(anchor.year, anchor.month, anchor.day);
+      var d = anchorDate;
+      var monthOffset = 0;
       // Fast-forward old forever-series to the window: stepping day-by-day
       // from a 2000 anchor would exhaust the 3700 guard before reaching a
       // 2026 window and silently return nothing. Jump arithmetically to
       // just before fromIso (wall-clock arithmetic, no Duration drift).
       final fromDate = DateTime.tryParse(fromIso);
       if (fromDate != null && d.isBefore(fromDate)) {
-        d = switch (kind) {
-          RepeatKind.daily => DateTime(
-            fromDate.year,
-            fromDate.month,
-            fromDate.day,
-          ),
-          RepeatKind.weekly => () {
+        switch (kind) {
+          case RepeatKind.daily:
+            d = DateTime(fromDate.year, fromDate.month, fromDate.day);
+          case RepeatKind.weekly:
             final gap = daysBetween(d, fromDate);
             final steps = gap ~/ 7;
-            return shiftDays(d, steps * 7);
-          }(),
-          RepeatKind.monthly => () {
+            d = shiftDays(d, steps * 7);
+          case RepeatKind.monthly:
             var months =
-                (fromDate.year - d.year) * 12 + (fromDate.month - d.month);
+                (fromDate.year - anchorDate.year) * 12 +
+                (fromDate.month - anchorDate.month);
             // Step back one so the main loop still emits a fromDate-month
             // instance when the anchor day allows it.
             if (months > 0) months -= 1;
-            var jumped = d;
-            for (var i = 0; i < months; i++) {
-              jumped = shiftMonths(jumped, 1);
-            }
-            return jumped;
-          }(),
-        };
+            monthOffset = months;
+            d = shiftMonths(anchorDate, monthOffset);
+        }
       }
       // ~10 years of daily occurrences; the loop also breaks at the
       // range end or repeatUntil, so monthly/weekly series stop much
@@ -1016,12 +1011,19 @@ class XtraRepository {
         }
         if (iso.compareTo(toIso) > 0) break;
         if (iso.compareTo(fromIso) >= 0) out.add(row.copyWith(date: iso));
-        d = switch (kind) {
+        switch (kind) {
           // Wall-clock steps (see TaskRepository.nextRepeatDate).
-          RepeatKind.daily => shiftDays(d, 1),
-          RepeatKind.weekly => shiftDays(d, 7),
-          RepeatKind.monthly => shiftMonths(d, 1),
-        };
+          case RepeatKind.daily:
+            d = shiftDays(d, 1);
+          case RepeatKind.weekly:
+            d = shiftDays(d, 7);
+          case RepeatKind.monthly:
+            // Step from anchorDate (not the previously clamped date) so a
+            // Jan 31 anchor expands to Feb 28/29, Mar 31, Apr 30 instead of
+            // drifting permanently to the 28th.
+            monthOffset++;
+            d = shiftMonths(anchorDate, monthOffset);
+        }
       }
     }
     out.sort((a, b) {
@@ -1455,11 +1457,62 @@ class SettingsRepository {
   }
 
   static const dataFolderKey = 'data_folder_path';
+  static const syncBackendKey = 'sync_backend';
+  static const gdriveEmailKey = 'gdrive_email';
+  static const gdriveCustomClientIdKey = 'gdrive_custom_client_id';
+  static const gdriveCustomClientSecretKey = 'gdrive_custom_client_secret';
   static const dataLastExportAtKey = 'data_last_export_at';
   static const dataLastImportAtKey = 'data_last_import_at';
   static const dataLastSeenAtKey = 'data_last_seen_exported_at';
   static const dataSyncErrorKey = 'data_sync_error';
   static const dataLastConflictsKey = 'data_last_conflicts';
+
+  /// Active sync backend: `'none'`, `'folder'`, or `'gdrive'`.
+  /// Defaults to `'folder'` when unset and a local data folder is already
+  /// configured (seamless upgrade for existing users), otherwise `'none'`.
+  Future<String> syncBackend() async {
+    const known = {'none', 'folder', 'gdrive'};
+    final raw = await get(syncBackendKey);
+    if (raw != null && known.contains(raw)) return raw;
+    final folder = await dataFolder();
+    return (folder != null && folder.trim().isNotEmpty) ? 'folder' : 'none';
+  }
+
+  Future<void> setSyncBackend(String value) => set(syncBackendKey, value);
+
+  /// Cached Google account email for instant display in Settings.
+  Future<String?> gdriveEmail() => get(gdriveEmailKey);
+
+  Future<void> setGdriveEmail(String? email) async {
+    if (email == null || email.trim().isEmpty) {
+      await remove(gdriveEmailKey);
+    } else {
+      await set(gdriveEmailKey, email.trim());
+    }
+  }
+
+  /// Optional user-supplied Linux Desktop OAuth Client ID (for self-builders).
+  Future<String?> gdriveCustomClientId() => get(gdriveCustomClientIdKey);
+
+  Future<void> setGdriveCustomClientId(String? value) async {
+    if (value == null || value.trim().isEmpty) {
+      await remove(gdriveCustomClientIdKey);
+    } else {
+      await set(gdriveCustomClientIdKey, value.trim());
+    }
+  }
+
+  /// Optional user-supplied Linux Desktop OAuth Client Secret.
+  Future<String?> gdriveCustomClientSecret() =>
+      get(gdriveCustomClientSecretKey);
+
+  Future<void> setGdriveCustomClientSecret(String? value) async {
+    if (value == null || value.trim().isEmpty) {
+      await remove(gdriveCustomClientSecretKey);
+    } else {
+      await set(gdriveCustomClientSecretKey, value.trim());
+    }
+  }
 
   /// User-chosen folder holding exported data files. Null = unset.
   /// The path is remembered across restarts; if the platform revokes
@@ -1500,8 +1553,13 @@ class SettingsRepository {
     return raw == null ? null : int.tryParse(raw);
   }
 
-  Future<void> setDataLastSeenExportedAt(int value) =>
-      set(dataLastSeenAtKey, value.toString());
+  Future<void> setDataLastSeenExportedAt(int? value) async {
+    if (value == null) {
+      await remove(dataLastSeenAtKey);
+    } else {
+      await set(dataLastSeenAtKey, value.toString());
+    }
+  }
 
   /// Last auto/manual sync failure, or null when the last run succeeded.
   /// Surfaced in Settings → Data so silent `debugPrint` failures become

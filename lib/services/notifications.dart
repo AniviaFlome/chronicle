@@ -10,6 +10,7 @@ import '../l10n/l10n.dart';
 
 import '../data/repositories.dart';
 import '../data/schedule_repository.dart';
+import '../domain/schedule_models.dart' as engine_models;
 import '../utils/time_format.dart';
 
 /// Local due moment for a task: dated tasks use their time (or 09:00 when
@@ -398,17 +399,25 @@ class ReminderScheduler {
     final weekStartDay = await settings.weekStartDay();
     final activeYearId = await settings.activeYearId();
     Set<int>? classIds;
+    engine_models.DayRotationConfig? dayRotation;
     if (activeYearId != null) {
       final all = await classes.all();
       classIds = {
         for (final c in all)
           if (c.yearId == null || c.yearId == activeYearId) c.id,
       };
+      for (final y in await classes.years()) {
+        if (y.id == activeYearId) {
+          dayRotation = dayRotationFromYear(y);
+          break;
+        }
+      }
     }
     final engine = await schedule.loadEngine(
       weekABAnchor: anchor,
       weekStartDay: weekStartDay,
       classIds: classIds,
+      dayRotation: dayRotation,
     );
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);

@@ -988,5 +988,35 @@
     }
   },
   "widgetCurrently": "Currently",
-  "@widgetCurrently": {}
+  "@widgetCurrently": {},
+  "syncBackendLabel": "Sync method",
+  "syncBackendNone": "Off",
+  "syncBackendFolder": "Local folder",
+  "syncBackendGdrive": "Google Drive",
+  "gdriveTitle": "Google Drive",
+  "gdriveSignedOut": "Not signed in",
+  "gdriveSignInAction": "Sign in with Google",
+  "gdriveSignOutAction": "Sign out",
+  "gdriveSignedInAs": "Signed in as {email}",
+  "@gdriveSignedInAs": {
+    "placeholders": {
+      "email": {}
+    }
+  },
+  "gdriveSignedOutDone": "Signed out of Google Drive",
+  "gdriveSignInFailed": "Google sign-in failed: {error}",
+  "@gdriveSignInFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "gdriveNotConfigured": "OAuth Client ID not configured. Tap the settings icon to add one.",
+  "gdriveNotSignedIn": "Sign in to Google Drive first",
+  "gdriveAuthExpired": "Google Drive sign-in expired. Please sign in again.",
+  "gdriveOAuthTitle": "Google Drive OAuth (Linux)",
+  "gdriveOAuthHint": "Leave empty to use built-in credentials (if included in this build).",
+  "gdriveClientIdLabel": "OAuth Client ID",
+  "gdriveClientSecretLabel": "OAuth Client Secret (optional)",
+  "gdriveOAuthSaved": "OAuth credentials saved",
+  "gdriveOAuthTooltip": "OAuth credentials"
 }

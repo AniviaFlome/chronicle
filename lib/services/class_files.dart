@@ -125,13 +125,12 @@ class ClassFilesService {
   }) async {
     if (stored.startsWith('/')) return stored;
     final base = root ?? await getApplicationSupportDirectory();
-    final normalized = Uri.file(
-      '${base.path}/$stored',
-    ).toFilePath();
-    final baseWithSep = base.path.endsWith('/')
-        ? base.path
-        : '${base.path}/';
-    if (normalized != base.path && !normalized.startsWith(baseWithSep)) {
+    final baseNormalized = Uri.file(base.path).toFilePath();
+    final baseWithSep = baseNormalized.endsWith('/')
+        ? baseNormalized
+        : '$baseNormalized/';
+    final normalized = Uri.file('$baseWithSep$stored').toFilePath();
+    if (normalized != baseNormalized && !normalized.startsWith(baseWithSep)) {
       throw StateError('Stored path escapes support directory');
     }
     return normalized;
@@ -179,6 +178,7 @@ class ClassFilesService {
 
   String _safeName(String raw) {
     final name = raw.trim().split('/').last.split('\\').last;
+    if (name == '.' || name == '..') return '';
     return name.length > 255 ? name.substring(name.length - 255) : name;
   }
 

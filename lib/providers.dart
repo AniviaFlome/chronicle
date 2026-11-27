@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,6 +11,7 @@ import 'domain/schedule_models.dart' as engine;
 import 'domain/schedule_occurrence_engine.dart';
 import 'services/class_files.dart';
 import 'services/folder_sync.dart';
+import 'services/gdrive_auth.dart';
 import 'services/notifications.dart';
 import 'services/data_folder.dart';
 import 'services/storage_access.dart';
@@ -593,15 +596,25 @@ const classColorPalette = [
   0xFFD6409F, // magenta
 ];
 
-/// Local data-folder export/import service.
+/// Platform-specific Google Drive authentication provider.
+final googleDriveAuthProvider = Provider<GoogleDriveAuth>((ref) {
+  final settings = ref.watch(settingsRepositoryProvider);
+  if (Platform.isAndroid) return AndroidGoogleDriveAuth(settings);
+  if (Platform.isLinux) return LinuxGoogleDriveAuth(settings);
+  return const UnsupportedGoogleDriveAuth();
+});
+
+/// Sync export/import service (Local folder or Google Drive).
 final dataFolderServiceProvider = Provider<DataFolderService>((ref) {
   return DataFolderService(
     ref.watch(appDatabaseProvider),
     ref.watch(settingsRepositoryProvider),
+    null,
+    ref.watch(googleDriveAuthProvider),
   );
 });
 
-/// Automatic folder sync controller (app lifetime).
+/// Automatic sync controller (app lifetime).
 final folderSyncControllerProvider = Provider<FolderSyncController>((ref) {
   final controller = FolderSyncController(
     service: ref.watch(dataFolderServiceProvider),
@@ -610,9 +623,12 @@ final folderSyncControllerProvider = Provider<FolderSyncController>((ref) {
   return controller;
 });
 
-/// Data folder + last export/import status for the settings UI.
+/// Sync target + last export/import status for the settings UI.
 class DataFolderStatus {
+  final String syncBackend;
   final String? folder;
+  final String? gdriveEmail;
+  final bool gdriveConfigured;
   final int? lastExportAt;
   final int? lastImportAt;
   final bool autoSync;
@@ -625,7 +641,10 @@ class DataFolderStatus {
   final bool? storageGranted;
 
   const DataFolderStatus({
+    required this.syncBackend,
     required this.folder,
+    required this.gdriveEmail,
+    required this.gdriveConfigured,
     required this.lastExportAt,
     required this.lastImportAt,
     required this.autoSync,
@@ -638,13 +657,17 @@ class DataFolderStatus {
 
 final dataFolderStatusProvider = FutureProvider<DataFolderStatus>((ref) async {
   final settings = ref.watch(settingsRepositoryProvider);
+  final gdriveAuth = ref.watch(googleDriveAuthProvider);
   bool? storageGranted;
   try {
     storageGranted = await StorageAccessService().filesAccessGranted();
   } catch (_) {
     storageGranted = null;
   }
+  final backendFuture = settings.syncBackend();
   final folderFuture = settings.dataFolder();
+  final gdriveEmailFuture = settings.gdriveEmail();
+  final gdriveConfiguredFuture = gdriveAuth.isConfigured();
   final lastExportFuture = settings.dataLastExportAt();
   final lastImportFuture = settings.dataLastImportAt();
   final autoSyncFuture = settings.autoSync();
@@ -652,7 +675,10 @@ final dataFolderStatusProvider = FutureProvider<DataFolderStatus>((ref) async {
   final syncErrorFuture = settings.dataSyncError();
   final conflictsFuture = settings.dataLastConflicts();
   return DataFolderStatus(
+    syncBackend: await backendFuture,
     folder: await folderFuture,
+    gdriveEmail: await gdriveEmailFuture,
+    gdriveConfigured: await gdriveConfiguredFuture,
     lastExportAt: await lastExportFuture,
     lastImportAt: await lastImportFuture,
     autoSync: await autoSyncFuture,

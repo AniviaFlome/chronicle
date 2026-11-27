@@ -2601,13 +2601,27 @@ void main() {
     // Language picker offers system default plus English and Turkish.
     expect(find.text('System default'), findsOneWidget);
     expect(find.text('Türkçe'), findsOneWidget);
-    // Folder data tiles live in the Data card.
+    // Sync method selector lives in the Data card; defaults to Off.
+    expect(find.text('Sync method'), findsOneWidget);
+    await tester.tap(find.text('Off'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Local folder').last);
+    await tester.pumpAndSettle();
+    await pumpForAsync(tester);
+    // Folder data tiles appear once Local folder is selected.
     expect(find.text('Data folder'), findsOneWidget);
     expect(find.text('Export data'), findsOneWidget);
     expect(find.text('Import data'), findsOneWidget);
     await tester.tap(find.text('Export data'));
     await tester.pumpAndSettle();
     expect(find.text('Pick a data folder first'), findsOneWidget);
+    // Switching to Google Drive shows the Google Drive sign-in row.
+    await tester.tap(find.text('Local folder'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Google Drive').last);
+    await tester.pumpAndSettle();
+    await pumpForAsync(tester);
+    expect(find.text('Sign in with Google'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());

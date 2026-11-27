@@ -10,9 +10,9 @@
 -keep class com.chronicleapp.chronicle.widget.*Callback {
     <init>(...);
 }
-# Belt and braces: Glance calls ActionCallbacks via
-# androidx.glance.action.ActionCallback. Keep any future implementation
-# outside the widget package from the same stripping.
--keep class * implements androidx.glance.action.ActionCallback {
+# Belt and braces: Glance 1.2.0 ActionCallback lives in
+# androidx.glance.appwidget.action.ActionCallback. Keep any future
+# implementation outside the widget package from the same stripping.
+-keep class * implements androidx.glance.appwidget.action.ActionCallback {
     <init>(...);
 }
