@@ -2,11 +2,13 @@
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-11-27
+
 ### Added
 - Google Drive sync (`drive.appdata`) across Android (native Google Sign-In) and Linux (OAuth 2.0 PKCE browser sign-in with `--dart-define` defaults and optional Settings override). Choose between Off, Local folder, or Google Drive in Settings → Data; both backends share the same JSON/blob merge, tombstones, conflict preservation, Auto-sync, and Sync settings toggles.
 
 ### Changed
-- Redesigned the Next-class home widget and Chronicle Hub class tab (`SharedClassTab` / `ClassHero`): elevated tonal Hero Card (`cardHigh`, 16dp radius) with an accent status pill and right-aligned time range, grouped `room · building` location line, separate teacher line, hairline separator, and subtler (`card`) upcoming lookahead rows with aligned fixed-width time chips; updated the static picker preview (`widget_preview_next_class.xml`) to match.
+- Redesigned the Next-class home widget and Chronicle Hub class tab (`SharedClassTab` / `ClassHero`): elevated tonal Hero Card (`cardHigh`, 16dp radius) with an accent status pill and width-aware time range eyebrow, grouped `room · building` location line, separate teacher line, hairline separator, and subtler (`card`) upcoming lookahead rows with width-responsive time chips; updated the 2×2 static picker preview (`widget_preview_next_class.xml`) to match.
 
 ### Fixed
 - Audit sweep round 3 (`test/audit_round3_test.dart`, 14 fixes): `GoogleDriveStorage.fastManifestExportedAt` reads manifests without poisoning `_index` with a 1-entry map, handles 404 on PATCH by re-creating via POST, single-flights index refreshes, uses `Random.secure()` multipart boundaries, and enforces HTTP timeouts; `LinuxGoogleDriveAuth` `chmod 600`s a unique temp token file before writing (closing the TOCTOU window), sends `/revoke` tokens in POST body instead of URL query string, single-flights concurrent refreshes, and requires readable tokens in `currentAccount()`; `FolderSyncController` claims `_busy` synchronously before `await enabled()`; `LocalFolderStorage` rejects path traversal and uses unique temp files while attachment storage rejects `.`/`..` filenames; `DataFolderService.exportData(pruneBlobs: true)` merges before indexing; iCal preserves `LOCATION`/`DESCRIPTION` on events without `DTEND`; `ReminderScheduler` passes `dayRotation` for day-rotation classes; monthly `XtraEvent` repeats step from the anchor date so day 29–31 anchors no longer drift to day 28 after February; `HubConfigureActivity` wires `APPWIDGET_CONFIGURE` properly, uses `applicationContext`/`commit()`/`hubNavBump`, and `proguard-rules.pro` keeps `androidx.glance.appwidget.action.ActionCallback`; Settings drops duplicate resume import, disposes dialog controllers, guards `mounted`, and resets sync markers on folder switch; Bilsis/ITU time parsers reject minutes `>= 60` and ITU branch lookup uses `jsonDecode`; Due-tasks widget filters by `activeYearId`.
