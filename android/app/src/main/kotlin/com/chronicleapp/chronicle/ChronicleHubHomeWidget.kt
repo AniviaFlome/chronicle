@@ -61,6 +61,7 @@ import com.chronicleapp.chronicle.widget.SharedAgendaList
 import com.chronicleapp.chronicle.widget.SharedClassTab
 import com.chronicleapp.chronicle.widget.SharedMenuList
 import com.chronicleapp.chronicle.widget.SharedTasksList
+import com.chronicleapp.chronicle.widget.StatusPill
 import com.chronicleapp.chronicle.widget.TabArrow
 import com.chronicleapp.chronicle.widget.TaskRow
 import com.chronicleapp.chronicle.widget.ThenLine
@@ -146,7 +147,7 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
         val locales = ConfigurationCompat.getLocales(context.resources.configuration)
         val loc = (0 until locales.size()).mapNotNull { locales[it] }.joinToString(",")
         val snap = HomeWidgetPlugin.getData(context).snapshot(Keys.HUB)
-        return "v3|hub|$loc|${snap.useYou}|${snap.themeCode}"
+        return "v4|hub|$loc|${snap.useYou}|${snap.themeCode}"
     }
 
     companion object {
@@ -562,6 +563,7 @@ private fun HubColumn(
                             data.snap,
                             nowMs,
                             data.looks,
+                            chromeDp = 92,
                         )
                     ChronicleHubHomeWidget.TAB_AGENDA ->
                         if (data.agendaRows.isEmpty()) {
@@ -709,6 +711,7 @@ private fun ShortHubColumn(
                             val thenRow = data.looks.firstOrNull {
                                 it.time == entry.thenWhen && it.name == entry.thenName
                             }
+                            Spacer(modifier = GlanceModifier.height(4.dp))
                             ThenLine(palette, entry, thenRow, wrapName = data.snap.wrapName)
                             if (roomy) {
                                 val extra = data.looks.filterNot {
@@ -729,64 +732,133 @@ private fun ShortHubColumn(
                             }
                         }
                     } else {
+                        val status = liveStatus(entry, data.snap, nowMs)
+                        val narrow = isNarrowSlot()
                         if (hasBar) {
-                            // Bar mode: name + status/range/room meta (the
-                            // location lives in detailLine). Name stays one
-                            // line so header + meta + slim bar fit ~110dp;
-                            // the Then-card only renders in taller buckets.
-                            Text(
-                                text = entry.className,
-                                style = TextStyle(
-                                    color = palette.onSurface,
-                                    fontSize = if (isNarrowSlot()) 15.sp else 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                ),
-                                maxLines = if (data.snap.wrapName) Int.MAX_VALUE else 1,
-                            )
-                            val meta = listOf(
-                                liveStatus(entry, data.snap, nowMs),
-                                entry.detailLine,
-                            ).filter { it.isNotEmpty() }.joinToString(" · ")
-                            if (meta.isNotEmpty()) {
-                                Spacer(modifier = GlanceModifier.height(2.dp))
+                            // Bar mode (~110dp): inline accent StatusPill on
+                            // wide slots adds zero vertical height; narrow
+                            // keeps status inside the compact meta line.
+                            if (!narrow && status.isNotEmpty()) {
+                                Row(
+                                    modifier = GlanceModifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = entry.className,
+                                        style = TextStyle(
+                                            color = palette.onSurface,
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold,
+                                        ),
+                                        maxLines = if (data.snap.wrapName) Int.MAX_VALUE else 1,
+                                        modifier = GlanceModifier.defaultWeight(),
+                                    )
+                                    Spacer(modifier = GlanceModifier.width(6.dp))
+                                    StatusPill(palette, status, compact = true)
+                                }
+                                if (entry.detailLine.isNotEmpty()) {
+                                    Spacer(modifier = GlanceModifier.height(2.dp))
+                                    Text(
+                                        text = entry.detailLine,
+                                        style = TextStyle(
+                                            color = palette.onSurfaceVariant,
+                                            fontSize = 11.sp,
+                                        ),
+                                        maxLines = 1,
+                                    )
+                                }
+                            } else {
                                 Text(
-                                    text = meta,
+                                    text = entry.className,
                                     style = TextStyle(
-                                        color = palette.onSurfaceVariant,
-                                        fontSize = 10.sp,
+                                        color = palette.onSurface,
+                                        fontSize = if (narrow) 15.sp else 18.sp,
+                                        fontWeight = FontWeight.Bold,
                                     ),
-                                    maxLines = 2,
+                                    maxLines = if (data.snap.wrapName) Int.MAX_VALUE else 1,
                                 )
+                                val meta = listOf(status, entry.detailLine)
+                                    .filter { it.isNotEmpty() }
+                                    .joinToString(" · ")
+                                if (meta.isNotEmpty()) {
+                                    Spacer(modifier = GlanceModifier.height(2.dp))
+                                    Text(
+                                        text = meta,
+                                        style = TextStyle(
+                                            color = palette.onSurfaceVariant,
+                                            fontSize = 10.sp,
+                                        ),
+                                        maxLines = 2,
+                                    )
+                                }
                             }
                         } else {
-                            // Hero-short: name + status/range/room meta only. No
-                            // teacher line, no Then-line: neither fits ~110dp
-                            // (seen-on-device). Tall widgets show the full hero.
-                            // 15sp keeps name + 2-line meta inside a 110dp card
-                            // with margin (16sp ran ~3dp over the drawn box).
-                            Text(
-                                text = entry.className,
-                                style = TextStyle(
-                                    color = palette.onSurface,
-                                    fontSize = if (isNarrowSlot()) 15.sp else 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                ),
-                                maxLines = if (data.snap.wrapName) Int.MAX_VALUE else 2,
-                            )
-                            val meta = listOf(
-                                liveStatus(entry, data.snap, nowMs),
-                                entry.detailLine,
-                            ).filter { it.isNotEmpty() }.joinToString(" · ")
-                            if (meta.isNotEmpty()) {
-                                Spacer(modifier = GlanceModifier.height(2.dp))
-                                Text(
-                                    text = meta,
-                                    style = TextStyle(
-                                        color = palette.onSurfaceVariant,
-                                        fontSize = 10.sp,
-                                    ),
-                                    maxLines = 2,
-                                )
+                            // Single-tab short: slim elevated Hero Card with
+                            // inline StatusPill on wide slots, matching the
+                            // redesigned ClassHero visual language.
+                            Box(
+                                modifier = GlanceModifier
+                                    .fillMaxWidth()
+                                    .background(palette.cardHigh)
+                                    .cornerRadius(12.dp)
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                            ) {
+                                Column(modifier = GlanceModifier.fillMaxWidth()) {
+                                    if (!narrow && status.isNotEmpty()) {
+                                        Row(
+                                            modifier = GlanceModifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                text = entry.className,
+                                                style = TextStyle(
+                                                    color = palette.onSurface,
+                                                    fontSize = 18.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                ),
+                                                maxLines = if (data.snap.wrapName) Int.MAX_VALUE else 1,
+                                                modifier = GlanceModifier.defaultWeight(),
+                                            )
+                                            Spacer(modifier = GlanceModifier.width(6.dp))
+                                            StatusPill(palette, status, compact = true)
+                                        }
+                                        if (entry.detailLine.isNotEmpty()) {
+                                            Spacer(modifier = GlanceModifier.height(2.dp))
+                                            Text(
+                                                text = entry.detailLine,
+                                                style = TextStyle(
+                                                    color = palette.onSurfaceVariant,
+                                                    fontSize = 11.sp,
+                                                ),
+                                                maxLines = 1,
+                                            )
+                                        }
+                                    } else {
+                                        Text(
+                                            text = entry.className,
+                                            style = TextStyle(
+                                                color = palette.onSurface,
+                                                fontSize = if (narrow) 14.sp else 18.sp,
+                                                fontWeight = FontWeight.Bold,
+                                            ),
+                                            maxLines = if (data.snap.wrapName) Int.MAX_VALUE else 2,
+                                        )
+                                        val meta = listOf(status, entry.detailLine)
+                                            .filter { it.isNotEmpty() }
+                                            .joinToString(" · ")
+                                        if (meta.isNotEmpty()) {
+                                            Spacer(modifier = GlanceModifier.height(2.dp))
+                                            Text(
+                                                text = meta,
+                                                style = TextStyle(
+                                                    color = palette.onSurfaceVariant,
+                                                    fontSize = 10.sp,
+                                                ),
+                                                maxLines = 2,
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

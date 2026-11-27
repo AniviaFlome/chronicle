@@ -55,7 +55,7 @@ class NextClassHomeWidget : GlanceAppWidget() {
         val snap = HomeWidgetPlugin.getData(context).snapshot(Keys.NEXT_CLASS)
         val state = NextClassWidgetUiState.Success(
             hero = Samples.nextClass,
-            upcoming = Samples.later,
+            upcoming = Samples.looks,
             snap = snap,
             nowMs = System.currentTimeMillis(),
         )
@@ -66,7 +66,7 @@ class NextClassHomeWidget : GlanceAppWidget() {
         val locales = ConfigurationCompat.getLocales(context.resources.configuration)
         val loc = (0 until locales.size()).mapNotNull { locales[it] }.joinToString(",")
         val snap = HomeWidgetPlugin.getData(context).snapshot(Keys.NEXT_CLASS)
-        return "v3|nc|$loc|${snap.useYou}|${snap.themeCode}"
+        return "v5|nc|$loc|${snap.useYou}|${snap.themeCode}"
     }
 
     private fun resolveState(context: Context): NextClassWidgetUiState {

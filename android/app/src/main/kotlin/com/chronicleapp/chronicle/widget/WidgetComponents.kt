@@ -194,21 +194,28 @@ fun WidgetHeader(
     }
 }
 
-/** Accent status pill ("Currently · ends 09:30"). */
+/** Accent status pill ("in 12 min", "Currently"). */
 @Composable
-fun StatusPill(palette: ChroniclePalette, text: String) {
+fun StatusPill(
+    palette: ChroniclePalette,
+    text: String,
+    compact: Boolean = false,
+) {
     if (text.isEmpty()) return
     Box(
         modifier = GlanceModifier
             .background(palette.accentChipBg)
             .cornerRadius(50.dp)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(
+                horizontal = if (compact) 8.dp else 10.dp,
+                vertical = if (compact) 3.dp else 4.dp,
+            ),
     ) {
         Text(
             text = text,
             style = TextStyle(
                 color = palette.accentChipFg,
-                fontSize = 12.sp,
+                fontSize = if (compact) 11.sp else 12.sp,
                 fontWeight = FontWeight.Bold,
             ),
             maxLines = 1,
@@ -223,19 +230,24 @@ fun TonalChip(
     text: String,
     width: Dp? = null,
     urgent: Boolean = false,
+    compact: Boolean = false,
 ) {
     if (text.isEmpty()) return
+    val useCompact = compact || isNarrowSlot()
     var mod = GlanceModifier
         .background(if (urgent) palette.errorContainer else palette.chipBg)
-        .cornerRadius(8.dp)
-        .padding(horizontal = 6.dp, vertical = 3.dp)
+        .cornerRadius(if (useCompact) 6.dp else 8.dp)
+        .padding(
+            horizontal = if (useCompact) 5.dp else 6.dp,
+            vertical = if (useCompact) 2.dp else 3.dp,
+        )
     if (width != null) mod = mod.width(width)
     Box(modifier = mod, contentAlignment = Alignment.Center) {
         Text(
             text = text,
             style = TextStyle(
                 color = if (urgent) palette.error else palette.onSurfaceVariant,
-                fontSize = if (isNarrowSlot()) 10.sp else 11.sp,
+                fontSize = if (useCompact) 10.sp else 11.sp,
                 fontWeight = FontWeight.Bold,
             ),
             maxLines = 1,
@@ -350,19 +362,33 @@ fun FilledMiniRow(palette: ChroniclePalette, text: String, colorHex: String) {
 }
 
 /**
- * Fixed chip width for lookahead lists so every class name in the list
- * starts at the same x. Sized for weekday-prefixed chips ("Wed 13:40");
- * plain times ("08:40") just leave air. Wide rows only — narrow slots
- * stack the chip below the name where widths don't interact.
+ * Responsive chip width for lookahead lists:
+ * - Below 300.dp (medium portrait slots like 260dp): `null` (wrap-content)
+ *   so short times like "10:20" stay ~38dp and leave maximum width for the
+ *   class name.
+ * - 300.dp+ (wide landscape/4-col slots): fixed width aligned to the
+ *   widest time shape in the list (`48.dp` for plain "10:20", `68.dp` when
+ *   any row carries a weekday prefix like "Fri 15:23").
+ * Narrow slots (<200.dp) stack time under the name and never use a side chip.
  */
-fun lookaheadChipWidth(): Dp = 72.dp
+@Composable
+fun lookaheadChipWidth(hasWeekday: Boolean = true): Dp? =
+    if (LocalSize.current.width < 300.dp) {
+        null
+    } else if (hasWeekday) {
+        68.dp
+    } else {
+        48.dp
+    }
+
+/** Compact chip styling on medium widths (<300.dp) so the time chip never
+ *  crowds out the class name. */
+@Composable
+fun isCompactLookaheadChip(): Boolean = LocalSize.current.width < 300.dp
 
 /** Structured class row: name + one always-visible meta line in narrow
- * slots ("room · time" — no stacked chip: the chip was a whole extra line
- * and squeezed a 1x2 hub's second row off, seen on-device); wide slots
- * keep the compact horizontal form with a FIXED chip width so every name
- * in the list starts at the same x (weekday-prefixed chips like "Wed 13:40"
- * are wider than plain "08:40"). */
+ * slots ("time · room"); medium/wide slots place a responsive [TonalChip]
+ * beside the class name so the chip scales with the widget width. */
 @Composable
 fun FilledLookaheadRow(
     palette: ChroniclePalette,
@@ -371,8 +397,18 @@ fun FilledLookaheadRow(
     where: String = "",
     chipWidth: Dp? = null,
     wrapName: Boolean = false,
+    compactChip: Boolean = isCompactLookaheadChip(),
 ) {
-    FilledBlock(palette, "", radius = 12.dp) {
+    // Subtler `card` surface (vs `cardHigh` on the Hero Card and TonalChip)
+    // so upcoming rows stay visually subordinate to the hero and the time
+    // chip has real tonal contrast against its row background.
+    Box(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .background(palette.card)
+            .cornerRadius(12.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
         if (isNarrowSlot()) {
             Column(modifier = GlanceModifier.fillMaxWidth()) {
                 Text(
@@ -404,8 +440,8 @@ fun FilledLookaheadRow(
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (time.isNotEmpty()) {
-                    TonalChip(palette, time, width = chipWidth)
-                    Spacer(modifier = GlanceModifier.width(6.dp))
+                    TonalChip(palette, time, width = chipWidth, compact = compactChip)
+                    Spacer(modifier = GlanceModifier.width(if (compactChip) 6.dp else 8.dp))
                 }
                 Column(modifier = GlanceModifier.defaultWeight()) {
                     Text(
@@ -432,10 +468,9 @@ fun FilledLookaheadRow(
 /**
  * Then-line for a timeline entry: structured name/when parts when pushed
  * (no baked-in "Then" prefix), legacy composed-string split as fallback
- * for old pushes. A plain class row like any other: its where meta comes
- * from [thenRow] (the looks[0] duplicate — same class by contract), with
- * the quiet entry's own fields as the old-push fallback (the quiet entry
- * carries tomorrow's teacher/room there).
+ * for old pushes. Uses the caller-supplied [chipWidth] so its class name
+ * aligns with every [LookRow] below it; spacing above is owned by
+ * [SharedClassTab].
  */
 @Composable
 fun ThenLine(
@@ -443,9 +478,9 @@ fun ThenLine(
     entry: TimedEntry,
     thenRow: TimeRow? = null,
     wrapName: Boolean = false,
+    chipWidth: Dp? = lookaheadChipWidth(hasWeekday = entry.thenWhen.contains(' ')),
 ) {
     if (entry.thenName.isNotEmpty()) {
-        Spacer(modifier = GlanceModifier.height(4.dp))
         // Tomorrow's room/building ride the quiet entry's own fields (the
         // push side fills them with the class after "No classes today");
         // thenRow carries them on fresh pushes. The fallback is gated on
@@ -463,20 +498,21 @@ fun ThenLine(
             name = entry.thenName,
             where = listOf(room, building).filter { it.isNotEmpty() }
                 .joinToString(" · "),
+            chipWidth = chipWidth,
             wrapName = wrapName,
         )
     } else if (entry.thenLine.isNotEmpty()) {
-        Spacer(modifier = GlanceModifier.height(4.dp))
         FilledMiniRow(palette, entry.thenLine, entry.thenColorHex)
     }
 }
 
 /**
- * Shared class hero: big title, gray status/time/room meta, an
- * always-visible teacher · building line, then-line. The lookahead list
- * itself lives in [SharedClassTab] (scrollable or static depending on
- * bucket). Nothing hides behind a tap — every field the entry carries is
- * on screen.
+ * Shared class hero card: elevated tonal container (`cardHigh`, 16dp radius)
+ * with an accent [StatusPill] eyebrow (+ right-aligned time range on slots
+ * >= 260dp wide so it never clips), bold class title, grouped
+ * `room · building` location line, and teacher line. Solid fill survives
+ * translucent/transparent widget backgrounds. The upcoming section lives
+ * in [SharedClassTab].
  */
 @Composable
 fun ClassHero(
@@ -485,62 +521,159 @@ fun ClassHero(
     snap: WidgetSnapshot,
     nowMs: Long,
     titleSizeSp: Int,
-    thenRow: TimeRow? = null,
+    compact: Boolean = false,
 ) {
-    // Narrow slots step the hero down 4sp so the name, meta and who lines
-    // plus the Then-card all fit a 1x2 body (at 18sp the Then-card's meta
-    // line clipped at the widget edge — seen-on-device).
-    val fittedTitleSp = if (isNarrowSlot()) (titleSizeSp - 4).coerceAtLeast(14) else titleSizeSp
-    Text(
-        text = entry.className,
-        style = TextStyle(color = palette.onSurface, fontSize = fittedTitleSp.sp, fontWeight = FontWeight.Bold),
-        maxLines = if (snap.wrapName) Int.MAX_VALUE else 2,
-    )
-    val meta = listOf(liveStatus(entry, snap, nowMs), entry.detailLine)
-        .filter { it.isNotEmpty() }
-        .joinToString(" · ")
-    if (meta.isNotEmpty()) {
-        Spacer(modifier = GlanceModifier.height(2.dp))
-        Text(
-            text = meta,
-            // 10sp: at 11sp/13sp a narrow hero wraps status+range+room to 2
-            // lines and the Then-card's own meta clips below (seen-on-
-            // device); 10sp keeps it one line on 2-column, two on 1-column.
-            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 10.sp),
-            maxLines = 2,
-        )
+    val widthDp = LocalSize.current.width
+    val narrow = widthDp < 200.dp
+    val wideEyebrow = widthDp >= 260.dp
+    val status = liveStatus(entry, snap, nowMs)
+    val timeRange = entry.range.ifEmpty { entry.startLabel }
+    val fittedTitleSp = when {
+        narrow -> if (compact) 14 else 15
+        !wideEyebrow -> if (compact) 16 else 18
+        else -> titleSizeSp
     }
-    val who = listOf(entry.teacher, entry.building)
-        .filter { it.isNotEmpty() }
-        .joinToString(" · ")
-    if (who.isNotEmpty()) {
-        Spacer(modifier = GlanceModifier.height(2.dp))
-        Text(
-            text = who,
-            // 10sp, 2 lines: at 11sp/1 line a 1-column hero ellipsized the
-            // teacher ("…CANAR…") — the whole point of the expanded detail
-            // (seen-on-device).
-            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 10.sp),
-            maxLines = 2,
-            modifier = GlanceModifier.fillMaxWidth(),
-        )
+    Box(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .background(palette.cardHigh)
+            .cornerRadius(16.dp)
+            .padding(
+                horizontal = if (narrow) 10.dp else 12.dp,
+                vertical = if (narrow) 8.dp else 10.dp,
+            ),
+    ) {
+        Column(modifier = GlanceModifier.fillMaxWidth()) {
+            val hasEyebrow = if (wideEyebrow) {
+                status.isNotEmpty() || timeRange.isNotEmpty()
+            } else {
+                status.isNotEmpty()
+            }
+            if (hasEyebrow) {
+                if (wideEyebrow) {
+                    Row(
+                        modifier = GlanceModifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (status.isNotEmpty()) {
+                            StatusPill(palette, status, compact = true)
+                            if (timeRange.isNotEmpty()) {
+                                Spacer(modifier = GlanceModifier.defaultWeight())
+                                Text(
+                                    text = timeRange,
+                                    style = TextStyle(
+                                        color = palette.onSurfaceVariant,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    ),
+                                    maxLines = 1,
+                                )
+                            }
+                        } else if (timeRange.isNotEmpty()) {
+                            TonalChip(palette, timeRange, compact = true)
+                        }
+                    }
+                } else {
+                    StatusPill(palette, status, compact = true)
+                }
+                Spacer(modifier = GlanceModifier.height(if (narrow) 4.dp else 6.dp))
+            }
+            Text(
+                text = entry.className,
+                style = TextStyle(
+                    color = palette.onSurface,
+                    fontSize = fittedTitleSp.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                maxLines = if (snap.wrapName) Int.MAX_VALUE else 2,
+                modifier = GlanceModifier.fillMaxWidth(),
+            )
+            if (!wideEyebrow) {
+                val primaryMeta = if (timeRange.isNotEmpty()) {
+                    listOf(timeRange, entry.room)
+                        .filter { it.isNotEmpty() }
+                        .joinToString(" · ")
+                } else {
+                    entry.detailLine
+                }
+                if (primaryMeta.isNotEmpty()) {
+                    Spacer(modifier = GlanceModifier.height(3.dp))
+                    Text(
+                        text = primaryMeta,
+                        style = TextStyle(
+                            color = palette.onSurfaceVariant,
+                            fontSize = 11.sp,
+                        ),
+                        maxLines = 2,
+                        modifier = GlanceModifier.fillMaxWidth(),
+                    )
+                }
+                if (!compact) {
+                    val secondaryMeta = listOf(entry.teacher, entry.building)
+                        .filter { it.isNotEmpty() }
+                        .joinToString(" · ")
+                    if (secondaryMeta.isNotEmpty()) {
+                        Spacer(modifier = GlanceModifier.height(2.dp))
+                        Text(
+                            text = secondaryMeta,
+                            style = TextStyle(
+                                color = palette.onSurfaceVariant,
+                                fontSize = 10.sp,
+                            ),
+                            maxLines = 1,
+                            modifier = GlanceModifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            } else {
+                val where = listOf(entry.room, entry.building)
+                    .filter { it.isNotEmpty() }
+                    .joinToString(" · ")
+                val locationLine = where.ifEmpty {
+                    if (timeRange.isEmpty()) entry.detailLine else ""
+                }
+                if (locationLine.isNotEmpty()) {
+                    Spacer(modifier = GlanceModifier.height(3.dp))
+                    Text(
+                        text = locationLine,
+                        style = TextStyle(
+                            color = palette.onSurfaceVariant,
+                            fontSize = 12.sp,
+                        ),
+                        maxLines = 1,
+                        modifier = GlanceModifier.fillMaxWidth(),
+                    )
+                }
+                if (entry.teacher.isNotEmpty()) {
+                    Spacer(modifier = GlanceModifier.height(2.dp))
+                    Text(
+                        text = entry.teacher,
+                        style = TextStyle(
+                            color = palette.onSurfaceVariant,
+                            fontSize = 11.sp,
+                        ),
+                        maxLines = 1,
+                        modifier = GlanceModifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
     }
-    ThenLine(palette, entry, thenRow, wrapName = snap.wrapName)
 }
 
 /**
  * Shared class tab body — the single source of truth used by the hub
  * class tab AND the standalone Next-class widget, so the two render
- * identically: quiet/sentinel entries as plain copy, otherwise [ClassHero]
- * plus a lookahead list. Tall buckets scroll the full list (nothing clips,
- * nothing hides); [compact] buckets render at most 2 whole rows plus a
- * "+N more" indicator instead, so a short widget never shows a row that
- * cannot be fully seen.
+ * identically: quiet/sentinel entries as a compact banner or empty state,
+ * otherwise the elevated [ClassHero] card separated from an aligned
+ * upcoming lookahead section.
  *
- * IMPORTANT: this emits multiple root nodes (title, meta, lookahead
- * list). Always invoke it inside a vertical [Column] — a bare multi-root
- * composition has no stacking container and siblings paint on top of each
- * other. (All in-repo call sites do this.)
+ * [chromeDp] accounts for surrounding widget chrome (24dp for standalone
+ * shell padding; 92dp for the hub's header + bottom tab bar).
+ *
+ * IMPORTANT: this emits multiple root nodes. Always invoke it inside a
+ * vertical [Column] — a bare multi-root composition has no stacking
+ * container and siblings paint on top of each other.
  */
 @Composable
 fun SharedClassTab(
@@ -550,6 +683,7 @@ fun SharedClassTab(
     nowMs: Long,
     looks: List<TimeRow>,
     compact: Boolean = false,
+    chromeDp: Int = 24,
 ) {
     if (entry == null || entry.isSentinel || snap.stale) {
         EmptyState(
@@ -560,48 +694,47 @@ fun SharedClassTab(
         )
         return
     }
-    // Synthetic "no classes today" entries carry status copy in className
-    // and no class times — render them quiet, not as a hero class name.
-    // (True strips never reach here: Tiny buckets render one-liners, and
-    // the shortest agenda tier renders its own summary.)
-    // The quiet entry still carries tomorrow in thenName/thenWhen ("tomorrow
-    // rides in the Then-line") plus the classes after that in looks — render
-    // both, otherwise tall widgets show one line over a large blank void.
-    // The hub's nested looks repeat tomorrow as looks[0], so drop rows
-    // duplicating the Then-line.
     val quiet = entry.startLabel.isEmpty()
     // The Then-line class rides in looks[0] (same class by contract) —
     // its row carries the where meta; old pushes fall back to the quiet
     // entry's own fields (see ThenLine).
     val thenRow = looks.firstOrNull { it.time == entry.thenWhen && it.name == entry.thenName }
     val next = looks.filterNot { it.time == entry.thenWhen && it.name == entry.thenName }
-    // Static takes (never a LazyColumn here: the hub's tab container
-    // mismeasures weight-bound lazy lists past the second row —
-    // seen-on-device as 1px rows). The take follows the vertical budget:
-    // every shown row must have real room, or Glance squeezes it to a
-    // sliver instead of clipping (seen-on-device). Compact buckets cap
-    // at 1 lookahead row: hero + Then + 1 fits a 2x2, a second row
-    // squeezed to a textless sliver (seen-on-device).
-    val rawBudget = lookRowBudget(leadDp = if (quiet) 65 else 137)
+    val hasThen = entry.thenName.isNotEmpty() || entry.thenLine.isNotEmpty()
+    val leadDp = when {
+        quiet -> 72
+        compact -> 150
+        else -> 164
+    }
+    val rawBudget = lookRowBudget(chromeDp = chromeDp, leadDp = leadDp)
     val budget = if (compact) rawBudget.coerceAtMost(1) else rawBudget
+    val shown = next.take(budget)
+    val hasWeekday = (entry.thenName.isNotEmpty() && entry.thenWhen.contains(' ')) ||
+        shown.any { it.time.contains(' ') }
+    val chipWidth = lookaheadChipWidth(hasWeekday = hasWeekday)
+
     if (quiet) {
-        // 12sp keeps "No classes today" on one line in a 1-column card
-        // (15sp wrapped it to two and pushed the row budget to zero —
-        // seen-on-device as blank space under the card).
-        Text(
-            text = entry.className,
-            style = TextStyle(
-                color = palette.onSurfaceVariant,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-            ),
-            maxLines = 1,
-        )
-        ThenLine(palette, entry, thenRow, wrapName = snap.wrapName)
-        val shown = next.take(budget)
-        for ((i, row) in shown.withIndex()) {
-            Spacer(modifier = GlanceModifier.height(6.dp))
-            LookRow(palette, row)
+        Row(
+            modifier = GlanceModifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ic_widget_event_available),
+                contentDescription = null,
+                modifier = GlanceModifier.width(14.dp).height(14.dp),
+                colorFilter = ColorFilter.tint(palette.onSurfaceVariant),
+            )
+            Spacer(modifier = GlanceModifier.width(6.dp))
+            Text(
+                text = entry.className,
+                style = TextStyle(
+                    color = palette.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                maxLines = 1,
+                modifier = GlanceModifier.defaultWeight(),
+            )
         }
     } else {
         ClassHero(
@@ -610,47 +743,58 @@ fun SharedClassTab(
             snap = snap,
             nowMs = nowMs,
             titleSizeSp = if (compact) 18 else 20,
-            thenRow = thenRow,
+            compact = compact,
         )
-        // The pushed looks start with the Then-line class itself
-        // (looks[0] == thenName/thenWhen by contract), so drop it here —
-        // otherwise the hero's Then-line and the first lookahead row show
-        // the same class twice (seen-on-device: Viyolonsel I twice).
-        // The quiet branch above already does the same filtering.
-        val upcoming = next
-        val shown = upcoming.take(budget)
-        for ((i, row) in shown.withIndex()) {
+    }
+
+    if (hasThen || shown.isNotEmpty()) {
+        if (compact) {
             Spacer(modifier = GlanceModifier.height(6.dp))
-            LookRow(palette, row)
+        } else {
+            Spacer(modifier = GlanceModifier.height(8.dp))
+            Hairline(palette)
+            Spacer(modifier = GlanceModifier.height(6.dp))
+        }
+        // Group upcoming rows inside a dedicated Column so the parent
+        // Column stays well under Glance's ~10-child RemoteViews limit.
+        Column(modifier = GlanceModifier.fillMaxWidth()) {
+            if (hasThen) {
+                ThenLine(palette, entry, thenRow, wrapName = snap.wrapName, chipWidth = chipWidth)
+            }
+            for ((i, row) in shown.withIndex()) {
+                if (hasThen || i > 0) Spacer(modifier = GlanceModifier.height(6.dp))
+                LookRow(palette, row, chipWidth = chipWidth)
+            }
         }
     }
 }
 
 /**
- * How many lookahead rows fit after the lead block (quiet copy + Then-card,
- * or the hero block + Then-card). Chrome = shell padding (24) + header (20)
- * + dots bar (48). A compact narrow row measures ~45dp (name 1 line + one
- * meta line + card padding); quiet lead = one-line copy (16) + Then-card
- * (45) + gaps; hero lead = title + meta + who (~92) + Then-card (45).
- * Rounded down hard: Glance squeezes overflow to slivers instead of
- * clipping (seen-on-device), so a row only renders when it has real room.
+ * How many extra lookahead rows fit after the lead block (quiet banner +
+ * Then-card, or Hero Card + Hairline + Then-card). Rounded down hard:
+ * Glance squeezes overflow to slivers instead of clipping (seen-on-device),
+ * so a row only renders when it has real room.
  */
 @Composable
-private fun lookRowBudget(leadDp: Int): Int {
+private fun lookRowBudget(chromeDp: Int, leadDp: Int): Int {
     val height = LocalSize.current.height.value
-    return ((height - 92 - leadDp) / 45).toInt().coerceIn(0, 3)
+    return ((height - chromeDp - leadDp) / 46).toInt().coerceIn(0, 3)
 }
 
 /** One lookahead row rendered through the shared class row. */
 @Composable
-private fun LookRow(palette: ChroniclePalette, row: TimeRow) {
+private fun LookRow(
+    palette: ChroniclePalette,
+    row: TimeRow,
+    chipWidth: Dp? = lookaheadChipWidth(hasWeekday = row.time.contains(' ')),
+) {
     FilledLookaheadRow(
         palette = palette,
         time = row.time,
         name = row.name,
         where = listOf(row.room, row.building).filter { it.isNotEmpty() }
             .joinToString(" · "),
-        chipWidth = lookaheadChipWidth(),
+        chipWidth = chipWidth,
     )
 }
 
