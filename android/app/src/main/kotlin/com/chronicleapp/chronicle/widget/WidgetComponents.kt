@@ -685,7 +685,10 @@ fun SharedClassTab(
     compact: Boolean = false,
     chromeDp: Int = 24,
 ) {
-    if (entry == null || entry.isSentinel || snap.stale) {
+    // Timeline is self-expiring via its closing "—" sentinel: never gate on
+    // snap.stale (todayIso != deviceToday), which threw away valid multi-day
+    // entries at midnight until the user opened the app.
+    if (entry == null || entry.isSentinel) {
         EmptyState(
             palette,
             R.drawable.ic_widget_event_available,
@@ -697,12 +700,19 @@ fun SharedClassTab(
     val quiet = entry.startLabel.isEmpty()
     // The Then-line class rides in looks[0] (same class by contract) —
     // its row carries the where meta; old pushes fall back to the quiet
-    // entry's own fields (see ThenLine).
-    val thenRow = looks.firstOrNull { it.time == entry.thenWhen && it.name == entry.thenName }
-    val next = looks.filterNot { it.time == entry.thenWhen && it.name == entry.thenName }
+    // entry's own fields (see ThenLine). Drop ONLY looks[0] (never
+    // filterNot across the full 14-day list, which would also delete the
+    // same class next week).
+    val firstMatchesThen = looks.isNotEmpty() &&
+        looks[0].time == entry.thenWhen &&
+        looks[0].name == entry.thenName
+    val thenRow = if (firstMatchesThen) looks[0] else looks.firstOrNull {
+        it.time == entry.thenWhen && it.name == entry.thenName
+    }
+    val next = if (firstMatchesThen) looks.drop(1) else looks
     val hasThen = entry.thenName.isNotEmpty() || entry.thenLine.isNotEmpty()
     val leadDp = when {
-        quiet -> 72
+        quiet -> 92
         compact -> 150
         else -> 164
     }
@@ -714,27 +724,95 @@ fun SharedClassTab(
     val chipWidth = lookaheadChipWidth(hasWeekday = hasWeekday)
 
     if (quiet) {
-        Row(
-            modifier = GlanceModifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(
-                provider = ImageProvider(R.drawable.ic_widget_event_available),
-                contentDescription = null,
-                modifier = GlanceModifier.width(14.dp).height(14.dp),
-                colorFilter = ColorFilter.tint(palette.onSurfaceVariant),
-            )
-            Spacer(modifier = GlanceModifier.width(6.dp))
-            Text(
-                text = entry.className,
-                style = TextStyle(
-                    color = palette.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
+        val narrow = isNarrowSlot()
+        Box(
+            modifier = GlanceModifier
+                .fillMaxWidth()
+                .background(palette.cardHigh)
+                .cornerRadius(if (narrow) 14.dp else 16.dp)
+                .padding(
+                    horizontal = if (narrow) 10.dp else 12.dp,
+                    vertical = if (narrow) 8.dp else 10.dp,
                 ),
-                maxLines = 1,
-                modifier = GlanceModifier.defaultWeight(),
-            )
+        ) {
+            if (narrow) {
+                // Narrow slots stack the circular accent badge above the title
+                // so "No classes today" gets 100% card width and never clips.
+                Column(modifier = GlanceModifier.fillMaxWidth()) {
+                    Box(
+                        modifier = GlanceModifier
+                            .width(24.dp)
+                            .height(24.dp)
+                            .background(palette.accentChipBg)
+                            .cornerRadius(50.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            provider = ImageProvider(R.drawable.ic_widget_event_available),
+                            contentDescription = null,
+                            modifier = GlanceModifier.width(13.dp).height(13.dp),
+                            colorFilter = ColorFilter.tint(palette.accentChipFg),
+                        )
+                    }
+                    Spacer(modifier = GlanceModifier.height(5.dp))
+                    Text(
+                        text = entry.className,
+                        style = TextStyle(
+                            color = palette.onSurface,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                        maxLines = 2,
+                        modifier = GlanceModifier.fillMaxWidth(),
+                    )
+                }
+            } else {
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = GlanceModifier
+                            .width(32.dp)
+                            .height(32.dp)
+                            .background(palette.accentChipBg)
+                            .cornerRadius(50.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            provider = ImageProvider(R.drawable.ic_widget_event_available),
+                            contentDescription = null,
+                            modifier = GlanceModifier.width(16.dp).height(16.dp),
+                            colorFilter = ColorFilter.tint(palette.accentChipFg),
+                        )
+                    }
+                    Spacer(modifier = GlanceModifier.width(10.dp))
+                    Column(modifier = GlanceModifier.defaultWeight()) {
+                        Text(
+                            text = entry.className,
+                            style = TextStyle(
+                                color = palette.onSurface,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                            maxLines = 1,
+                            modifier = GlanceModifier.fillMaxWidth(),
+                        )
+                        if (entry.thenWhen.isNotEmpty()) {
+                            Spacer(modifier = GlanceModifier.height(2.dp))
+                            Text(
+                                text = entry.thenWhen,
+                                style = TextStyle(
+                                    color = palette.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                ),
+                                maxLines = 1,
+                                modifier = GlanceModifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+            }
         }
     } else {
         ClassHero(
@@ -957,76 +1035,186 @@ fun LetterRail(palette: ChroniclePalette, week: List<WeekCell>, sel: Int) {
     }
 }
 
-/** Intentional empty state: outlined icon + one line of copy (pushed, l10n).
- * Wraps content height (never fillMaxSize): inside a wrapping Column a
- * max-size child distorts measurement and can push siblings off-screen. */
+/**
+ * Intentional empty state: tonal surface card with a circular accent-tinted
+ * icon badge and bold message. Pass [fill] = true on standalone empty widgets
+ * so the card centers vertically instead of clinging to the top edge; keep
+ * [fill] = false (default) inside wrapping Columns (Hub, Agenda, Tasks).
+ */
 @Composable
-fun EmptyState(palette: ChroniclePalette, iconRes: Int, text: String) {
-    Column(
-        modifier = GlanceModifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
+fun EmptyState(
+    palette: ChroniclePalette,
+    iconRes: Int,
+    text: String,
+    subtitle: String = "",
+    fill: Boolean = false,
+) {
+    val narrow = isNarrowSlot()
+    val containerMod = if (fill) {
+        GlanceModifier.fillMaxSize()
+    } else {
+        GlanceModifier.fillMaxWidth().padding(vertical = 4.dp)
+    }
+    Box(
+        modifier = containerMod,
+        contentAlignment = Alignment.Center,
     ) {
-        // 8.dp, not 16: 4x1 strips are only ~120.dp tall and 16.dp pushed
-        // the copy off the bottom edge (seen on-device).
-        Spacer(modifier = GlanceModifier.height(8.dp))
-        Image(
-            provider = ImageProvider(iconRes),
-            contentDescription = null,
-            modifier = GlanceModifier.width(24.dp).height(24.dp),
-            colorFilter = ColorFilter.tint(palette.outline),
-        )
-        Spacer(modifier = GlanceModifier.height(8.dp))
-        Text(
-            text = text,
-            style = TextStyle(
-                color = palette.onSurfaceVariant,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-            ),
-            maxLines = 2,
-        )
+        Box(
+            modifier = GlanceModifier
+                .fillMaxWidth()
+                .background(palette.card)
+                .cornerRadius(16.dp)
+                .padding(
+                    horizontal = if (narrow) 10.dp else 14.dp,
+                    vertical = if (narrow) 12.dp else 14.dp,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = GlanceModifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    modifier = GlanceModifier
+                        .width(if (narrow) 32.dp else 36.dp)
+                        .height(if (narrow) 32.dp else 36.dp)
+                        .background(palette.accentChipBg)
+                        .cornerRadius(50.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        provider = ImageProvider(iconRes),
+                        contentDescription = null,
+                        modifier = GlanceModifier
+                            .width(if (narrow) 16.dp else 18.dp)
+                            .height(if (narrow) 16.dp else 18.dp),
+                        colorFilter = ColorFilter.tint(palette.accentChipFg),
+                    )
+                }
+                Spacer(modifier = GlanceModifier.height(8.dp))
+                Text(
+                    text = text,
+                    style = TextStyle(
+                        color = palette.onSurface,
+                        fontSize = if (narrow) 12.sp else 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    ),
+                    maxLines = 2,
+                    modifier = GlanceModifier.fillMaxWidth(),
+                )
+                if (subtitle.isNotEmpty()) {
+                    Spacer(modifier = GlanceModifier.height(3.dp))
+                    Text(
+                        text = subtitle,
+                        style = TextStyle(
+                            color = palette.onSurfaceVariant,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                        ),
+                        maxLines = 1,
+                        modifier = GlanceModifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
     }
 }
 
-/** Menu dish row: bulleted plain dish name text, deliberately NOT a
- * filled block — food rows render bubble-free by design. (A FilledBlock
- * here is fine structurally, but the menu look is plain text rows.)
- * Single Text node, full width, 2 lines max: the only shape that
- * measures everywhere (repeated siblings and explicit newlines both
- * mismeasure on-device). */
+/**
+ * Redesigned menu dish card: subtle tonal container (`card`, 10dp radius)
+ * with a vertical accent pill, bold dish name, optional garnish/side
+ * subtitle, and trailing kcal chip on wide slots.
+ */
+@Composable
+fun DishRow(palette: ChroniclePalette, item: MenuDishItem) {
+    val narrow = isNarrowSlot()
+    Box(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .background(palette.card)
+            .cornerRadius(10.dp)
+            .padding(
+                horizontal = if (narrow) 8.dp else 10.dp,
+                vertical = if (narrow) 5.dp else 6.dp,
+            ),
+    ) {
+        Row(
+            modifier = GlanceModifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = GlanceModifier
+                    .width(3.dp)
+                    .height(if (item.side.isNotEmpty()) 22.dp else 14.dp)
+                    .background(palette.accent)
+                    .cornerRadius(50.dp),
+            ) {}
+            Spacer(modifier = GlanceModifier.width(8.dp))
+            Column(modifier = GlanceModifier.defaultWeight()) {
+                Text(
+                    text = item.name,
+                    style = TextStyle(
+                        color = palette.onSurface,
+                        fontSize = if (narrow) 12.sp else 13.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    maxLines = 2,
+                    modifier = GlanceModifier.fillMaxWidth(),
+                )
+                if (item.side.isNotEmpty()) {
+                    Spacer(modifier = GlanceModifier.height(2.dp))
+                    Text(
+                        text = item.side,
+                        style = TextStyle(
+                            color = palette.onSurfaceVariant,
+                            fontSize = 10.sp,
+                        ),
+                        maxLines = 1,
+                        modifier = GlanceModifier.fillMaxWidth(),
+                    )
+                }
+            }
+            if (!narrow && item.kcal > 0) {
+                Spacer(modifier = GlanceModifier.width(6.dp))
+                TonalChip(palette, "${item.kcal} kcal", compact = true)
+            }
+        }
+    }
+}
+
+/** Legacy plain-string overload for short/compact callers. */
 @Composable
 fun DishRow(palette: ChroniclePalette, text: String) {
-    Text(
-        text = "• $text",
-        style = TextStyle(
-            color = palette.onSurface,
-            fontSize = if (isNarrowSlot()) 12.sp else 14.sp,
-        ),
-        maxLines = 2,
-        modifier = GlanceModifier.fillMaxWidth(),
-    )
+    DishRow(palette, MenuDishItem(name = text))
 }
 
 /**
- * Shared scrolling dish list: the hub menu tab and the standalone
- * cafeteria-menu widget render the very same rows (a copy, not a second
- * design — same rule as [SharedClassTab]). Short/narrow tiers keep their
- * fitting-take variants as the documented space adjustment; everything
- * tall scrolls this full list.
+ * Shared scrolling dish list (structured items): the hub menu tab and the
+ * standalone cafeteria-menu widget render the exact same tonal dish cards.
  */
 @Composable
-fun ColumnScope.SharedMenuList(palette: ChroniclePalette, dishes: List<String>) {
+fun ColumnScope.SharedMenuItemList(
+    palette: ChroniclePalette,
+    items: List<MenuDishItem>,
+) {
     // Weight-bound LazyColumn inside a bounded body (a wrap-content list
     // would measure only its first item); items wrap in their own Column
     // (bare single-node items mismeasure, spacers collapse to zero).
     LazyColumn(modifier = GlanceModifier.defaultWeight()) {
-        items(dishes.size) { i ->
+        items(items.size) { i ->
             Column(modifier = GlanceModifier.fillMaxWidth()) {
-                if (i > 0) Spacer(modifier = GlanceModifier.height(4.dp))
-                DishRow(palette, dishes[i])
+                if (i > 0) Spacer(modifier = GlanceModifier.height(5.dp))
+                DishRow(palette, items[i])
             }
         }
     }
+}
+
+/** Legacy string-list wrapper delegating to [SharedMenuItemList]. */
+@Composable
+fun ColumnScope.SharedMenuList(palette: ChroniclePalette, dishes: List<String>) {
+    SharedMenuItemList(palette, dishes.map { MenuDishItem(name = it) })
 }
 
 /**
@@ -1237,6 +1425,7 @@ private fun MealArrow(
     palette: ChroniclePalette,
     iconRes: Int,
     boxDp: Dp = 48.dp,
+    tonal: Boolean = false,
     onClick: () -> Action,
 ) {
     Box(
@@ -1247,12 +1436,30 @@ private fun MealArrow(
             .clickable(onClick = onClick(), rippleOverride = NoPressFeedback),
         contentAlignment = Alignment.Center,
     ) {
-        Image(
-            provider = ImageProvider(iconRes),
-            contentDescription = null,
-            modifier = GlanceModifier.width(20.dp).height(20.dp),
-            colorFilter = ColorFilter.tint(palette.onSurfaceVariant),
-        )
+        if (tonal) {
+            Box(
+                modifier = GlanceModifier
+                    .width(28.dp)
+                    .height(28.dp)
+                    .background(palette.card)
+                    .cornerRadius(10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    provider = ImageProvider(iconRes),
+                    contentDescription = null,
+                    modifier = GlanceModifier.width(16.dp).height(16.dp),
+                    colorFilter = ColorFilter.tint(palette.onSurface),
+                )
+            }
+        } else {
+            Image(
+                provider = ImageProvider(iconRes),
+                contentDescription = null,
+                modifier = GlanceModifier.width(20.dp).height(20.dp),
+                colorFilter = ColorFilter.tint(palette.onSurfaceVariant),
+            )
+        }
     }
 }
 
@@ -1260,11 +1467,8 @@ private fun MealArrow(
  * Meal switcher row: ‹ centered meal title ›. Arrows step the native-owned
  * meal-kind override via [arrowAction] (±1); hidden when a single meal is
  * servable. One Row with 3 children — safely under the RemoteViews limit.
- * Arrows-only tap targets: no row-level tap, so near-misses fall through
- * to the whole-widget tap (open app) instead of stepping the meal by
- * accident — same contract as the hub tab bar.
- * Compact 40.dp arrows (the ≥40dp hit-target floor) and a 12.sp title
- * leave room for dishes.
+ * On wide slots, "Lunch · ITU" splits into an accent [StatusPill] ("Lunch")
+ * over a muted source label ("ITU").
  */
 @Composable
 fun MealSwitcher(
@@ -1275,30 +1479,55 @@ fun MealSwitcher(
     rightIcon: Int,
     arrowAction: (Int) -> Action,
 ) {
+    val narrow = isNarrowSlot()
+    val arrowBox = if (narrow) 32.dp else 40.dp
+    val sep = title.indexOf(" · ")
+    val splitTitle = !narrow && sep > 0 && sep + 3 < title.length
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showArrows) {
-            MealArrow(palette, leftIcon, boxDp = 40.dp) { arrowAction(-1) }
+            MealArrow(palette, leftIcon, boxDp = arrowBox, tonal = true) { arrowAction(-1) }
         }
         Box(
             modifier = GlanceModifier.defaultWeight(),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = title,
-                style = TextStyle(
-                    color = palette.onSurface,
-                    fontSize = if (isNarrowSlot()) 11.sp else 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                ),
-                maxLines = 1,
-            )
+            if (splitTitle) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    StatusPill(palette, title.substring(0, sep), compact = true)
+                    Spacer(modifier = GlanceModifier.height(2.dp))
+                    Text(
+                        text = title.substring(sep + 3),
+                        style = TextStyle(
+                            color = palette.onSurfaceVariant,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                        ),
+                        maxLines = 1,
+                    )
+                }
+            } else {
+                // Narrow slots strip the " · Provider" suffix ("Lunch · Hacettepe"
+                // -> "Lunch") so the meal name never truncates to "Lun..." between
+                // the stepper buttons.
+                val compactLabel = if (narrow && sep > 0) title.substring(0, sep) else title
+                Text(
+                    text = compactLabel,
+                    style = TextStyle(
+                        color = palette.onSurface,
+                        fontSize = if (narrow) 11.sp else 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    ),
+                    maxLines = 1,
+                )
+            }
         }
         if (showArrows) {
-            MealArrow(palette, rightIcon, boxDp = 40.dp) { arrowAction(1) }
+            MealArrow(palette, rightIcon, boxDp = arrowBox, tonal = true) { arrowAction(1) }
         }
     }
 }

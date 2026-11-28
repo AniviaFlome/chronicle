@@ -318,17 +318,32 @@ fun parseStrings(json: String): List<String> {
     }
 }
 
-/** One servable meal: kind id (sabah/ogle/...), localized title, dishes. */
+/** Structured menu dish item (optional additive wire fields alongside [MenuMeal.dishes]). */
+data class MenuDishItem(
+    val name: String,
+    val side: String = "",
+    val kcal: Int = 0,
+)
+
+/** One servable meal: kind id (sabah/ogle/...), localized title, dishes, and
+ *  optional service hours / total kcal / structured items. */
 data class MenuMeal(
     val kind: String,
     val title: String,
     val dishes: List<String>,
-)
+    val serviceHours: String = "",
+    val totalKcal: Int = 0,
+    val items: List<MenuDishItem> = emptyList(),
+) {
+    /** Structured items when pushed; falls back to legacy [dishes] strings. */
+    val resolvedItems: List<MenuDishItem>
+        get() = if (items.isNotEmpty()) items else dishes.map { MenuDishItem(it) }
+}
 
 /**
- * Parses `menuMeals` (`[{kind, title, dishes[]}]`). Entries with blank
- * kinds or no dishes are skipped — mirrors the menu page, which only
- * ever points at a meal that has dishes.
+ * Parses `menuMeals` (`[{kind, title, serviceHours, totalKcal, dishes[], items[]}]`).
+ * Entries with blank kinds or no dishes are skipped — mirrors the menu page,
+ * which only ever points at a meal that has dishes.
  */
 fun parseMenuMeals(json: String): List<MenuMeal> {
     if (json.isBlank()) return emptyList()
@@ -341,8 +356,36 @@ fun parseMenuMeals(json: String): List<MenuMeal> {
                 val dishes = parseStrings(
                     o.optJSONArray("dishes")?.toString().orEmpty(),
                 ).map { it.trim() }.filter { it.isNotEmpty() }
-                if (kind.isEmpty() || dishes.isEmpty()) continue
-                add(MenuMeal(kind, o.s("title"), dishes))
+                val itemsArr = o.optJSONArray("items")
+                val items = if (itemsArr != null) {
+                    buildList {
+                        for (j in 0 until itemsArr.length()) {
+                            val itemObj = itemsArr.optJSONObject(j) ?: continue
+                            val name = itemObj.s("name").trim()
+                            if (name.isEmpty()) continue
+                            add(
+                                MenuDishItem(
+                                    name = name,
+                                    side = itemObj.s("side").trim(),
+                                    kcal = itemObj.optInt("kcal", 0),
+                                ),
+                            )
+                        }
+                    }
+                } else {
+                    emptyList()
+                }
+                if (kind.isEmpty() || (dishes.isEmpty() && items.isEmpty())) continue
+                add(
+                    MenuMeal(
+                        kind = kind,
+                        title = o.s("title"),
+                        dishes = if (dishes.isNotEmpty()) dishes else items.map { it.name },
+                        serviceHours = o.s("serviceHours").trim(),
+                        totalKcal = o.optInt("totalKcal", 0),
+                        items = items,
+                    ),
+                )
             }
         }
     } catch (_: Exception) {
@@ -530,29 +573,14 @@ val TimedEntry.isSentinel: Boolean
  * the pushed stale copy ("No classes today"), per the stale contract.
  */
 fun TimedEntry.heroName(snap: WidgetSnapshot): String =
-    if (isSentinel || snap.stale) snap.staleName.ifEmpty { snap.emptyText } else className
+    if (isSentinel) snap.staleName.ifEmpty { snap.emptyText } else className
 
-/**
- * Render-time countdown for the status pill. The pushed statusLine is baked
- * at push time ("in 17 h" at 01:09 is still "in 17 h" at noon); the class
- * start/end instants never go stale, so recompute here on every compose.
- * Today-only (like the push-side statusFor): future-day entries keep the
- * pushed statusLine. Falls back to statusLine when instants are missing
- * (synthetic entries) or the templates were never pushed.
- */
-/**
- * Hero numeral parts (prefix, number, unit suffix) parsed off the pushed
- * countdown templates by splitting on "{n}" — fully localized with zero new
- * wire keys. Null when the entry isn't countdown-able (running, sentinel,
- * synthetic, or future-day): callers show the [liveStatus] pill instead.
- * Mirrors [liveStatus]'s thresholds exactly (today-only, <120 min rule).
- */
 fun countdownParts(
     e: TimedEntry,
     snap: WidgetSnapshot,
     nowMs: Long,
 ): Triple<String, String, String>? {
-    if (e.startMs <= 0L || snap.stale || e.isSentinel) return null
+    if (e.startMs <= 0L || e.isSentinel) return null
     val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     if (dayFmt.format(Date(e.startMs)) != dayFmt.format(Date(nowMs))) return null
     val minsToStart = ((e.startMs - nowMs) / 60000).toInt()
@@ -677,6 +705,14 @@ object Samples {
     )
 
     val menu = listOf("Lentil soup", "Grilled chicken", "Rice pilaf", "Ayran")
+    val menuItems = listOf(
+        MenuDishItem("Lentil soup", kcal = 180),
+        MenuDishItem("Grilled chicken", side = "Roast potatoes", kcal = 420),
+        MenuDishItem("Rice pilaf", kcal = 260),
+        MenuDishItem("Ayran", kcal = 90),
+    )
+    const val menuServiceHours = "11:30–14:00"
+    const val menuTotalKcal = 950
 
     const val headerTitle = "Due tasks"
     const val tasksCount = "3"

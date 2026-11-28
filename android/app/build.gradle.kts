@@ -18,6 +18,7 @@ android {
 
     dependencies {
         implementation("androidx.glance:glance-appwidget:1.2.0")
+        implementation("androidx.work:work-runtime-ktx:2.11.2")
         coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     }
 

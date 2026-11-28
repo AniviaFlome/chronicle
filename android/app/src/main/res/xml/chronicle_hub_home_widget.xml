@@ -18,5 +18,4 @@
     android:previewImage="@drawable/widget_preview_chronicle_hub_img"
     android:minResizeWidth="40dp"
     android:minResizeHeight="40dp"
-    android:configure="com.chronicleapp.chronicle.HubConfigureActivity"
 />

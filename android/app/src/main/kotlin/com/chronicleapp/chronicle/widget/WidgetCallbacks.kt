@@ -50,6 +50,12 @@ val agendaNavBump = mutableIntStateOf(0)
  * resolving. */
 val menuNavBump = mutableIntStateOf(0)
 
+/** Same live-session staleness contract as [hubNavBump], for the
+ * standalone Next-class widget: bumped by [WidgetRefreshWorker] and
+ * [NextClassHomeWidgetReceiver.onUpdate] so background/timeline ticks
+ * always recompute `nowMs` even inside Glance's ~45s live-session window. */
+val nextClassNavBump = mutableIntStateOf(0)
+
 /** Week-rail tap: select one of the 7 upcoming days. */
 class AgendaDaySelectCallback : ActionCallback {
     override suspend fun onAction(

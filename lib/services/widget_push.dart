@@ -150,10 +150,11 @@ Future<void> widgetSaveJson(String key, Object? value) =>
     HomeWidget.saveWidgetData<String>(key, jsonEncode(value));
 
 /// Arms timed re-renders for the timeline widgets (next-class hero and the
-/// hub): every timeline key (entry switchover + closing sentinel), hourly
-/// ticks for the next day, and the next midnight (day rollover). Replaces
-/// any previous schedule for those receivers; [boundaries] empty cancels.
-/// Times are absolute instants — recompute on every push.
+/// hub): every timeline transition (class start, class end, midnight rollover,
+/// closing sentinel) across the next 7 days, 15-min countdown ticks over the
+/// next 2 hours, and hourly ticks for the next day. Capped at 64 alarms so
+/// AlarmManager limits are never exceeded; WorkManager covers periodic 15-min
+/// ticks indefinitely beyond this window.
 Future<void> scheduleWidgetTimelines({
   required List<DateTime> boundaries,
 }) async {
@@ -163,13 +164,17 @@ Future<void> scheduleWidgetTimelines({
       continue;
     }
     final now = DateTime.now();
-    final midnight = DateTime(now.year, now.month, now.day + 1);
+    final weekHorizon = now.add(const Duration(days: 7));
     final times = <DateTime>{
       for (final t in boundaries)
-        if (t.isAfter(now)) t,
-      for (var i = 1; i <= 24; i++) now.add(Duration(hours: i)),
-      midnight,
+        if (t.isAfter(now) && !t.isAfter(weekHorizon)) t,
+      for (var i = 1; i <= 8; i++) now.add(Duration(minutes: i * 15)),
+      for (var i = 3; i <= 24; i++) now.add(Duration(hours: i)),
+      for (var d = 1; d <= 7; d++) DateTime(now.year, now.month, now.day + d),
     }.toList()..sort();
-    await HomeWidget.scheduleWidgetUpdates(times, qualifiedAndroidName: name);
+    await HomeWidget.scheduleWidgetUpdates(
+      times.take(64).toList(),
+      qualifiedAndroidName: name,
+    );
   }
 }

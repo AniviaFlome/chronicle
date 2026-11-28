@@ -16,3 +16,7 @@
 -keep class * implements androidx.glance.appwidget.action.ActionCallback {
     <init>(...);
 }
+# WorkManager instantiates background widget refresh workers reflectively.
+-keep class com.chronicleapp.chronicle.widget.WidgetRefreshWorker {
+    <init>(...);
+}

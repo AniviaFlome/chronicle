@@ -51,6 +51,7 @@ import com.chronicleapp.chronicle.widget.HubDirectionKey
 import com.chronicleapp.chronicle.widget.HubMenuMealCallback
 import com.chronicleapp.chronicle.widget.HubTabCallback
 import com.chronicleapp.chronicle.widget.MealSwitcher
+import com.chronicleapp.chronicle.widget.MenuDishItem
 import com.chronicleapp.chronicle.widget.MenuMeal
 import com.chronicleapp.chronicle.widget.MenuMealDirectionKey
 import com.chronicleapp.chronicle.widget.MenuStepArrow
@@ -59,6 +60,7 @@ import com.chronicleapp.chronicle.widget.Keys
 import com.chronicleapp.chronicle.widget.Samples
 import com.chronicleapp.chronicle.widget.SharedAgendaList
 import com.chronicleapp.chronicle.widget.SharedClassTab
+import com.chronicleapp.chronicle.widget.SharedMenuItemList
 import com.chronicleapp.chronicle.widget.SharedMenuList
 import com.chronicleapp.chronicle.widget.SharedTasksList
 import com.chronicleapp.chronicle.widget.StatusPill
@@ -147,7 +149,7 @@ class ChronicleHubHomeWidget : GlanceAppWidget() {
         val locales = ConfigurationCompat.getLocales(context.resources.configuration)
         val loc = (0 until locales.size()).mapNotNull { locales[it] }.joinToString(",")
         val snap = HomeWidgetPlugin.getData(context).snapshot(Keys.HUB)
-        return "v4|hub|$loc|${snap.useYou}|${snap.themeCode}"
+        return "v5|hub|$loc|${snap.useYou}|${snap.themeCode}"
     }
 
     companion object {
@@ -347,7 +349,7 @@ private fun HubBody(
 private fun Tiny(palette: ChroniclePalette, data: HubContentData) {
     val line = when (data.sel) {
         ChronicleHubHomeWidget.TAB_CLASS -> {
-            val entry = data.entry?.takeUnless { it.isSentinel || data.snap.stale }
+            val entry = data.entry?.takeUnless { it.isSentinel }
             when {
                 entry == null -> data.snap.staleName.ifEmpty { data.snap.emptyText }
                 // Hero: name + live status ("in 7 h"); quiet: state copy +
@@ -591,17 +593,17 @@ private fun HubColumn(
                         }
                     else -> {
                         val meal = HubMenuMeal(data)
-                        val dishes = meal?.dishes ?: data.menuRows
-                        if (dishes.isEmpty()) {
+                        val items = meal?.resolvedItems
+                            ?: data.menuRows.map { MenuDishItem(it) }
+                        if (items.isEmpty()) {
                             EmptyState(
                                 palette,
                                 R.drawable.ic_widget_menu,
                                 data.emptyMenu.ifEmpty { data.snap.emptyText },
                             )
                         } else {
-                            // Same rows as the standalone menu widget
-                            // ([SharedMenuList]): a copy, not a second design.
-                            SharedMenuList(palette, dishes)
+                            // Same tonal dish cards as the standalone menu widget.
+                            SharedMenuItemList(palette, items)
                         }
                     }
                 }
@@ -647,7 +649,7 @@ private fun ShortHubColumn(
             when (data.sel) {
                 ChronicleHubHomeWidget.TAB_CLASS -> {
                     val entry = data.entry
-                    if (entry == null || entry.isSentinel || data.snap.stale) {
+                    if (entry == null || entry.isSentinel) {
                         EmptyState(
                             palette,
                             R.drawable.ic_widget_event_available,
@@ -714,9 +716,10 @@ private fun ShortHubColumn(
                             Spacer(modifier = GlanceModifier.height(4.dp))
                             ThenLine(palette, entry, thenRow, wrapName = data.snap.wrapName)
                             if (roomy) {
-                                val extra = data.looks.filterNot {
-                                    it.time == entry.thenWhen && it.name == entry.thenName
-                                }.take(1)
+                                val extra = (if (data.looks.isNotEmpty() &&
+                                    data.looks[0].time == entry.thenWhen &&
+                                    data.looks[0].name == entry.thenName
+                                ) data.looks.drop(1) else data.looks).take(1)
                                 for (row in extra) {
                                     Spacer(modifier = GlanceModifier.height(4.dp))
                                     FilledLookaheadRow(

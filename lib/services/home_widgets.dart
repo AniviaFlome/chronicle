@@ -37,6 +37,197 @@ List<String> pushedDishNames(ServedMeal m) => [
     if (d.displayName.trim().isNotEmpty) d.displayName,
 ];
 
+/// Builds the multi-day Next-class timeline map keyed by epoch-millis strings.
+///
+/// Keying contract (self-updating without opening the app for up to 14 days):
+/// - Same-day consecutive classes: class `i` is keyed at `listed[i-1].end`.
+/// - Day transitions (day 0 has no classes, or `listed[i].date != prev.date`):
+///   a quiet `"No classes today"` entry is keyed at `prevEnd` (or `today` 00:00)
+///   with the next scheduled class riding in `thenName`/`thenWhen`/`looks`, and
+///   class `i` itself is keyed at midnight of `listed[i].date` so it promotes
+///   to the Hero Card automatically at 00:00 with a live countdown.
+/// - Closing sentinel `'—'` is keyed at `listed.last.end`.
+///
+/// Visible for tests.
+Map<String, Map<String, Object?>> buildNextClassTimeline({
+  required DateTime now,
+  required List<engine.ClassOccurrence> occurrences,
+  required String locale,
+  required AppLocalizations l10n,
+  required String Function(engine.ClassOccurrence) displayNameOf,
+  required String Function(engine.ClassOccurrence) colorOf,
+  required String Function(engine.ClassOccurrence) teacherOf,
+  required String? Function(engine.ClassOccurrence) roomOf,
+  required String Function(engine.ClassOccurrence) buildingOf,
+}) {
+  final today = DateTime(now.year, now.month, now.day);
+  final nowMinutes = now.hour * 60 + now.minute;
+  final upcoming = [
+    for (final o in occurrences)
+      if (o.date.isAfter(today) || o.endMinutes > nowMinutes) o,
+  ];
+  final listed = upcoming.take(40).toList();
+  if (listed.isEmpty) return <String, Map<String, Object?>>{};
+
+  String rangeFor(engine.ClassOccurrence o) =>
+      '${hhmmLocale(o.startMinutes, locale)}–${hhmmLocale(o.endMinutes, locale)}';
+
+  String whenRelative(engine.ClassOccurrence o, DateTime anchorDate) {
+    final time = hhmmLocale(o.startMinutes, locale);
+    return o.date == anchorDate
+        ? time
+        : '${shortWeekdayName(o.date.weekday, locale)} $time';
+  }
+
+  String detailLineFor(engine.ClassOccurrence o) {
+    final range = rangeFor(o);
+    final roomText = roomOf(o);
+    if (roomText == null) return range;
+    return '$range · $roomText';
+  }
+
+  String statusFor(engine.ClassOccurrence o) {
+    if (o.date != today) return '';
+    if (o.startMinutes > nowMinutes) {
+      final mins = o.startMinutes - nowMinutes;
+      return mins < 120
+          ? l10n.widgetInMin(mins)
+          : l10n.widgetInHours(mins ~/ 60);
+    }
+    return l10n.widgetCurrently;
+  }
+
+  List<Map<String, Object?>> looksFor(int afterIdx, DateTime anchorDate) => [
+    for (var j = afterIdx + 1; j < listed.length && j <= afterIdx + 4; j++)
+      {
+        'time': whenRelative(listed[j], anchorDate),
+        'name': displayNameOf(listed[j]),
+        'colorHex': colorOf(listed[j]),
+        'at': -listed[j].start.millisecondsSinceEpoch,
+        'teacher': teacherOf(listed[j]),
+        'room': roomOf(listed[j]) ?? '',
+        'building': buildingOf(listed[j]),
+        'range': rangeFor(listed[j]),
+      },
+  ];
+
+  Map<String, Object?> entryJson({
+    required String className,
+    required String detailLine,
+    required String statusLine,
+    required String startLabel,
+    required String thenLine,
+    required String thenName,
+    required String thenWhen,
+    required String colorHex,
+    required String thenColorHex,
+    required String teacher,
+    String room = '',
+    String building = '',
+    String range = '',
+    required List<Map<String, Object?>> looks,
+    required int startMs,
+    required int endMs,
+  }) => {
+    'className': className,
+    'detailLine': detailLine,
+    'statusLine': statusLine,
+    'startLabel': startLabel,
+    'thenLine': thenLine,
+    'thenName': thenName,
+    'thenWhen': thenWhen,
+    'colorHex': colorHex,
+    'thenColorHex': thenColorHex,
+    'teacher': teacher,
+    'room': room,
+    'building': building,
+    'range': range,
+    'looks': looks,
+    'startMs': startMs,
+    'endMs': endMs,
+  };
+
+  final timed = <String, Map<String, Object?>>{};
+  String keyOf(DateTime at) => at.millisecondsSinceEpoch.toString();
+
+  DateTime? prevEnd;
+  DateTime? prevDate;
+  for (var i = 0; i < listed.length; i++) {
+    final o = listed[i];
+    final next = i + 1 < listed.length ? listed[i + 1] : null;
+    final oMidnight = DateTime(o.date.year, o.date.month, o.date.day);
+    final isNewDay = i == 0 ? o.date != today : o.date != prevDate;
+
+    if (isNewDay) {
+      final quietAt = prevEnd ?? today;
+      final quietAnchor = prevDate ?? today;
+      if (quietAt.isBefore(oMidnight)) {
+        final nextWhen = whenRelative(o, quietAnchor);
+        timed[keyOf(quietAt)] = entryJson(
+          className: l10n.widgetNoClasses,
+          detailLine: '',
+          statusLine: '',
+          startLabel: '',
+          thenLine: l10n.widgetThen(displayNameOf(o), nextWhen),
+          thenName: displayNameOf(o),
+          thenWhen: nextWhen,
+          colorHex: '',
+          thenColorHex: colorOf(o),
+          teacher: teacherOf(o),
+          room: roomOf(o) ?? '',
+          building: buildingOf(o),
+          range: rangeFor(o),
+          looks: looksFor(i - 1, quietAnchor),
+          startMs: 0,
+          endMs: 0,
+        );
+      }
+    }
+
+    final classAt = isNewDay ? oMidnight : (i == 0 ? today : prevEnd!);
+    final nextWhen = next == null ? '' : whenRelative(next, o.date);
+    final nextName = next == null ? '' : displayNameOf(next);
+    timed[keyOf(classAt)] = entryJson(
+      className: displayNameOf(o),
+      detailLine: detailLineFor(o),
+      statusLine: statusFor(o),
+      startLabel: whenRelative(o, o.date),
+      thenLine: next == null ? '' : l10n.widgetThen(nextName, nextWhen),
+      thenName: nextName,
+      thenWhen: nextWhen,
+      colorHex: colorOf(o),
+      thenColorHex: next == null ? '' : colorOf(next),
+      teacher: teacherOf(o),
+      room: roomOf(o) ?? '',
+      building: buildingOf(o),
+      range: rangeFor(o),
+      looks: looksFor(i, o.date),
+      startMs: o.start.millisecondsSinceEpoch,
+      endMs: o.end.millisecondsSinceEpoch,
+    );
+
+    prevEnd = o.end;
+    prevDate = o.date;
+  }
+
+  timed[keyOf(listed.last.end)] = entryJson(
+    className: '—',
+    detailLine: '',
+    statusLine: '',
+    startLabel: '',
+    thenLine: '',
+    thenName: '',
+    thenWhen: '',
+    colorHex: '',
+    thenColorHex: '',
+    teacher: '',
+    looks: const [],
+    startMs: 0,
+    endMs: 0,
+  );
+  return timed;
+}
+
 /// Last-sent payload fingerprint per widget prefix (in-memory only).
 /// See `updateIfChanged` inside `_push`.
 final _lastWidgetPayload = <String, String>{};
@@ -82,7 +273,6 @@ String _hexColor(int colorValue) {
 Future<void> _push(ProviderContainer container) async {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
-  final tomorrow = shiftDays(today, 1);
   final locale = await container.read(appLocaleProvider.future) ?? 'en';
   final lang = locale.split(RegExp(r'[_-]')).first;
   final l10n = lookupAppLocalizations(Locale(lang == 'tr' ? 'tr' : 'en'));
@@ -133,9 +323,10 @@ Future<void> _push(ProviderContainer container) async {
 
   final occurrenceEngine = await container.read(engineProvider.future);
   final byId = await container.read(classesByIdProvider.future);
-  // Scan a full week ahead so the Next-class widget can show the next
-  // real class ("Tue 08:40…") instead of going blank on class-free days.
-  final horizon = shiftDays(today, 7);
+  // Scan 14 days ahead so the Next-class widget runs hands-free across two
+  // full weeks (day rollovers, quiet days, and class switches) without
+  // needing the user to open the app.
+  final horizon = shiftDays(today, 14);
   final occs =
       occurrenceEngine
           .occurrences(rangeStart: today, rangeEnd: horizon)
@@ -146,238 +337,41 @@ Future<void> _push(ProviderContainer container) async {
           return d != 0 ? d : a.startMinutes.compareTo(b.startMinutes);
         });
 
-  // Next class: remaining classes today plus the next 7 days. Classes past
-  // tomorrow get a weekday prefix ("Tue 08:40–09:30"). Each entry is keyed
-  // at the time it should appear: the previous class's end (start of today
-  // for the first), because the native side shows the entry with the
-  // greatest key at or before now — keying at class start would blank the
-  // widget before the first class. A trailing "—" entry keyed at the last
-  // class end clears it afterwards.
-  final nowMinutes = now.hour * 60 + now.minute;
-  final upcoming = [
-    for (final o in occs)
-      if (o.date.isAfter(today) || o.endMinutes > nowMinutes) o,
-  ];
-  String rangeFor(engine.ClassOccurrence o) {
-    final range =
-        '${hhmmLocale(o.startMinutes, locale)}–${hhmmLocale(o.endMinutes, locale)}';
-    if (o.date == today || o.date == tomorrow) return range;
-    return '${shortWeekdayName(o.date.weekday, locale)} $range';
-  }
-
-  final listed = upcoming.take(12).toList();
   String nameOf(engine.ClassOccurrence o) => byId[o.classId]?.name ?? '—';
   String codeOf(engine.ClassOccurrence o) =>
       byId[o.classId]?.courseCode?.trim() ?? '';
   String teacherOf(engine.ClassOccurrence o) =>
       byId[o.classId]?.teacher?.trim() ?? '';
-  // Display name with the saved university course code when one exists
-  // ("MAT 103E · Müzik Teorisi I"), plain name otherwise — or always plain
-  // when the hide-codes widget option is on. Used by the timeline
-  // (hero/then/looks) of both the standalone Next-class widget and the hub
-  // class tab (same pre-baked strings); agenda day rows keep plain names.
   String displayNameOf(engine.ClassOccurrence o) => widgetClassDisplayName(
     name: nameOf(o),
     code: codeOf(o),
     hideCodes: showFullName,
   );
-
   String colorOf(engine.ClassOccurrence o) =>
       _hexColor(byId[o.classId]?.colorValue ?? 0);
-
-  // "When" label for Then-lines: plain time same-day, weekday-prefixed
-  // otherwise (a bare time after midnight reads as "soon").
-  String whenOf(engine.ClassOccurrence o) {
-    final time = hhmmLocale(o.startMinutes, locale);
-    return o.date == today
-        ? time
-        : '${shortWeekdayName(o.date.weekday, locale)} $time';
-  }
-
-  // "Then" entry at index i names class i+1 (empty for the last class
-  // and the sentinel). Pushed as structured name/when parts; `thenLine`
-  // keeps the composed string for backward compatibility.
-  String thenNameFor(int i) {
-    if (i + 1 >= listed.length) return '';
-    return displayNameOf(listed[i + 1]);
-  }
-
-  String thenWhenFor(int i) {
-    if (i + 1 >= listed.length) return '';
-    return whenOf(listed[i + 1]);
-  }
-
-  String thenFor(int i) {
-    if (i + 1 >= listed.length) return '';
-    return l10n.widgetThen(displayNameOf(listed[i + 1]), whenOf(listed[i + 1]));
-  }
-
-  /// Resolved room for an occurrence (slot override wins, class fallback),
-  /// placeholder-cleaned; null when absent.
   String? roomOf(engine.ClassOccurrence o) =>
       cleanRoom(o.room ?? byId[o.classId]?.room);
-
-  /// Class building ("C Blok"); empty when unset.
   String buildingOf(engine.ClassOccurrence o) =>
       byId[o.classId]?.building?.trim() ?? '';
 
-  String detailLineFor(engine.ClassOccurrence o) {
-    final range = rangeFor(o);
-    final roomText = roomOf(o);
-    if (roomText == null) return range;
-    return '$range · $roomText';
-  }
-
-  // Countdown lives in its own pill on the new design ("in 12 min",
-  // "Currently · ends 09:30"). Only for today's classes — future entries
-  // already carry a weekday prefix, and a day-count would go stale between
-  // pushes.
-  String statusFor(engine.ClassOccurrence o) {
-    if (o.date != today) return '';
-    if (o.startMinutes > nowMinutes) {
-      final mins = o.startMinutes - nowMinutes;
-      return mins < 120
-          ? l10n.widgetInMin(mins)
-          : l10n.widgetInHours(mins ~/ 60);
-    }
-    // Running: plain "Currently" — the detail line already carries the
-    // time range, so an "ends {time}" suffix would repeat the end time.
-    return l10n.widgetCurrently;
-  }
-
-  // Hub class-tab lookahead rows: the classes after the hero entry,
-  // display names with course codes (no Then/Later prefix — the native
-  // side lays out time and name separately). Rides inside each timeline
-  // entry so the native side can slice it at render time (the standalone
-  // Next-class widget and the hub both render entry.looks; the native
-  // budget caps at 3 rows after the Then-line, so carry Then + 3 more).
-  // Each row also carries its expand key (`at`, negated class start so
-  // it can never collide with a timeline entry key) plus the detail
-  // fields shown when tapped (teacher / room / building / range).
-  List<Map<String, Object?>> looksFor(int i) => [
-    for (var j = i + 1; j < listed.length && j <= i + 4; j++)
-      {
-        // Cross-day rows carry a weekday hint ("Fri 18:09"); the native
-        // chip wraps instead of clipping when the time has a space.
-        'time': listed[j].date == today
-            ? hhmmLocale(listed[j].startMinutes, locale)
-            : '${shortWeekdayName(listed[j].date.weekday, locale)} ${hhmmLocale(listed[j].startMinutes, locale)}',
-        'name': displayNameOf(listed[j]),
-        'colorHex': colorOf(listed[j]),
-        'at': -listed[j].start.millisecondsSinceEpoch,
-        'teacher': teacherOf(listed[j]),
-        'room': roomOf(listed[j]) ?? '',
-        'building': buildingOf(listed[j]),
-        'range': rangeFor(listed[j]),
-      },
-  ];
-
-  Map<String, Object?> entryJson({
-    required String className,
-    required String detailLine,
-    required String statusLine,
-    required String startLabel,
-    required String thenLine,
-    required String thenName,
-    required String thenWhen,
-    required String colorHex,
-    required String thenColorHex,
-    required String teacher,
-    String room = '',
-    String building = '',
-    String range = '',
-    required List<Map<String, Object?>> looks,
-    // Class start/end instants (epoch ms) for the render-time countdown;
-    // 0 on synthetic entries (no-classes/sentinel).
-    required int startMs,
-    required int endMs,
-  }) => {
-    'className': className,
-    'detailLine': detailLine,
-    'statusLine': statusLine,
-    'startLabel': startLabel,
-    'thenLine': thenLine,
-    'thenName': thenName,
-    'thenWhen': thenWhen,
-    'colorHex': colorHex,
-    'thenColorHex': thenColorHex,
-    'teacher': teacher,
-    'room': room,
-    'building': building,
-    'range': range,
-    'looks': looks,
-    'startMs': startMs,
-    'endMs': endMs,
-  };
-
-  final firstIsToday = listed.isNotEmpty && listed[0].date == today;
-  // Built imperatively: map-literal duplicate keys throw at runtime.
-  final timed = <String, Map<String, Object?>>{};
-  String keyOf(DateTime at) => at.millisecondsSinceEpoch.toString();
-  // Nothing today: say so instead of showing tomorrow's class as if it
-  // were happening now; tomorrow rides in the Then-line instead.
-  if (!firstIsToday && listed.isNotEmpty) {
-    timed[keyOf(today)] = entryJson(
-      className: l10n.widgetNoClasses,
-      detailLine: '',
-      statusLine: '',
-      startLabel: '',
-      thenLine: l10n.widgetThen(displayNameOf(listed[0]), whenOf(listed[0])),
-      thenName: displayNameOf(listed[0]),
-      thenWhen: whenOf(listed[0]),
-      colorHex: '',
-      thenColorHex: colorOf(listed[0]),
-      teacher: teacherOf(listed[0]),
-      room: roomOf(listed[0]) ?? '',
-      building: buildingOf(listed[0]),
-      range: rangeFor(listed[0]),
-      looks: looksFor(-1),
-      startMs: 0,
-      endMs: 0,
-    );
-  }
-  for (var i = 0; i < listed.length; i++) {
-    final o = listed[i];
-    final next = i + 1 < listed.length ? listed[i + 1] : null;
-    final at = i == 0
-        ? (firstIsToday ? today : listed[i].start)
-        : listed[i - 1].end;
-    timed[keyOf(at)] = entryJson(
-      className: displayNameOf(o),
-      detailLine: detailLineFor(o),
-      statusLine: statusFor(o),
-      startLabel: whenOf(o),
-      thenLine: thenFor(i),
-      thenName: thenNameFor(i),
-      thenWhen: thenWhenFor(i),
-      colorHex: colorOf(o),
-      thenColorHex: next == null ? '' : colorOf(next),
-      teacher: teacherOf(o),
-      room: roomOf(o) ?? '',
-      building: buildingOf(o),
-      range: rangeFor(o),
-      looks: looksFor(i),
-      startMs: o.start.millisecondsSinceEpoch,
-      endMs: o.end.millisecondsSinceEpoch,
-    );
-  }
-  if (listed.isNotEmpty) {
-    timed[keyOf(listed.last.end)] = entryJson(
-      className: '—',
-      detailLine: '',
-      statusLine: '',
-      startLabel: '',
-      thenLine: '',
-      thenName: '',
-      thenWhen: '',
-      colorHex: '',
-      thenColorHex: '',
-      teacher: '',
-      looks: const [],
-      startMs: 0,
-      endMs: 0,
-    );
-  }
+  final timed = buildNextClassTimeline(
+    now: now,
+    occurrences: occs,
+    locale: locale,
+    l10n: l10n,
+    displayNameOf: displayNameOf,
+    colorOf: colorOf,
+    teacherOf: teacherOf,
+    roomOf: roomOf,
+    buildingOf: buildingOf,
+  );
+  final nowMinutes = now.hour * 60 + now.minute;
+  final upcomingStarts = [
+    for (final o in occs)
+      if ((o.date.isAfter(today) || o.endMinutes > nowMinutes) &&
+          o.start.isAfter(now))
+        o.start,
+  ].take(40);
 
   // Agenda: one class list per day of the week ahead (the widget shows the
   // selected rail day's rows, defaulting to today), plus the 7-day rail
@@ -555,7 +549,20 @@ Future<void> _push(ProviderContainer container) async {
               {
                 'kind': m.kind,
                 'title': mealTitle(m),
+                'serviceHours': m.serviceHours.trim(),
+                'totalKcal': m.totalKcal ?? 0,
                 'dishes': pushedDishNames(m),
+                'items': [
+                  for (final d in m.dishes.take(pushedDishesPerMeal))
+                    if (d.displayName.trim().isNotEmpty)
+                      {
+                        'name': d.name.trim().isNotEmpty
+                            ? d.name.trim()
+                            : d.displayName.trim(),
+                        'side': d.side.trim(),
+                        'kcal': d.kcal ?? 0,
+                      },
+                ],
               },
         ];
         if (menuMeals.isNotEmpty) {
@@ -812,6 +819,7 @@ Future<void> _push(ProviderContainer container) async {
     boundaries: [
       for (final k in timed.keys)
         DateTime.fromMillisecondsSinceEpoch(int.parse(k)),
+      ...upcomingStarts,
     ],
   );
 }

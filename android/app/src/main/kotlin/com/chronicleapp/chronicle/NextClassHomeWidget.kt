@@ -31,6 +31,7 @@ import com.chronicleapp.chronicle.widget.currentVerticalBucket
 import com.chronicleapp.chronicle.widget.heroName
 import com.chronicleapp.chronicle.widget.isSentinel
 import com.chronicleapp.chronicle.widget.long
+import com.chronicleapp.chronicle.widget.nextClassNavBump
 import com.chronicleapp.chronicle.widget.parseTimed
 import com.chronicleapp.chronicle.widget.resolvePalette
 import com.chronicleapp.chronicle.widget.snapshot
@@ -48,7 +49,12 @@ class NextClassHomeWidget : GlanceAppWidget() {
     override val sizeMode = verticalSizeSlots
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        provideContent { NextClassContent(context, resolveState(context)) }
+        provideContent {
+            // Snapshot-tracked read (see nextClassNavBump): pins live Glance
+            // sessions to the counter so WorkManager / timeline updates always
+            // recompute nowMs instead of replaying cached state.
+            NextClassContent(context, resolveState(context, nextClassNavBump.intValue))
+        }
     }
 
     override suspend fun providePreview(context: Context, widgetCategory: Int) {
@@ -66,10 +72,13 @@ class NextClassHomeWidget : GlanceAppWidget() {
         val locales = ConfigurationCompat.getLocales(context.resources.configuration)
         val loc = (0 until locales.size()).mapNotNull { locales[it] }.joinToString(",")
         val snap = HomeWidgetPlugin.getData(context).snapshot(Keys.NEXT_CLASS)
-        return "v5|nc|$loc|${snap.useYou}|${snap.themeCode}"
+        return "v6|nc|$loc|${snap.useYou}|${snap.themeCode}"
     }
 
-    private fun resolveState(context: Context): NextClassWidgetUiState {
+    private fun resolveState(
+        context: Context,
+        @Suppress("UNUSED_PARAMETER") navBump: Int,
+    ): NextClassWidgetUiState {
         return try {
             val prefs = HomeWidgetPlugin.getData(context)
             val prefix = Keys.NEXT_CLASS
@@ -78,17 +87,13 @@ class NextClassHomeWidget : GlanceAppWidget() {
             val now = System.currentTimeMillis()
             val idx = entries.indexOfLast { it.at <= now }
             val entry = if (idx >= 0) entries[idx] else null
-            if (entry == null || entry.isSentinel || snap.stale) {
+            // Timeline is self-expiring via the closing "—" sentinel: never
+            // discard valid multi-day entries at midnight via snap.stale.
+            if (entry == null || entry.isSentinel) {
                 val msg = entry?.heroName(snap)?.ifEmpty { snap.emptyText }
                     ?: snap.staleName.ifEmpty { snap.emptyText }
-                return NextClassWidgetUiState.Empty(msg.ifEmpty { "No classes" })
+                return NextClassWidgetUiState.Empty(msg.ifEmpty { "No classes today" })
             }
-            // Render entry.looks (same contract as the hub class tab):
-            // looks[0] is the Then-line class, so SharedClassTab can
-            // resolve its room/building via thenRow. Re-deriving from
-            // future timeline entries skipped the immediate next class and
-            // dropped its location (the Then-line fell back to the hero's
-            // room or empty).
             val lookahead = entry.looks
             NextClassWidgetUiState.Success(entry, lookahead, snap, now)
         } catch (e: Exception) {
@@ -99,10 +104,8 @@ class NextClassHomeWidget : GlanceAppWidget() {
 
 @Composable
 private fun NextClassContent(context: Context, state: NextClassWidgetUiState) {
-    // Loading resolves against the live prefs snapshot for theming; the
-    // body is a quiet empty state so a cold bind never flashes raw keys.
-    // No tap targets: hero expand was removed (detail always visible), so
-    // no bump counter is needed here (hub/agenda/menu keep theirs).
+    @Suppress("unused")
+    val navBump = nextClassNavBump.intValue
     val snap: WidgetSnapshot = when (state) {
         is NextClassWidgetUiState.Success -> state.snap
         else -> HomeWidgetPlugin.getData(context).snapshot(Keys.NEXT_CLASS)
@@ -113,11 +116,11 @@ private fun NextClassContent(context: Context, state: NextClassWidgetUiState) {
     VerticalShell(context, palette, snap.opacity, paddingDp = if (tiny) 8 else 12) {
         when (state) {
             is NextClassWidgetUiState.Loading ->
-                EmptyState(palette, R.drawable.ic_widget_event_available, snap.emptyText)
+                EmptyState(palette, R.drawable.ic_widget_event_available, snap.emptyText, fill = true)
             is NextClassWidgetUiState.Empty ->
-                EmptyState(palette, R.drawable.ic_widget_event_available, state.message)
+                EmptyState(palette, R.drawable.ic_widget_event_available, state.message, fill = true)
             is NextClassWidgetUiState.Error ->
-                EmptyState(palette, R.drawable.ic_widget_event_available, state.message)
+                EmptyState(palette, R.drawable.ic_widget_event_available, state.message, fill = true)
             is NextClassWidgetUiState.Success -> when (currentVerticalBucket()) {
                 VerticalBucket.Tiny -> Tiny(state, palette)
                 VerticalBucket.Compact -> Compact(state, palette)
