@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-11-28
+
+### Changed
+- Removed the Hub widget configuration popup (`HubConfigureActivity`) on widget add; Hub tabs remain configurable in Settings → Widgets.
+- Redesigned widget empty states (`EmptyState`) and the quiet "No classes today" banner into centered / elevated tonal cards with circular accent icon badges.
+- Redesigned the Cafeteria Menu widget and Hub Menu tab with an elevated Meal Header Card (meal kind pill, source tag, service hours / kcal, tonal stepper buttons) and tonal dish cards with vertical accent bars and optional garnish/kcal metadata.
+
+### Fixed
+- Next-class widget and Hub class tab now update automatically across class starts, class ends, countdown ticks, and midnights for up to 14 days without opening the app: stopped discarding valid multi-day timelines at midnight (`snap.stale`), promoted next-day classes at 00:00 instead of class start, anchored lookahead times to each entry's active day, scheduled class-start/end/midnight alarms, and added a native 15-minute `WorkManager` refresh worker (`WidgetRefreshWorker`).
+
 ## [1.17.0] - 2026-11-27
 
 ### Added
