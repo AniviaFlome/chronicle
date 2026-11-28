@@ -149,7 +149,7 @@ private fun AgendaContent(
         if (week.isEmpty()) {
             // Stale data: the week was not pushed for today — never show
             // yesterday's plan as if it were current.
-            EmptyState(palette, R.drawable.ic_widget_event_available, emptyCopy)
+            EmptyState(palette, R.drawable.ic_widget_event_available, emptyCopy, fill = true)
         } else {
             Column {
                 if (h >= 250.dp) {

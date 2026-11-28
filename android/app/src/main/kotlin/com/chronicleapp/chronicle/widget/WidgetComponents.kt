@@ -1062,11 +1062,11 @@ fun EmptyState(
         Box(
             modifier = GlanceModifier
                 .fillMaxWidth()
-                .background(palette.card)
+                .background(palette.cardHigh)
                 .cornerRadius(16.dp)
                 .padding(
                     horizontal = if (narrow) 10.dp else 14.dp,
-                    vertical = if (narrow) 12.dp else 14.dp,
+                    vertical = if (narrow) 14.dp else 16.dp,
                 ),
             contentAlignment = Alignment.Center,
         ) {
@@ -1076,8 +1076,8 @@ fun EmptyState(
             ) {
                 Box(
                     modifier = GlanceModifier
-                        .width(if (narrow) 32.dp else 36.dp)
-                        .height(if (narrow) 32.dp else 36.dp)
+                        .width(if (narrow) 36.dp else 42.dp)
+                        .height(if (narrow) 36.dp else 42.dp)
                         .background(palette.accentChipBg)
                         .cornerRadius(50.dp),
                     contentAlignment = Alignment.Center,
@@ -1086,17 +1086,17 @@ fun EmptyState(
                         provider = ImageProvider(iconRes),
                         contentDescription = null,
                         modifier = GlanceModifier
-                            .width(if (narrow) 16.dp else 18.dp)
-                            .height(if (narrow) 16.dp else 18.dp),
+                            .width(if (narrow) 18.dp else 20.dp)
+                            .height(if (narrow) 18.dp else 20.dp),
                         colorFilter = ColorFilter.tint(palette.accentChipFg),
                     )
                 }
-                Spacer(modifier = GlanceModifier.height(8.dp))
+                Spacer(modifier = GlanceModifier.height(10.dp))
                 Text(
                     text = text,
                     style = TextStyle(
                         color = palette.onSurface,
-                        fontSize = if (narrow) 12.sp else 13.sp,
+                        fontSize = if (narrow) 12.sp else 14.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
                     ),

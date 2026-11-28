@@ -147,11 +147,11 @@ private fun WeekContent(context: Context, state: WeeklyCalendarWidgetUiState) {
     VerticalShell(context, palette, snap.opacity, paddingDp = if (tiny) 8 else 12) {
         when (state) {
             is WeeklyCalendarWidgetUiState.Loading ->
-                EmptyState(palette, R.drawable.ic_widget_event_available, snap.emptyText)
+                EmptyState(palette, R.drawable.ic_widget_event_available, snap.emptyText, fill = true)
             is WeeklyCalendarWidgetUiState.Empty ->
-                EmptyState(palette, R.drawable.ic_widget_event_available, state.message)
+                EmptyState(palette, R.drawable.ic_widget_event_available, state.message, fill = true)
             is WeeklyCalendarWidgetUiState.Error ->
-                EmptyState(palette, R.drawable.ic_widget_event_available, state.message)
+                EmptyState(palette, R.drawable.ic_widget_event_available, state.message, fill = true)
             is WeeklyCalendarWidgetUiState.Success -> when (currentVerticalBucket()) {
                 VerticalBucket.Tiny -> Tiny(state, palette)
                 VerticalBucket.Compact -> Compact(context, state, palette)

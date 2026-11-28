@@ -296,18 +296,20 @@ private fun HubContent(context: Context, state: HubWidgetUiState) {
     ) {
         when (state) {
             is HubWidgetUiState.Loading ->
-                EmptyState(palette, R.drawable.ic_widget_event_available, snap.emptyText)
+                EmptyState(palette, R.drawable.ic_widget_event_available, snap.emptyText, fill = true)
             is HubWidgetUiState.Empty ->
                 EmptyState(
                     palette,
                     R.drawable.ic_widget_event_available,
                     state.message.ifEmpty { snap.emptyText },
+                    fill = true,
                 )
             is HubWidgetUiState.Error ->
                 EmptyState(
                     palette,
                     R.drawable.ic_widget_event_available,
                     state.message.ifEmpty { snap.emptyText },
+                    fill = true,
                 )
             is HubWidgetUiState.Success -> HubBody(context, palette, state.content, state.nowMs, hasBar = showBar && short)
         }
@@ -573,6 +575,7 @@ private fun HubColumn(
                                 palette,
                                 R.drawable.ic_widget_event_available,
                                 data.snap.staleName.ifEmpty { data.snap.emptyText },
+                                fill = true,
                             )
                         } else {
                             // Same rows as the standalone agenda widget
@@ -585,6 +588,7 @@ private fun HubColumn(
                                 palette,
                                 R.drawable.ic_widget_done_all,
                                 data.emptyTasks.ifEmpty { data.snap.emptyText },
+                                fill = true,
                             )
                         } else {
                             // Same rows as the standalone tasks widget
@@ -600,6 +604,7 @@ private fun HubColumn(
                                 palette,
                                 R.drawable.ic_widget_menu,
                                 data.emptyMenu.ifEmpty { data.snap.emptyText },
+                                fill = true,
                             )
                         } else {
                             // Same tonal dish cards as the standalone menu widget.
@@ -657,25 +662,11 @@ private fun ShortHubColumn(
                         )
                     } else if (entry.startLabel.isEmpty()) {
                         if (hasBar) {
-                            // Bar mode: copy + one plain then-line with the
-                            // next class location when known. The Then-card
-                            // (45dp) doesn't fit under the bar + header.
-                            Text(
-                                text = entry.className,
-                                style = TextStyle(
-                                    color = palette.onSurfaceVariant,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                ),
-                                maxLines = 1,
-                            )
+                            // Compact tonal quiet banner matching the redesigned
+                            // Quiet Hero Card so 2x2 Hub never shows bare gray copy.
                             val thenRow = data.looks.firstOrNull {
                                 it.time == entry.thenWhen && it.name == entry.thenName
                             }
-                            // Quiet entry fallback (same contract as
-                            // ThenLine): tomorrow's location rides the
-                            // entry's own fields; thenRow may be missing
-                            // or carry empty strings from old pushes.
                             val thenWhere = listOf(
                                 thenRow?.room?.takeIf { !it.isNullOrEmpty() }
                                     ?: entry.room.takeIf { it.isNotEmpty() }.orEmpty(),
@@ -687,29 +678,100 @@ private fun ShortHubColumn(
                                 entry.thenWhen,
                                 thenWhere,
                             ).filter { it.isNotEmpty() }
-                            if (thenBits.isNotEmpty()) {
-                                Spacer(modifier = GlanceModifier.height(2.dp))
-                                Text(
-                                    text = thenBits.joinToString(" · "),
-                                    style = TextStyle(
-                                        color = palette.onSurfaceVariant,
-                                        fontSize = 11.sp,
-                                    ),
-                                    maxLines = if (data.snap.wrapName) Int.MAX_VALUE else 1,
-                                )
+                            Box(
+                                modifier = GlanceModifier
+                                    .fillMaxWidth()
+                                    .background(palette.cardHigh)
+                                    .cornerRadius(12.dp)
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                            ) {
+                                Row(
+                                    modifier = GlanceModifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Box(
+                                        modifier = GlanceModifier
+                                            .width(22.dp)
+                                            .height(22.dp)
+                                            .background(palette.accentChipBg)
+                                            .cornerRadius(50.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Image(
+                                            provider = ImageProvider(R.drawable.ic_widget_event_available),
+                                            contentDescription = null,
+                                            modifier = GlanceModifier.width(12.dp).height(12.dp),
+                                            colorFilter = ColorFilter.tint(palette.accentChipFg),
+                                        )
+                                    }
+                                    Spacer(modifier = GlanceModifier.width(8.dp))
+                                    Column(modifier = GlanceModifier.defaultWeight()) {
+                                        Text(
+                                            text = entry.className,
+                                            style = TextStyle(
+                                                color = palette.onSurface,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                            ),
+                                            maxLines = 1,
+                                            modifier = GlanceModifier.fillMaxWidth(),
+                                        )
+                                        if (thenBits.isNotEmpty()) {
+                                            Spacer(modifier = GlanceModifier.height(1.dp))
+                                            Text(
+                                                text = thenBits.joinToString(" · "),
+                                                style = TextStyle(
+                                                    color = palette.onSurfaceVariant,
+                                                    fontSize = 10.sp,
+                                                ),
+                                                maxLines = if (data.snap.wrapName) Int.MAX_VALUE else 1,
+                                                modifier = GlanceModifier.fillMaxWidth(),
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         } else {
-                            // Quiet: copy + Then-line (the SharedClassTab quiet
-                            // lead, ~61dp). Taller shorts add one lookahead row.
-                            Text(
-                                text = entry.className,
-                                style = TextStyle(
-                                    color = palette.onSurfaceVariant,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                ),
-                                maxLines = 1,
-                            )
+                            // Single-tab short: compact tonal quiet card + Then-line.
+                            Box(
+                                modifier = GlanceModifier
+                                    .fillMaxWidth()
+                                    .background(palette.cardHigh)
+                                    .cornerRadius(12.dp)
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                            ) {
+                                Row(
+                                    modifier = GlanceModifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Box(
+                                        modifier = GlanceModifier
+                                            .width(22.dp)
+                                            .height(22.dp)
+                                            .background(palette.accentChipBg)
+                                            .cornerRadius(50.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Image(
+                                            provider = ImageProvider(R.drawable.ic_widget_event_available),
+                                            contentDescription = null,
+                                            modifier = GlanceModifier.width(12.dp).height(12.dp),
+                                            colorFilter = ColorFilter.tint(palette.accentChipFg),
+                                        )
+                                    }
+                                    Spacer(modifier = GlanceModifier.width(8.dp))
+                                    Text(
+                                        text = entry.className,
+                                        style = TextStyle(
+                                            color = palette.onSurface,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                        ),
+                                        maxLines = 1,
+                                        modifier = GlanceModifier.defaultWeight(),
+                                    )
+                                }
+                            }
                             val thenRow = data.looks.firstOrNull {
                                 it.time == entry.thenWhen && it.name == entry.thenName
                             }

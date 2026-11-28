@@ -78,6 +78,14 @@
             </intent-filter>
         </receiver>
         <receiver
+            android:name="com.chronicleapp.chronicle.widget.WidgetUpgradeReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <receiver
             android:name="com.chronicleapp.chronicle.DueTasksCompactHomeWidgetReceiver"
             android:label="@string/home_widget_due_tasks_compact_label"
             android:exported="true">

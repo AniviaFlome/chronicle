@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.18.1] - 2026-11-28
+
+### Fixed
+- Updated the remaining "No classes today" surfaces: redesigned `ShortHubColumn` (2×2 Hub Class tab quiet state) into a tonal card with a circular accent icon badge, upgraded `EmptyState` from faint `card` to `cardHigh` with a larger accent badge and vertical centering across Weekly Calendar, Today Agenda, and Hub empty tabs, and added `WidgetUpgradeReceiver` (`MY_PACKAGE_REPLACED` / `BOOT_COMPLETED`) to immediately re-render all 6 home widgets after an app update without needing to open the app.
+
 ## [1.18.0] - 2026-11-28
 
 ### Changed
